@@ -100,3 +100,17 @@ func PrintJSON(w io.Writer, v any) error {
 	_, err = fmt.Fprintf(w, "%s\n", b)
 	return err
 }
+
+// FlagInfo is one flag as the renderers see it.
+type FlagInfo struct{ Name, Type, Default, Usage string }
+
+// FlagsOf enumerates fs's flags (sorted by name, as flag.VisitAll yields them).
+// Type and the cleaned Usage come from flag.UnquoteUsage; Default from DefValue.
+func FlagsOf(fs *flag.FlagSet) []FlagInfo {
+	var out []FlagInfo
+	fs.VisitAll(func(f *flag.Flag) {
+		typ, usage := flag.UnquoteUsage(f)
+		out = append(out, FlagInfo{Name: f.Name, Type: typ, Default: f.DefValue, Usage: usage})
+	})
+	return out
+}

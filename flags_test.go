@@ -110,3 +110,20 @@ func TestPrintJSON(t *testing.T) {
 		t.Fatalf("got %q", b.String())
 	}
 }
+
+func TestFlagsOf(t *testing.T) {
+	fs := flag.NewFlagSet("x", flag.ContinueOnError)
+	fs.Int("port", 8080, "port to listen on")
+	fs.Bool("quiet", false, "suppress output")
+	got := FlagsOf(fs)
+	if len(got) != 2 {
+		t.Fatalf("len = %d", len(got))
+	}
+	// sorted by name: port, quiet
+	if got[0].Name != "port" || got[0].Type != "int" || got[0].Default != "8080" || got[0].Usage != "port to listen on" {
+		t.Fatalf("port info wrong: %+v", got[0])
+	}
+	if got[1].Name != "quiet" || got[1].Default != "false" {
+		t.Fatalf("quiet info wrong: %+v", got[1])
+	}
+}
