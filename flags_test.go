@@ -100,3 +100,59 @@ func TestParseFlagsBadFlagIsUsageError(t *testing.T) {
 		t.Fatalf("stderr = %q, want contains 'not defined'", errw.String())
 	}
 }
+
+func TestPrintJSON(t *testing.T) {
+	var b bytes.Buffer
+	if err := PrintJSON(&b, map[string]int{"n": 2}); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(b.String(), `"n": 2`) || !strings.HasSuffix(b.String(), "\n") {
+		t.Fatalf("got %q", b.String())
+	}
+}
+
+func TestFlagsOf(t *testing.T) {
+	fs := flag.NewFlagSet("x", flag.ContinueOnError)
+	fs.Int("port", 8080, "port to listen on")
+	fs.Bool("quiet", false, "suppress output")
+	got := FlagsOf(fs)
+	if len(got) != 2 {
+		t.Fatalf("len = %d", len(got))
+	}
+	// sorted by name: port, quiet
+	if got[0].Name != "port" || got[0].Type != "int" || got[0].Default != "8080" || got[0].Usage != "port to listen on" {
+		t.Fatalf("port info wrong: %+v", got[0])
+	}
+	if got[1].Name != "quiet" || got[1].Default != "false" {
+		t.Fatalf("quiet info wrong: %+v", got[1])
+	}
+}
+
+func TestSplitArgsInterspersed(t *testing.T) {
+	fs := flag.NewFlagSet("new", flag.ContinueOnError)
+	fs.String("agent", "", "agent")
+	fs.Bool("no-sidebar", false, "suppress")
+	flagArgs, pos := SplitArgs(fs, []string{"proj/work", "--agent", "claude", "--no-sidebar"})
+	if len(pos) != 1 || pos[0] != "proj/work" {
+		t.Fatalf("positional = %v", pos)
+	}
+	// --agent claude paired; --no-sidebar recognized as bool (no value swallowed)
+	if err := fs.Parse(flagArgs); err != nil {
+		t.Fatalf("parse: %v (flagArgs=%v)", err, flagArgs)
+	}
+	if fs.Lookup("agent").Value.String() != "claude" || fs.Lookup("no-sidebar").Value.String() != "true" {
+		t.Fatalf("flags wrong")
+	}
+}
+
+func TestSplitArgsDanglingValueFlag(t *testing.T) {
+	fs := flag.NewFlagSet("x", flag.ContinueOnError)
+	fs.String("subject", "", "subject")
+	fs.String("intent", "", "intent")
+	// --subject has no value and is followed by --intent: must not swallow --intent.
+	flagArgs, _ := SplitArgs(fs, []string{"--subject", "--intent", "fyi"})
+	_ = fs.Parse(flagArgs)
+	if fs.Lookup("intent").Value.String() != "fyi" {
+		t.Fatalf("intent wrongly bound; flagArgs=%v", flagArgs)
+	}
+}

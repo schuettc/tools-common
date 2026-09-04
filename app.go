@@ -23,7 +23,6 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"sort"
 )
 
 // UsageError signals a usage (exit code 2) error from a command's Run.
@@ -31,11 +30,18 @@ type UsageError struct{ Msg string }
 
 func (e UsageError) Error() string { return e.Msg }
 
+// Group is one heading in grouped usage, in display order.
+type Group struct{ Key, Heading string }
+
 // Command is a registrable subcommand.
 type Command struct {
-	Name    string
-	Summary string
-	Run     func(args []string, out, errw io.Writer) error
+	Name     string
+	Summary  string
+	Synopsis string                                         // arg shape after the name; "" → just the name
+	Help     string                                         // long-form for help <cmd>/man; "" → omitted
+	Group    string                                         // group key; "" → default bucket
+	NewFlags func() *flag.FlagSet                           // side-effect-free flag constructor; nil → no flags
+	Run      func(args []string, out, errw io.Writer) error // nil → self-routed (Task 8)
 }
 
 // Config configures a family App.
@@ -43,6 +49,7 @@ type Config struct {
 	Name    string  // e.g. "kempt"
 	Domain  string  // e.g. "kempt.tools"
 	Version Version // the tool's own ldflags-stamped values
+	Groups  []Group // optional; empty → flat usage
 }
 
 // App is an instance-scoped CLI: it holds the tool name, domain, version, and
@@ -52,19 +59,21 @@ type App struct {
 	domain   string
 	version  Version
 	registry map[string]Command
+	groups   []Group
 	dlHost   string
 	client   *http.Client
 	exePath  func() (string, error)
 }
 
 // New builds an App, sets dlHost = "https://"+cfg.Domain, and auto-registers
-// the three built-in commands: version, help, update.
+// the five built-in commands: version, help, update, man, commands.
 func New(cfg Config) *App {
 	a := &App{
 		name:     cfg.Name,
 		domain:   cfg.Domain,
 		version:  cfg.Version,
 		registry: map[string]Command{},
+		groups:   cfg.Groups,
 		dlHost:   "https://" + cfg.Domain,
 		client:   http.DefaultClient,
 		exePath:  os.Executable,
@@ -79,8 +88,15 @@ func New(cfg Config) *App {
 	})
 	a.Register(Command{
 		Name:    "help",
-		Summary: "show usage",
+		Summary: "show usage, or `help <command>` for one command",
 		Run: func(args []string, out, errw io.Writer) error {
+			if len(args) > 0 {
+				if c, ok := a.registry[args[0]]; ok {
+					HelpFor(out, a.name, c)
+					return nil
+				}
+				return UsageError{Msg: fmt.Sprintf("unknown command %q", args[0])}
+			}
 			a.usage(out)
 			return nil
 		},
@@ -101,6 +117,43 @@ func New(cfg Config) *App {
 			return nil
 		},
 	})
+	a.Register(Command{
+		Name:    "man",
+		Summary: "print a roff man page",
+		Run: func(_ []string, out, errw io.Writer) error {
+			cmds := make([]Command, 0, len(a.registry))
+			for _, c := range a.registry {
+				cmds = append(cmds, c)
+			}
+			fmt.Fprint(out, ManPage(a.name, a.domain, a.groups, cmds))
+			return nil
+		},
+	})
+	a.Register(Command{
+		Name:    "commands",
+		Summary: "list commands (--json for the machine-readable index)",
+		NewFlags: func() *flag.FlagSet {
+			fs := flag.NewFlagSet("commands", flag.ContinueOnError)
+			fs.Bool("json", false, "emit the machine-readable command index")
+			return fs
+		},
+		Run: func(args []string, out, errw io.Writer) error {
+			cmds := make([]Command, 0, len(a.registry))
+			for _, c := range a.registry {
+				cmds = append(cmds, c)
+			}
+			if hasJSONFlag(args) {
+				b, err := CommandsJSON(a.name, cmds)
+				if err != nil {
+					return err
+				}
+				fmt.Fprintf(out, "%s\n", b)
+				return nil
+			}
+			GroupedUsage(out, a.name, a.groups, cmds)
+			return nil
+		},
+	})
 	return a
 }
 
@@ -108,17 +161,14 @@ func New(cfg Config) *App {
 // (e.g. wrap "update" with domain-specific logic).
 func (a *App) Register(cmd Command) { a.registry[cmd.Name] = cmd }
 
+func (a *App) groupList() []Group { return a.groups }
+
 func (a *App) usage(w io.Writer) {
-	fmt.Fprintf(w, "usage: %s <command> [args]\n", a.name)
-	fmt.Fprintln(w, "\ncommands:")
-	names := make([]string, 0, len(a.registry))
-	for n := range a.registry {
-		names = append(names, n)
+	cmds := make([]Command, 0, len(a.registry))
+	for _, c := range a.registry {
+		cmds = append(cmds, c)
 	}
-	sort.Strings(names)
-	for _, n := range names {
-		fmt.Fprintf(w, "  %-10s %s\n", n, a.registry[n].Summary)
-	}
+	GroupedUsage(w, a.name, a.groups, cmds)
 }
 
 // Dispatch routes args to a registered command and returns the process exit
@@ -135,24 +185,40 @@ func (a *App) Dispatch(args []string, out, errw io.Writer) int {
 	case "--help", "-h":
 		name = "help"
 	}
+	jsonMode := hasJSONFlag(args[1:])
 	cmd, ok := a.registry[name]
 	if !ok {
 		fmt.Fprintf(errw, "%s: unknown command %q\n\n", a.name, name)
 		a.usage(errw)
 		return 2
 	}
+	if (cmd.Help != "" || cmd.Synopsis != "" || cmd.NewFlags != nil) && hasHelpArg(args[1:]) {
+		HelpFor(out, a.name, cmd)
+		return 0
+	}
+	if cmd.Run == nil {
+		a.writeErr(errw, name, jsonMode, 2, fmt.Sprintf("%q is handled by %s itself, not dispatch", name, a.name), "")
+		return 2
+	}
 	if err := cmd.Run(args[1:], out, errw); err != nil {
-		// A command that parsed -h/-help via ParseFlags has already printed its
-		// flag listing to out; flag.ErrHelp is the signal to exit cleanly.
 		if errors.Is(err, flag.ErrHelp) {
 			return 0
 		}
+		var ee *ExitError
+		if errors.As(err, &ee) {
+			code := ee.Code
+			if code == 0 {
+				code = 1
+			}
+			a.writeErr(errw, name, jsonMode, code, ee.Msg, ee.Hint)
+			return code
+		}
 		var ue UsageError
 		if errors.As(err, &ue) {
-			fmt.Fprintf(errw, "%s %s: %s\n", a.name, name, ue.Msg)
+			a.writeErr(errw, name, jsonMode, 2, ue.Msg, "")
 			return 2
 		}
-		fmt.Fprintf(errw, "%s %s: %v\n", a.name, name, err)
+		a.writeErr(errw, name, jsonMode, 1, err.Error(), "")
 		return 1
 	}
 	return 0
@@ -160,3 +226,40 @@ func (a *App) Dispatch(args []string, out, errw io.Writer) int {
 
 // setDLHost overrides the download host; used by tests.
 func (a *App) setDLHost(h string) { a.dlHost = h }
+
+// hasJSONFlag reports whether a global --json/-json appears in args.
+func hasJSONFlag(args []string) bool {
+	for _, a := range args {
+		if a == "--json" || a == "-json" {
+			return true
+		}
+	}
+	return false
+}
+
+// hasHelpArg reports whether -h or --help appears in args.
+func hasHelpArg(args []string) bool {
+	for _, a := range args {
+		if a == "-h" || a == "--help" {
+			return true
+		}
+	}
+	return false
+}
+
+// writeErr renders a command error to errw, as a JSON envelope when jsonMode,
+// else as "name cmd: msg" (+ hint line).
+func (a *App) writeErr(errw io.Writer, name string, jsonMode bool, code int, msg, hint string) {
+	if jsonMode {
+		env := map[string]any{"error": msg, "code": code}
+		if hint != "" {
+			env["hint"] = hint
+		}
+		_ = PrintJSON(errw, env)
+		return
+	}
+	fmt.Fprintf(errw, "%s %s: %s\n", a.name, name, msg)
+	if hint != "" {
+		fmt.Fprintf(errw, "%s\n", hint)
+	}
+}
