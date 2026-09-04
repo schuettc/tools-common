@@ -147,6 +147,17 @@ func (a *App) Dispatch(args []string, out, errw io.Writer) int {
 		if errors.Is(err, flag.ErrHelp) {
 			return 0
 		}
+		var ee *ExitError
+		if errors.As(err, &ee) {
+			fmt.Fprintf(errw, "%s %s: %s\n", a.name, name, ee.Msg)
+			if ee.Hint != "" {
+				fmt.Fprintf(errw, "%s\n", ee.Hint)
+			}
+			if ee.Code == 0 {
+				return 1
+			}
+			return ee.Code
+		}
 		var ue UsageError
 		if errors.As(err, &ue) {
 			fmt.Fprintf(errw, "%s %s: %s\n", a.name, name, ue.Msg)
