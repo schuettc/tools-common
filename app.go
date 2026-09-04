@@ -88,8 +88,15 @@ func New(cfg Config) *App {
 	})
 	a.Register(Command{
 		Name:    "help",
-		Summary: "show usage",
+		Summary: "show usage, or `help <command>` for one command",
 		Run: func(args []string, out, errw io.Writer) error {
+			if len(args) > 0 {
+				if c, ok := a.registry[args[0]]; ok {
+					HelpFor(out, a.name, c)
+					return nil
+				}
+				return UsageError{Msg: fmt.Sprintf("unknown command %q", args[0])}
+			}
 			a.usage(out)
 			return nil
 		},
@@ -148,6 +155,10 @@ func (a *App) Dispatch(args []string, out, errw io.Writer) int {
 		a.usage(errw)
 		return 2
 	}
+	if cmd.Help != "" && hasHelpArg(args[1:]) {
+		HelpFor(out, a.name, cmd)
+		return 0
+	}
 	if err := cmd.Run(args[1:], out, errw); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
 			return 0
@@ -179,6 +190,16 @@ func (a *App) setDLHost(h string) { a.dlHost = h }
 func hasJSONFlag(args []string) bool {
 	for _, a := range args {
 		if a == "--json" || a == "-json" {
+			return true
+		}
+	}
+	return false
+}
+
+// hasHelpArg reports whether -h or --help appears in args.
+func hasHelpArg(args []string) bool {
+	for _, a := range args {
+		if a == "-h" || a == "--help" {
 			return true
 		}
 	}

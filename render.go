@@ -59,3 +59,35 @@ func writeRows(w io.Writer, cmds []Command) {
 	}
 	tw.Flush()
 }
+
+// HelpFor prints one command's help: the usage line, its long Help, and its
+// flags (from NewFlags). Synopsis falls back to the bare name.
+func HelpFor(w io.Writer, name string, c Command) {
+	syn := c.Synopsis
+	if syn == "" {
+		syn = c.Name
+	}
+	fmt.Fprintf(w, "Usage: %s %s\n", name, syn)
+	if c.Help != "" {
+		fmt.Fprintf(w, "\n%s\n", c.Help)
+	}
+	if c.NewFlags != nil {
+		infos := FlagsOf(c.NewFlags())
+		if len(infos) > 0 {
+			fmt.Fprintln(w, "\nflags:")
+			tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
+			for _, fi := range infos {
+				label := "  -" + fi.Name
+				if fi.Type != "" {
+					label += " " + fi.Type
+				}
+				usage := fi.Usage
+				if fi.Default != "" && fi.Default != "false" {
+					usage += fmt.Sprintf(" (default %s)", fi.Default)
+				}
+				fmt.Fprintf(tw, "%s\t%s\n", label, usage)
+			}
+			tw.Flush()
+		}
+	}
+}

@@ -2,6 +2,7 @@ package tools
 
 import (
 	"bytes"
+	"flag"
 	"strings"
 	"testing"
 )
@@ -41,5 +42,25 @@ func TestGroupedUsageFlat(t *testing.T) {
 	}
 	if !strings.Contains(s, "send") {
 		t.Fatalf("commands missing: %q", s)
+	}
+}
+
+func TestHelpForRendersSynopsisHelpFlags(t *testing.T) {
+	c := Command{
+		Name: "serve", Synopsis: "serve <page> [flags]",
+		Help: "Serves a page as a live document.",
+		NewFlags: func() *flag.FlagSet {
+			fs := flag.NewFlagSet("serve", flag.ContinueOnError)
+			fs.Int("port", 0, "port to listen on")
+			return fs
+		},
+	}
+	var b bytes.Buffer
+	HelpFor(&b, "galley", c)
+	s := b.String()
+	for _, want := range []string{"Usage: galley serve <page> [flags]", "Serves a page as a live document.", "-port", "port to listen on"} {
+		if !strings.Contains(s, want) {
+			t.Fatalf("missing %q in:\n%s", want, s)
+		}
 	}
 }

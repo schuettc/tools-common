@@ -124,3 +124,33 @@ func TestCommandRichFieldsAndGroups(t *testing.T) {
 		t.Fatalf("code = %d", code)
 	}
 }
+
+func TestDispatchHelpForCommand(t *testing.T) {
+	a := newTestApp()
+	a.Register(Command{
+		Name: "serve", Summary: "serve", Synopsis: "serve <page>",
+		Help: "Serves it.", Run: func(_ []string, _, _ io.Writer) error { return nil },
+	})
+	for _, arg := range []string{"-h", "--help"} {
+		var out, errw bytes.Buffer
+		code := a.Dispatch([]string{"serve", arg}, &out, &errw)
+		if code != 0 {
+			t.Fatalf("%s: code %d", arg, code)
+		}
+		if !strings.Contains(out.String(), "Usage: kempt serve <page>") || !strings.Contains(out.String(), "Serves it.") {
+			t.Fatalf("%s: help wrong: %q", arg, out.String())
+		}
+	}
+}
+
+func TestHelpSubcommandForNamed(t *testing.T) {
+	a := newTestApp()
+	a.Register(Command{Name: "serve", Summary: "serve", Help: "Serves it.", Run: func(_ []string, _, _ io.Writer) error { return nil }})
+	var out, errw bytes.Buffer
+	if code := a.Dispatch([]string{"help", "serve"}, &out, &errw); code != 0 {
+		t.Fatalf("code %d", code)
+	}
+	if !strings.Contains(out.String(), "Serves it.") {
+		t.Fatalf("help serve wrong: %q", out.String())
+	}
+}
