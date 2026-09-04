@@ -23,7 +23,6 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"sort"
 )
 
 // UsageError signals a usage (exit code 2) error from a command's Run.
@@ -38,10 +37,10 @@ type Group struct{ Key, Heading string }
 type Command struct {
 	Name     string
 	Summary  string
-	Synopsis string                                          // arg shape after the name; "" → just the name
-	Help     string                                          // long-form for help <cmd>/man; "" → omitted
-	Group    string                                          // group key; "" → default bucket
-	NewFlags func() *flag.FlagSet                            // side-effect-free flag constructor; nil → no flags
+	Synopsis string                                         // arg shape after the name; "" → just the name
+	Help     string                                         // long-form for help <cmd>/man; "" → omitted
+	Group    string                                         // group key; "" → default bucket
+	NewFlags func() *flag.FlagSet                           // side-effect-free flag constructor; nil → no flags
 	Run      func(args []string, out, errw io.Writer) error // nil → self-routed (Task 8)
 }
 
@@ -121,16 +120,11 @@ func (a *App) Register(cmd Command) { a.registry[cmd.Name] = cmd }
 func (a *App) groupList() []Group { return a.groups }
 
 func (a *App) usage(w io.Writer) {
-	fmt.Fprintf(w, "usage: %s <command> [args]\n", a.name)
-	fmt.Fprintln(w, "\ncommands:")
-	names := make([]string, 0, len(a.registry))
-	for n := range a.registry {
-		names = append(names, n)
+	cmds := make([]Command, 0, len(a.registry))
+	for _, c := range a.registry {
+		cmds = append(cmds, c)
 	}
-	sort.Strings(names)
-	for _, n := range names {
-		fmt.Fprintf(w, "  %-10s %s\n", n, a.registry[n].Summary)
-	}
+	GroupedUsage(w, a.name, a.groups, cmds)
 }
 
 // Dispatch routes args to a registered command and returns the process exit
