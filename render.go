@@ -120,12 +120,17 @@ func ManPage(name, domain string, groups []Group, cmds []Command) string {
 			syn = c.Name
 		}
 		fmt.Fprintf(&b, ".TP\n.B %s\n%s\n", roffEscape(syn), roffEscape(c.Summary))
-		if c.Help != "" {
-			fmt.Fprintf(&b, ".RS\n%s\n", roffEscape(c.Help))
-			if c.NewFlags != nil {
-				for _, fi := range FlagsOf(c.NewFlags()) {
-					fmt.Fprintf(&b, ".br\n\\-%s\t%s\n", roffEscape(fi.Name), roffEscape(fi.Usage))
-				}
+		var flags []FlagInfo
+		if c.NewFlags != nil {
+			flags = FlagsOf(c.NewFlags())
+		}
+		if c.Help != "" || len(flags) > 0 {
+			fmt.Fprintf(&b, ".RS\n")
+			if c.Help != "" {
+				fmt.Fprintf(&b, "%s\n", roffEscape(c.Help))
+			}
+			for _, fi := range flags {
+				fmt.Fprintf(&b, ".br\n\\-%s\t%s\n", roffEscape(fi.Name), roffEscape(fi.Usage))
 			}
 			fmt.Fprintf(&b, ".RE\n")
 		}

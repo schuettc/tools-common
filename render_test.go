@@ -83,6 +83,21 @@ func TestRoffEscape(t *testing.T) {
 	}
 }
 
+func TestManPageListsFlagsWithoutHelp(t *testing.T) {
+	cmds := []Command{{
+		Name: "commands", Summary: "list commands", Help: "",
+		NewFlags: func() *flag.FlagSet {
+			fs := flag.NewFlagSet("commands", flag.ContinueOnError)
+			fs.Bool("json", false, "emit the machine-readable command index")
+			return fs
+		},
+	}}
+	m := ManPage("kempt", "kempt.tools", nil, cmds)
+	if !strings.Contains(m, "json") {
+		t.Fatalf("man page missing flag json:\n%s", m)
+	}
+}
+
 func TestCommandsJSONShape(t *testing.T) {
 	cmds := []Command{{
 		Name: "serve", Summary: "serve", Synopsis: "serve <page>", Group: "core", Help: "Serves.",

@@ -66,7 +66,7 @@ type App struct {
 }
 
 // New builds an App, sets dlHost = "https://"+cfg.Domain, and auto-registers
-// the three built-in commands: version, help, update.
+// the five built-in commands: version, help, update, man, commands.
 func New(cfg Config) *App {
 	a := &App{
 		name:     cfg.Name,
