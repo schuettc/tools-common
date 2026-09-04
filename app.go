@@ -129,6 +129,31 @@ func New(cfg Config) *App {
 			return nil
 		},
 	})
+	a.Register(Command{
+		Name:    "commands",
+		Summary: "list commands (--json for the machine-readable index)",
+		NewFlags: func() *flag.FlagSet {
+			fs := flag.NewFlagSet("commands", flag.ContinueOnError)
+			fs.Bool("json", false, "emit the machine-readable command index")
+			return fs
+		},
+		Run: func(args []string, out, errw io.Writer) error {
+			cmds := make([]Command, 0, len(a.registry))
+			for _, c := range a.registry {
+				cmds = append(cmds, c)
+			}
+			if hasJSONFlag(args) {
+				b, err := CommandsJSON(a.name, cmds)
+				if err != nil {
+					return err
+				}
+				fmt.Fprintf(out, "%s\n", b)
+				return nil
+			}
+			GroupedUsage(out, a.name, a.groups, cmds)
+			return nil
+		},
+	})
 	return a
 }
 
@@ -170,6 +195,10 @@ func (a *App) Dispatch(args []string, out, errw io.Writer) int {
 	if (cmd.Help != "" || cmd.Synopsis != "" || cmd.NewFlags != nil) && hasHelpArg(args[1:]) {
 		HelpFor(out, a.name, cmd)
 		return 0
+	}
+	if cmd.Run == nil {
+		a.writeErr(errw, name, jsonMode, 2, fmt.Sprintf("%q is handled by %s itself, not dispatch", name, a.name), "")
+		return 2
 	}
 	if err := cmd.Run(args[1:], out, errw); err != nil {
 		if errors.Is(err, flag.ErrHelp) {

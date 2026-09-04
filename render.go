@@ -1,6 +1,7 @@
 package tools
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"sort"
@@ -130,4 +131,36 @@ func ManPage(name, domain string, groups []Group, cmds []Command) string {
 		}
 	}
 	return b.String()
+}
+
+// CommandsJSON serializes the registry as the agent-facing command index.
+func CommandsJSON(name string, cmds []Command) ([]byte, error) {
+	type flagJSON struct {
+		Name    string `json:"name"`
+		Type    string `json:"type"`
+		Default string `json:"default"`
+		Usage   string `json:"usage"`
+	}
+	type cmdJSON struct {
+		Name       string     `json:"name"`
+		Synopsis   string     `json:"synopsis"`
+		Summary    string     `json:"summary"`
+		Group      string     `json:"group"`
+		Help       string     `json:"help"`
+		SelfRouted bool       `json:"selfRouted"`
+		Flags      []flagJSON `json:"flags"`
+	}
+	sorted := append([]Command(nil), cmds...)
+	sort.Slice(sorted, func(i, j int) bool { return sorted[i].Name < sorted[j].Name })
+	out := make([]cmdJSON, 0, len(sorted))
+	for _, c := range sorted {
+		cj := cmdJSON{Name: c.Name, Synopsis: c.Synopsis, Summary: c.Summary, Group: c.Group, Help: c.Help, SelfRouted: c.Run == nil, Flags: []flagJSON{}}
+		if c.NewFlags != nil {
+			for _, fi := range FlagsOf(c.NewFlags()) {
+				cj.Flags = append(cj.Flags, flagJSON{fi.Name, fi.Type, fi.Default, fi.Usage})
+			}
+		}
+		out = append(out, cj)
+	}
+	return json.MarshalIndent(out, "", "  ")
 }

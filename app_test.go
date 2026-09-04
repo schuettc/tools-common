@@ -190,3 +190,42 @@ func TestManBuiltin(t *testing.T) {
 		t.Fatalf("man output wrong: %q", out.String())
 	}
 }
+
+func TestCommandsBuiltinJSON(t *testing.T) {
+	a := newTestApp()
+	a.Register(Command{Name: "serve", Summary: "serve", Run: func(_ []string, _, _ io.Writer) error { return nil }})
+	var out, errw bytes.Buffer
+	if code := a.Dispatch([]string{"commands", "--json"}, &out, &errw); code != 0 {
+		t.Fatalf("code %d", code)
+	}
+	var got []map[string]any
+	if err := json.Unmarshal(out.Bytes(), &got); err != nil {
+		t.Fatalf("not JSON: %q", out.String())
+	}
+	names := map[string]bool{}
+	for _, c := range got {
+		names[c["name"].(string)] = true
+	}
+	if !names["serve"] || !names["help"] || !names["man"] || !names["commands"] {
+		t.Fatalf("index missing commands: %v", names)
+	}
+}
+
+func TestSelfRoutedRefused(t *testing.T) {
+	a := newTestApp()
+	a.Register(Command{Name: "daemon", Summary: "run the daemon", Run: nil}) // self-routed
+	var out, errw bytes.Buffer
+	code := a.Dispatch([]string{"daemon"}, &out, &errw)
+	if code != 2 {
+		t.Fatalf("code = %d, want 2", code)
+	}
+	if !strings.Contains(errw.String(), "daemon") {
+		t.Fatalf("refusal should name the command: %q", errw.String())
+	}
+	// but it IS listed in the index
+	var out2, errw2 bytes.Buffer
+	a.Dispatch([]string{"commands", "--json"}, &out2, &errw2)
+	if !strings.Contains(out2.String(), "daemon") {
+		t.Fatalf("self-routed command should be listed: %q", out2.String())
+	}
+}

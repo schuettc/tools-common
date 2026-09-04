@@ -2,6 +2,7 @@ package tools
 
 import (
 	"bytes"
+	"encoding/json"
 	"flag"
 	"strings"
 	"testing"
@@ -79,5 +80,31 @@ func TestManPageStructure(t *testing.T) {
 func TestRoffEscape(t *testing.T) {
 	if got := roffEscape(`a\b-c`); !strings.Contains(got, `\\`) {
 		t.Fatalf("backslash not escaped: %q", got)
+	}
+}
+
+func TestCommandsJSONShape(t *testing.T) {
+	cmds := []Command{{
+		Name: "serve", Summary: "serve", Synopsis: "serve <page>", Group: "core", Help: "Serves.",
+		NewFlags: func() *flag.FlagSet {
+			fs := flag.NewFlagSet("serve", flag.ContinueOnError)
+			fs.Int("port", 0, "port")
+			return fs
+		},
+	}}
+	b, err := CommandsJSON("galley", cmds)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got []map[string]any
+	if err := json.Unmarshal(b, &got); err != nil {
+		t.Fatalf("not JSON: %v", err)
+	}
+	if got[0]["name"] != "serve" || got[0]["group"] != "core" {
+		t.Fatalf("fields wrong: %v", got[0])
+	}
+	flags := got[0]["flags"].([]any)
+	if len(flags) != 1 || flags[0].(map[string]any)["name"] != "port" {
+		t.Fatalf("flags wrong: %v", flags)
 	}
 }
