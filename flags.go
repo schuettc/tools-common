@@ -114,3 +114,44 @@ func FlagsOf(fs *flag.FlagSet) []FlagInfo {
 	})
 	return out
 }
+
+// SplitArgs separates args into flag tokens and positionals, allowing flags to
+// appear before OR after positionals (flag.Parse otherwise stops at the first
+// non-flag token). Bool-valued flags are read from fs; -h/-help are always
+// boolean. A dangling value-flag immediately followed by another flag is
+// rewritten to `name=` so flag.Parse does not consume the next flag as its
+// value.
+func SplitArgs(fs *flag.FlagSet, args []string) (flagArgs, positional []string) {
+	bf := map[string]bool{}
+	fs.VisitAll(func(f *flag.Flag) {
+		if b, ok := f.Value.(interface{ IsBoolFlag() bool }); ok && b.IsBoolFlag() {
+			bf[f.Name] = true
+		}
+	})
+	for i := 0; i < len(args); i++ {
+		a := args[i]
+		if !strings.HasPrefix(a, "-") {
+			positional = append(positional, a)
+			continue
+		}
+		name := strings.TrimLeft(a, "-")
+		if idx := strings.Index(name, "="); idx >= 0 {
+			flagArgs = append(flagArgs, a) // explicit name=value
+			continue
+		}
+		if bf[name] || name == "h" || name == "help" {
+			flagArgs = append(flagArgs, a)
+			continue
+		}
+		switch {
+		case i+1 < len(args) && !strings.HasPrefix(args[i+1], "-"):
+			flagArgs = append(flagArgs, a, args[i+1])
+			i++
+		case i+1 < len(args):
+			flagArgs = append(flagArgs, a+"=") // dangling, next is a flag
+		default:
+			flagArgs = append(flagArgs, a) // dangling at end; flag.Parse errors correctly
+		}
+	}
+	return flagArgs, positional
+}
