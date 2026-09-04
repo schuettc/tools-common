@@ -154,3 +154,27 @@ func TestHelpSubcommandForNamed(t *testing.T) {
 		t.Fatalf("help serve wrong: %q", out.String())
 	}
 }
+
+func TestDispatchHelpForCommandWithoutHelpText(t *testing.T) {
+	a := newTestApp()
+	a.Register(Command{
+		Name: "query", Summary: "query", Synopsis: "query [flags]",
+		NewFlags: func() *flag.FlagSet {
+			fs := flag.NewFlagSet("query", flag.ContinueOnError)
+			fs.String("filter", "", "filter results")
+			return fs
+		},
+		Run: func(_ []string, _, _ io.Writer) error { return nil },
+	})
+	for _, arg := range []string{"-h", "--help"} {
+		var out, errw bytes.Buffer
+		code := a.Dispatch([]string{"query", arg}, &out, &errw)
+		if code != 0 {
+			t.Fatalf("%s: code %d", arg, code)
+		}
+		s := out.String()
+		if !strings.Contains(s, "Usage: kempt query [flags]") || !strings.Contains(s, "-filter") {
+			t.Fatalf("%s: help wrong: %q", arg, s)
+		}
+	}
+}

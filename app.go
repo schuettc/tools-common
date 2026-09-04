@@ -155,7 +155,7 @@ func (a *App) Dispatch(args []string, out, errw io.Writer) int {
 		a.usage(errw)
 		return 2
 	}
-	if cmd.Help != "" && hasHelpArg(args[1:]) {
+	if (cmd.Help != "" || cmd.Synopsis != "" || cmd.NewFlags != nil) && hasHelpArg(args[1:]) {
 		HelpFor(out, a.name, cmd)
 		return 0
 	}
