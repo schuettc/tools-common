@@ -31,11 +31,18 @@ type UsageError struct{ Msg string }
 
 func (e UsageError) Error() string { return e.Msg }
 
+// Group is one heading in grouped usage, in display order.
+type Group struct{ Key, Heading string }
+
 // Command is a registrable subcommand.
 type Command struct {
-	Name    string
-	Summary string
-	Run     func(args []string, out, errw io.Writer) error
+	Name     string
+	Summary  string
+	Synopsis string                                          // arg shape after the name; "" → just the name
+	Help     string                                          // long-form for help <cmd>/man; "" → omitted
+	Group    string                                          // group key; "" → default bucket
+	NewFlags func() *flag.FlagSet                            // side-effect-free flag constructor; nil → no flags
+	Run      func(args []string, out, errw io.Writer) error // nil → self-routed (Task 8)
 }
 
 // Config configures a family App.
@@ -43,6 +50,7 @@ type Config struct {
 	Name    string  // e.g. "kempt"
 	Domain  string  // e.g. "kempt.tools"
 	Version Version // the tool's own ldflags-stamped values
+	Groups  []Group // optional; empty → flat usage
 }
 
 // App is an instance-scoped CLI: it holds the tool name, domain, version, and
@@ -52,6 +60,7 @@ type App struct {
 	domain   string
 	version  Version
 	registry map[string]Command
+	groups   []Group
 	dlHost   string
 	client   *http.Client
 	exePath  func() (string, error)
@@ -65,6 +74,7 @@ func New(cfg Config) *App {
 		domain:   cfg.Domain,
 		version:  cfg.Version,
 		registry: map[string]Command{},
+		groups:   cfg.Groups,
 		dlHost:   "https://" + cfg.Domain,
 		client:   http.DefaultClient,
 		exePath:  os.Executable,
@@ -107,6 +117,8 @@ func New(cfg Config) *App {
 // Register adds or overrides a command by Name. A tool can override a built-in
 // (e.g. wrap "update" with domain-specific logic).
 func (a *App) Register(cmd Command) { a.registry[cmd.Name] = cmd }
+
+func (a *App) groupList() []Group { return a.groups }
 
 func (a *App) usage(w io.Writer) {
 	fmt.Fprintf(w, "usage: %s <command> [args]\n", a.name)

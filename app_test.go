@@ -3,6 +3,7 @@ package tools
 import (
 	"bytes"
 	"encoding/json"
+	"flag"
 	"io"
 	"strings"
 	"testing"
@@ -99,5 +100,27 @@ func TestDispatchJSONErrorEnvelope(t *testing.T) {
 	}
 	if got["error"] != "the editor stopped" || got["hint"] != "start `galley edit`" || got["code"].(float64) != 4 {
 		t.Fatalf("envelope wrong: %v", got)
+	}
+}
+
+func TestCommandRichFieldsAndGroups(t *testing.T) {
+	a := New(Config{
+		Name: "kempt", Domain: "kempt.tools",
+		Version: Version{Number: "0.3.0"},
+		Groups:  []Group{{Key: "core", Heading: "Core"}},
+	})
+	a.Register(Command{
+		Name: "apply", Summary: "converge", Synopsis: "apply [flags]",
+		Help: "Applies the plan.", Group: "core",
+		NewFlags: func() *flag.FlagSet { return flag.NewFlagSet("apply", flag.ContinueOnError) },
+		Run:      func(_ []string, _, _ io.Writer) error { return nil },
+	})
+	if got := a.groupList(); len(got) != 1 || got[0].Heading != "Core" {
+		t.Fatalf("groups = %v", got)
+	}
+	// A bare {Name,Summary,Run} command still registers and runs.
+	var out, errw bytes.Buffer
+	if code := a.Dispatch([]string{"apply"}, &out, &errw); code != 0 {
+		t.Fatalf("code = %d", code)
 	}
 }
