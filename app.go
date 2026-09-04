@@ -117,6 +117,18 @@ func New(cfg Config) *App {
 			return nil
 		},
 	})
+	a.Register(Command{
+		Name:    "man",
+		Summary: "print a roff man page",
+		Run: func(_ []string, out, errw io.Writer) error {
+			cmds := make([]Command, 0, len(a.registry))
+			for _, c := range a.registry {
+				cmds = append(cmds, c)
+			}
+			fmt.Fprint(out, ManPage(a.name, a.domain, a.groups, cmds))
+			return nil
+		},
+	})
 	return a
 }
 

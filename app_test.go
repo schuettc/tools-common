@@ -178,3 +178,15 @@ func TestDispatchHelpForCommandWithoutHelpText(t *testing.T) {
 		}
 	}
 }
+
+func TestManBuiltin(t *testing.T) {
+	a := newTestApp()
+	a.Register(Command{Name: "send", Summary: "send", Help: "Sends it.", Run: func(_ []string, _, _ io.Writer) error { return nil }})
+	var out, errw bytes.Buffer
+	if code := a.Dispatch([]string{"man"}, &out, &errw); code != 0 {
+		t.Fatalf("code %d", code)
+	}
+	if !strings.Contains(out.String(), ".TH KEMPT 1") {
+		t.Fatalf("man output wrong: %q", out.String())
+	}
+}

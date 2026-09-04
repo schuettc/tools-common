@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"sort"
+	"strings"
 	"text/tabwriter"
 )
 
@@ -90,4 +91,43 @@ func HelpFor(w io.Writer, name string, c Command) {
 			tw.Flush()
 		}
 	}
+}
+
+// roffEscape escapes the characters roff treats specially in body text.
+func roffEscape(s string) string {
+	s = strings.ReplaceAll(s, `\`, `\\`)
+	s = strings.ReplaceAll(s, "-", `\-`)
+	return s
+}
+
+// ManPage renders the registry as a roff man page (section 1).
+func ManPage(name, domain string, groups []Group, cmds []Command) string {
+	var b strings.Builder
+	up := strings.ToUpper(name)
+	fmt.Fprintf(&b, ".TH %s 1\n", up)
+	fmt.Fprintf(&b, ".SH NAME\n%s \\- %s command-line interface\n", name, name)
+	fmt.Fprintf(&b, ".SH SYNOPSIS\n.B %s\n<command> [args]\n", name)
+	fmt.Fprintf(&b, ".SH DESCRIPTION\nCommands for %s (%s).\n", name, domain)
+
+	sorted := append([]Command(nil), cmds...)
+	sort.Slice(sorted, func(i, j int) bool { return sorted[i].Name < sorted[j].Name })
+
+	fmt.Fprintf(&b, ".SH COMMANDS\n")
+	for _, c := range sorted {
+		syn := c.Synopsis
+		if syn == "" {
+			syn = c.Name
+		}
+		fmt.Fprintf(&b, ".TP\n.B %s\n%s\n", roffEscape(syn), roffEscape(c.Summary))
+		if c.Help != "" {
+			fmt.Fprintf(&b, ".RS\n%s\n", roffEscape(c.Help))
+			if c.NewFlags != nil {
+				for _, fi := range FlagsOf(c.NewFlags()) {
+					fmt.Fprintf(&b, ".br\n\\-%s\t%s\n", roffEscape(fi.Name), roffEscape(fi.Usage))
+				}
+			}
+			fmt.Fprintf(&b, ".RE\n")
+		}
+	}
+	return b.String()
 }

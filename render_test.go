@@ -64,3 +64,20 @@ func TestHelpForRendersSynopsisHelpFlags(t *testing.T) {
 		}
 	}
 }
+
+func TestManPageStructure(t *testing.T) {
+	cmds := []Command{{Name: "send", Summary: "send a message", Synopsis: "send <target>", Help: "Sends it.", Group: "talk"}}
+	groups := []Group{{Key: "talk", Heading: "Talk"}}
+	m := ManPage("muster", "muster.tools", groups, cmds)
+	for _, want := range []string{`.TH MUSTER 1`, "NAME", "SYNOPSIS", "send", "Sends it."} {
+		if !strings.Contains(m, want) {
+			t.Fatalf("man page missing %q:\n%s", want, m)
+		}
+	}
+}
+
+func TestRoffEscape(t *testing.T) {
+	if got := roffEscape(`a\b-c`); !strings.Contains(got, `\\`) {
+		t.Fatalf("backslash not escaped: %q", got)
+	}
+}
