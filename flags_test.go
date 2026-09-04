@@ -100,3 +100,13 @@ func TestParseFlagsBadFlagIsUsageError(t *testing.T) {
 		t.Fatalf("stderr = %q, want contains 'not defined'", errw.String())
 	}
 }
+
+func TestPrintJSON(t *testing.T) {
+	var b bytes.Buffer
+	if err := PrintJSON(&b, map[string]int{"n": 2}); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(b.String(), `"n": 2`) || !strings.HasSuffix(b.String(), "\n") {
+		t.Fatalf("got %q", b.String())
+	}
+}

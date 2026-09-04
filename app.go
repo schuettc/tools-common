@@ -135,6 +135,7 @@ func (a *App) Dispatch(args []string, out, errw io.Writer) int {
 	case "--help", "-h":
 		name = "help"
 	}
+	jsonMode := hasJSONFlag(args[1:])
 	cmd, ok := a.registry[name]
 	if !ok {
 		fmt.Fprintf(errw, "%s: unknown command %q\n\n", a.name, name)
@@ -142,28 +143,24 @@ func (a *App) Dispatch(args []string, out, errw io.Writer) int {
 		return 2
 	}
 	if err := cmd.Run(args[1:], out, errw); err != nil {
-		// A command that parsed -h/-help via ParseFlags has already printed its
-		// flag listing to out; flag.ErrHelp is the signal to exit cleanly.
 		if errors.Is(err, flag.ErrHelp) {
 			return 0
 		}
 		var ee *ExitError
 		if errors.As(err, &ee) {
-			fmt.Fprintf(errw, "%s %s: %s\n", a.name, name, ee.Msg)
-			if ee.Hint != "" {
-				fmt.Fprintf(errw, "%s\n", ee.Hint)
+			code := ee.Code
+			if code == 0 {
+				code = 1
 			}
-			if ee.Code == 0 {
-				return 1
-			}
-			return ee.Code
+			a.writeErr(errw, name, jsonMode, code, ee.Msg, ee.Hint)
+			return code
 		}
 		var ue UsageError
 		if errors.As(err, &ue) {
-			fmt.Fprintf(errw, "%s %s: %s\n", a.name, name, ue.Msg)
+			a.writeErr(errw, name, jsonMode, 2, ue.Msg, "")
 			return 2
 		}
-		fmt.Fprintf(errw, "%s %s: %v\n", a.name, name, err)
+		a.writeErr(errw, name, jsonMode, 1, err.Error(), "")
 		return 1
 	}
 	return 0
@@ -171,3 +168,30 @@ func (a *App) Dispatch(args []string, out, errw io.Writer) int {
 
 // setDLHost overrides the download host; used by tests.
 func (a *App) setDLHost(h string) { a.dlHost = h }
+
+// hasJSONFlag reports whether a global --json/-json appears in args.
+func hasJSONFlag(args []string) bool {
+	for _, a := range args {
+		if a == "--json" || a == "-json" {
+			return true
+		}
+	}
+	return false
+}
+
+// writeErr renders a command error to errw, as a JSON envelope when jsonMode,
+// else as "name cmd: msg" (+ hint line).
+func (a *App) writeErr(errw io.Writer, name string, jsonMode bool, code int, msg, hint string) {
+	if jsonMode {
+		env := map[string]any{"error": msg, "code": code}
+		if hint != "" {
+			env["hint"] = hint
+		}
+		_ = PrintJSON(errw, env)
+		return
+	}
+	fmt.Fprintf(errw, "%s %s: %s\n", a.name, name, msg)
+	if hint != "" {
+		fmt.Fprintf(errw, "%s\n", hint)
+	}
+}

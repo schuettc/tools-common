@@ -1,6 +1,7 @@
 package tools
 
 import (
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -86,4 +87,16 @@ func YesFlag(fs *flag.FlagSet, usage string) *bool {
 	fs.BoolVar(yes, "yes", false, usage)
 	fs.BoolVar(yes, "y", false, "shorthand for -yes")
 	return yes
+}
+
+// PrintJSON writes v as indented JSON followed by a newline. It is the one
+// spelling of the --json payload shape, so every command's structured output
+// matches.
+func PrintJSON(w io.Writer, v any) error {
+	b, err := json.MarshalIndent(v, "", "  ")
+	if err != nil {
+		return err
+	}
+	_, err = fmt.Fprintf(w, "%s\n", b)
+	return err
 }

@@ -2,6 +2,7 @@ package tools
 
 import (
 	"bytes"
+	"encoding/json"
 	"io"
 	"strings"
 	"testing"
@@ -79,5 +80,24 @@ func TestRegisterOverridesBuiltin(t *testing.T) {
 	}
 	if !strings.Contains(out.String(), "custom update ran") {
 		t.Errorf("stdout = %q, want custom update", out.String())
+	}
+}
+
+func TestDispatchJSONErrorEnvelope(t *testing.T) {
+	a := newTestApp()
+	a.Register(Command{Name: "p", Run: func(_ []string, _, _ io.Writer) error {
+		return Exitf(4, "the editor stopped").WithHint("start `galley edit`")
+	}})
+	var out, errw bytes.Buffer
+	code := a.Dispatch([]string{"p", "--json"}, &out, &errw)
+	if code != 4 {
+		t.Fatalf("code = %d, want 4", code)
+	}
+	var got map[string]any
+	if err := json.Unmarshal(errw.Bytes(), &got); err != nil {
+		t.Fatalf("stderr not JSON: %q (%v)", errw.String(), err)
+	}
+	if got["error"] != "the editor stopped" || got["hint"] != "start `galley edit`" || got["code"].(float64) != 4 {
+		t.Fatalf("envelope wrong: %v", got)
 	}
 }
