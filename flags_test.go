@@ -1,0 +1,102 @@
+package tools
+
+import (
+	"bytes"
+	"flag"
+	"io"
+	"strings"
+	"testing"
+)
+
+// helpCmd registers a command that declares -yes/-y plus a string flag and
+// parses via ParseFlags, so a test can drive the shared help/flag behavior end
+// to end through Dispatch.
+func helpCmd() Command {
+	return Command{Name: "do", Summary: "do a thing", Run: func(args []string, out, errw io.Writer) error {
+		fs := flag.NewFlagSet("do", flag.ContinueOnError)
+		fs.String("manifest", "", "path to manifest")
+		yes := YesFlag(fs, "skip the confirmation prompt")
+		if err := ParseFlags(fs, args, out); err != nil {
+			return err
+		}
+		if *yes {
+			out.Write([]byte("skipped prompt\n"))
+		} else {
+			out.Write([]byte("would prompt\n"))
+		}
+		return nil
+	}}
+}
+
+func TestParseFlagsHelpListsFlagsAndExitsClean(t *testing.T) {
+	for _, arg := range []string{"-h", "--help"} {
+		a := newTestApp()
+		a.Register(helpCmd())
+		var out, errw bytes.Buffer
+		code := a.Dispatch([]string{"do", arg}, &out, &errw)
+		if code != 0 {
+			t.Fatalf("%s: code = %d, want 0; err=%s", arg, code, errw.String())
+		}
+		got := out.String()
+		for _, want := range []string{"Usage of do", "-manifest", "-yes", "-y"} {
+			if !strings.Contains(got, want) {
+				t.Fatalf("%s: help missing %q; got:\n%s", arg, want, got)
+			}
+		}
+		if strings.Contains(errw.String(), "help requested") {
+			t.Fatalf("%s: leaked raw flag error: %q", arg, errw.String())
+		}
+	}
+}
+
+func TestYesFlagBothSpellings(t *testing.T) {
+	for _, arg := range []string{"-yes", "-y", "--yes"} {
+		a := newTestApp()
+		a.Register(helpCmd())
+		var out, errw bytes.Buffer
+		code := a.Dispatch([]string{"do", arg}, &out, &errw)
+		if code != 0 {
+			t.Fatalf("%s: code = %d, want 0; err=%s", arg, code, errw.String())
+		}
+		if !strings.Contains(out.String(), "skipped prompt") {
+			t.Fatalf("%s: flag not honored; out=%q", arg, out.String())
+		}
+	}
+}
+
+func TestSetUsageRendersRichHelp(t *testing.T) {
+	a := newTestApp()
+	a.Register(Command{Name: "serve", Run: func(args []string, out, errw io.Writer) error {
+		fs := flag.NewFlagSet("serve", flag.ContinueOnError)
+		fs.Int("port", 0, "port to listen on")
+		SetUsage(fs, "kempt serve <page> [flags]", "Serves a page as a live document.")
+		if err := ParseFlags(fs, args, out); err != nil {
+			return err
+		}
+		return nil
+	}})
+	var out, errw bytes.Buffer
+	code := a.Dispatch([]string{"serve", "-h"}, &out, &errw)
+	if code != 0 {
+		t.Fatalf("code = %d, want 0; err=%s", code, errw.String())
+	}
+	got := out.String()
+	for _, want := range []string{"Usage: kempt serve <page> [flags]", "Serves a page as a live document.", "-port"} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("rich help missing %q; got:\n%s", want, got)
+		}
+	}
+}
+
+func TestParseFlagsBadFlagIsUsageError(t *testing.T) {
+	a := newTestApp()
+	a.Register(helpCmd())
+	var out, errw bytes.Buffer
+	code := a.Dispatch([]string{"do", "-nope"}, &out, &errw)
+	if code != 2 {
+		t.Fatalf("code = %d, want 2; err=%s", code, errw.String())
+	}
+	if !strings.Contains(errw.String(), "not defined") {
+		t.Fatalf("stderr = %q, want contains 'not defined'", errw.String())
+	}
+}

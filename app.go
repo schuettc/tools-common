@@ -18,6 +18,7 @@ package tools
 
 import (
 	"errors"
+	"flag"
 	"fmt"
 	"io"
 	"net/http"
@@ -141,6 +142,11 @@ func (a *App) Dispatch(args []string, out, errw io.Writer) int {
 		return 2
 	}
 	if err := cmd.Run(args[1:], out, errw); err != nil {
+		// A command that parsed -h/-help via ParseFlags has already printed its
+		// flag listing to out; flag.ErrHelp is the signal to exit cleanly.
+		if errors.Is(err, flag.ErrHelp) {
+			return 0
+		}
 		var ue UsageError
 		if errors.As(err, &ue) {
 			fmt.Fprintf(errw, "%s %s: %s\n", a.name, name, ue.Msg)
