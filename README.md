@@ -83,3 +83,8 @@ A tool can override any built-in by registering a command with the same `Name`
 | `0.1.0` | `abc` | — | `0.1.0 (abc)` |
 | `0.1.0` | — | — | `0.1.0` |
 | — | — | — | `dev` |
+
+## License
+
+[Apache-2.0](LICENSE) © 2026 Court Schuett. tools-common is permissively
+licensed so every family binary — MIT or source-available — can import it.
