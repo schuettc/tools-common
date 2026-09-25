@@ -108,6 +108,10 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		s.serveAPI(w, r)
 		return
 	}
+	if s.cfg.Assets == nil {
+		http.NotFound(w, r)
+		return
+	}
 	http.FileServerFS(s.cfg.Assets).ServeHTTP(w, r)
 }
 

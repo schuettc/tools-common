@@ -195,3 +195,24 @@ func TestFreePort(t *testing.T) {
 		t.Fatalf("%d %v", p, err)
 	}
 }
+
+func TestNilAssetsServe404(t *testing.T) {
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	t.Setenv("LWTEST_HOME", "")
+	ctx, cancel := context.WithCancel(context.Background())
+	s, err := Start(ctx, Config{Tool: "lwtest"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { cancel(); _ = s.Wait() })
+	_, port, _ := net.SplitHostPort(s.Addr())
+	req, _ := http.NewRequest("GET", "http://"+s.Addr()+"/", nil)
+	req.Host = "127.0.0.1:" + port
+	resp, err := noRedirect.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.StatusCode != http.StatusNotFound {
+		t.Fatalf("nil Assets: got %d, want 404", resp.StatusCode)
+	}
+}

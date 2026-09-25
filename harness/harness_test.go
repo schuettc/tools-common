@@ -8,6 +8,8 @@ import (
 )
 
 func TestFromHookPayloadPrecedence(t *testing.T) {
+	t.Setenv("AGENT_SESSION_CHILD", "")
+	t.Setenv("AGENT_SESSION_ID", "")
 	t.Setenv("CLAUDE_CODE_SESSION_ID", "env-uuid")
 	c := FromHookPayload([]byte(`{"session_id":"payload-uuid","cwd":"/tmp/payload-dir"}`))
 	if c.SessionID != "payload-uuid" || c.CWD != "/tmp/payload-dir" {
@@ -16,6 +18,8 @@ func TestFromHookPayloadPrecedence(t *testing.T) {
 }
 
 func TestFromHookPayloadFallsBackToEnv(t *testing.T) {
+	t.Setenv("AGENT_SESSION_CHILD", "")
+	t.Setenv("AGENT_SESSION_ID", "")
 	t.Setenv("CLAUDE_CODE_SESSION_ID", "env-uuid")
 	for _, payload := range []string{"", "not json", "{}"} {
 		c := FromHookPayload([]byte(payload))
@@ -73,6 +77,7 @@ func TestProjectLinkedWorktree(t *testing.T) {
 }
 
 func TestFromHookPayloadCapturesTranscriptPath(t *testing.T) {
+	t.Setenv("AGENT_SESSION_CHILD", "")
 	c := FromHookPayload([]byte(`{"session_id":"u1","cwd":"/w","transcript_path":"/tmp/t.jsonl"}`))
 	if c.TranscriptPath != "/tmp/t.jsonl" {
 		t.Fatalf("TranscriptPath = %q, want /tmp/t.jsonl", c.TranscriptPath)
@@ -175,6 +180,7 @@ func TestIsTeammateFailOpenAndBounded(t *testing.T) {
 // Claude variable; FromEnv must accept it so `muster register` and every
 // CLI identity path work for pi, not only the hook-payload path.
 func TestFromEnvAcceptsAgentSessionID(t *testing.T) {
+	t.Setenv("AGENT_SESSION_CHILD", "")
 	t.Setenv("CLAUDE_CODE_SESSION_ID", "")
 	t.Setenv("AGENT_SESSION_ID", "pi-uuid")
 	if got := FromEnv().SessionID; got != "pi-uuid" {
@@ -185,6 +191,7 @@ func TestFromEnvAcceptsAgentSessionID(t *testing.T) {
 // When both are present the Claude variable wins — existing behavior for
 // Claude sessions is untouched by the fallback.
 func TestFromEnvClaudeVariableWins(t *testing.T) {
+	t.Setenv("AGENT_SESSION_CHILD", "")
 	t.Setenv("CLAUDE_CODE_SESSION_ID", "claude-uuid")
 	t.Setenv("AGENT_SESSION_ID", "pi-uuid")
 	if got := FromEnv().SessionID; got != "claude-uuid" {
