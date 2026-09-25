@@ -5,7 +5,16 @@ The shared CLI foundation for the [.tools](https://subaud.tools) family
 binary hand-rolls: **version reporting**, **self-update** from the family
 `/dl` download standard, and **command dispatch**.
 
-One package, `tools`. **stdlib-only** — no external dependencies.
+One module, **stdlib-only** (no external dependencies): the root package `tools`
+(CLI foundation and small helpers) plus focused subpackages, each importable on
+its own. Subpackages never import each other; `localweb` imports only the root.
+
+| Import | What |
+|---|---|
+| `tools-common` (package `tools`) | CLI foundation (`App`, `Command`, help/man/`commands --json`, `ExitError`, version, self-update); `WriteFileAtomic`, `PIDAlive`, `ConfigDir`/`StateDir`/`CacheDir`/`DataDir`/`EnsureDir` |
+| `tools-common/channelmcp` | claude/channel stdio server (newline-delimited JSON-RPC 2.0) |
+| `tools-common/harness` | session identity: the family resolution rule over `CLAUDE_CODE_SESSION_ID`, `AGENT_SESSION_ID`, `AGENT_SESSION_CHILD` |
+| `tools-common/localweb` | loopback local-page server: per-launch token, rebinding/CSRF guards, remembered port, `OpenBrowser` |
 
 ## Usage
 
@@ -83,6 +92,17 @@ A tool can override any built-in by registering a command with the same `Name`
 | `0.1.0` | `abc` | — | `0.1.0 (abc)` |
 | `0.1.0` | — | — | `0.1.0` |
 | — | — | — | `dev` |
+
+## Session identity rule (`harness`)
+
+1. `AGENT_SESSION_CHILD=1` with a non-empty `AGENT_SESSION_ID` → the agent id
+   (a parent declared this process part of its session; today pi-claude-bridge).
+2. else `CLAUDE_CODE_SESSION_ID` (or a hook payload's `session_id`).
+3. else `AGENT_SESSION_ID`.
+4. else no session.
+
+Only a parent that runs a process as part of its own session may set
+`AGENT_SESSION_CHILD`. Tools never read these variables directly.
 
 ## License
 
