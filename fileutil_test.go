@@ -38,6 +38,9 @@ func TestWriteFileAtomicReplacesAndLeavesNoTemp(t *testing.T) {
 }
 
 func TestWriteFileAtomicFailureKeepsOriginal(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root ignores dir perms")
+	}
 	dir := t.TempDir()
 	p := filepath.Join(dir, "f")
 	_ = os.WriteFile(p, []byte("original"), 0o600)
