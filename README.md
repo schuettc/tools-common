@@ -16,6 +16,11 @@ its own. Subpackages never import each other; `localweb` imports only the root.
 | `tools-common/harness` | session identity: the family resolution rule over `CLAUDE_CODE_SESSION_ID`, `AGENT_SESSION_ID`, `AGENT_SESSION_CHILD` |
 | `tools-common/localweb` | loopback local-page server: per-launch token, rebinding/CSRF guards, remembered port, `OpenBrowser` |
 
+**Separate module:** `github.com/schuettc/tools-common/sqlitedb` has its own
+`go.mod` and `sqlitedb/vX.Y.Z` tags, because it needs the SQLite driver
+(`modernc.org/sqlite`). Importing the root or any package above never pulls it
+in. See [SQLite databases](#sqlite-databases-sqlitedb).
+
 ## Usage
 
 ```go
@@ -103,6 +108,47 @@ A tool can override any built-in by registering a command with the same `Name`
 
 Only a parent that runs a process as part of its own session may set
 `AGENT_SESSION_CHILD`. Tools never read these variables directly.
+
+## SQLite databases (`sqlitedb`)
+
+```
+go get github.com/schuettc/tools-common/sqlitedb@sqlitedb/v0.1.0
+```
+
+One way to open a tool's local database: modernc.org/sqlite, WAL, a 5 s busy
+timeout, one connection, foreign keys on, the database and its `-wal`/`-shm`
+files `0600` (parent directory created `0700`), and schema changes as an
+append-only list of steps tracked in `PRAGMA user_version`.
+
+```go
+db, err := sqlitedb.Open(ctx, filepath.Join(tools.StateDir("casebook"), "casebook.db"), sqlitedb.Options{
+	Migrations: []sqlitedb.Step{
+		sqlitedb.SQL(`CREATE TABLE sessions (id TEXT PRIMARY KEY, ...);`), // 0 -> 1
+		backfillLabels, // 1 -> 2: func(ctx context.Context, tx *sql.Tx) error
+	},
+})
+err = db.Tx(ctx, func(tx *sql.Tx) error { ... }) // commit on nil; roll back on error or panic
+```
+
+- Each step runs in its own transaction with the `user_version` bump inside
+  it: a failed step leaves the database at the previous version.
+- A database newer than the list is refused with `*sqlitedb.NewerError`
+  (both versions in the message).
+- Steps are append-only; fix a mistake with a new step.
+- `NoForeignKeys` leaves enforcement off, for a schema that was never written
+  for it (muster).
+- **Adopting an existing unversioned database** (muster's case: tables but
+  `user_version` 0): make step 1 idempotent (the old schema as `CREATE TABLE
+  IF NOT EXISTS`, `ALTER`s that tolerate `duplicate column name`, re-runnable
+  backfills) and set `AdoptUnversioned: true`. Step 1 then runs once over the
+  existing tables and the database is at version 1. Without the flag, such a
+  database is refused with `ErrUnversioned` rather than meet a first step
+  written for an empty file.
+- The package decides nothing about schemas: no table helpers, no ORM.
+
+**One driver version for the family:** sqlitedb pins `modernc.org/sqlite`
+v1.59.0. muster and galley are on v1.53.0 today; adopting the module moves
+them to v1.59.0.
 
 ## License
 
