@@ -141,3 +141,4 @@ func TestJSTheme(t *testing.T) { runBrowser(t, "theme") }
 func TestJSKeys(t *testing.T)  { runBrowser(t, "keys") }
 func TestJSApi(t *testing.T)   { runBrowser(t, "api") }
 func TestJSLive(t *testing.T)  { runBrowser(t, "live") }
+func TestJSDom(t *testing.T)   { runBrowser(t, "dom") }
