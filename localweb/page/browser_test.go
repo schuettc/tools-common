@@ -138,3 +138,4 @@ func TestHarnessReportsFailure(t *testing.T) {
 	}
 }
 func TestJSTheme(t *testing.T) { runBrowser(t, "theme") }
+func TestJSKeys(t *testing.T)  { runBrowser(t, "keys") }

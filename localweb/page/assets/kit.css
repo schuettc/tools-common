@@ -75,3 +75,35 @@ a { color: var(--kit-signal); }
 code { font: .88em var(--kit-mono); }
 :focus-visible { outline: 1px solid var(--kit-signal); outline-offset: 1px; }
 :focus:not(:focus-visible) { outline: none; }
+
+/* floating surfaces: the only users of --kit-lift */
+.kit-float {
+  position: fixed;
+  z-index: 100;
+  background: var(--kit-card);
+  border: 1px solid var(--kit-line);
+  border-radius: 8px;
+  box-shadow: var(--kit-lift);
+}
+
+/* the ? overlay */
+.kit-keys {
+  top: 12vh;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(440px, 92vw);
+  max-height: 76vh;
+  overflow: auto;
+  padding: 8px 20px 18px;
+  font: 13px var(--kit-mono);
+}
+.kit-keys .kit-label { margin: 14px 0 6px; }
+.kit-keys-row { display: grid; grid-template-columns: 120px 1fr; gap: 12px; padding: 3px 0; }
+.kit-keys-k { display: flex; gap: 4px; }
+.kit-keys kbd {
+  font: 12px var(--kit-mono);
+  border: 1px solid var(--kit-line);
+  border-radius: 6px;
+  padding: 0 6px;
+  color: var(--kit-fg);
+}
