@@ -7,7 +7,8 @@ binary hand-rolls: **version reporting**, **self-update** from the family
 
 One module, **stdlib-only** (no external dependencies): the root package `tools`
 (CLI foundation and small helpers) plus focused subpackages, each importable on
-its own. Subpackages never import each other; `localweb` imports only the root.
+its own. Subpackages never import each other; `localweb` imports only the root,
+and `localweb/page` imports nothing from the module.
 
 | Import | What |
 |---|---|
@@ -15,6 +16,7 @@ its own. Subpackages never import each other; `localweb` imports only the root.
 | `tools-common/channelmcp` | claude/channel stdio server (newline-delimited JSON-RPC 2.0) |
 | `tools-common/harness` | session identity: the family resolution rule over `CLAUDE_CODE_SESSION_ID`, `AGENT_SESSION_ID`, `AGENT_SESSION_CHILD` |
 | `tools-common/localweb` | loopback local-page server: per-launch token, rebinding/CSRF guards, remembered port, `OpenBrowser` |
+| `tools-common/localweb/page` | the galley-style page kit: tokens, bar, list panel, reading-column components, keyboard layer, API and live clients, served under `/_kit/` |
 
 ## Usage
 
@@ -92,6 +94,70 @@ A tool can override any built-in by registering a command with the same `Name`
 | `0.1.0` | `abc` | — | `0.1.0 (abc)` |
 | `0.1.0` | — | — | `0.1.0` |
 | — | — | — | `dev` |
+
+## Local page kit (`localweb/page`)
+
+The family's galley-style page: one stylesheet (`kit.css`, the only place the
+`--kit-*` tokens are declared) and vanilla ES modules, embedded and served
+under `/_kit/` beside a tool's own page. No build step, no node.
+
+```go
+srv, err := localweb.Start(ctx, localweb.Config{
+	Tool:   "cull",
+	Assets: page.With(webFS), // your files at /, the kit at /_kit/
+	API:    api,
+})
+```
+
+```html
+<script src="/_kit/boot.js" data-tool="cull"></script>  <!-- remembered theme, before paint -->
+<link rel="stylesheet" href="/_kit/kit.css">
+<!-- optional: the tool's colours (defaults are tackle rust and wire) -->
+<style>:root { --tool-signal-light: #a4512a; --tool-signal-dark: #d98f66; }</style>
+<div class="kit-page" id="app"></div>
+<script type="module">
+  import { bar, list, createKeys, createApi, live, initTheme, h } from '/_kit/kit.js';
+  const b = bar({ brand: { name: 'cull' }, sections: [{ id: 'label', label: 'label', count: '0/150' }],
+                  active: 'label', primary: { label: 'Next unlabeled', run: next } });
+  initTheme('cull', b.themeControl);
+  const l = list({ label: 'label', row: t => ({ key: `go · ${t.file}`, title: t.name }), openOnMove: true, onOpen: show });
+  const keys = createKeys({ list: l });                 // j/k/o/↵/x/⇧x/?/Esc
+  keys.register({ keys: '1', label: 'keep', run: () => label('keep') });
+  document.getElementById('app').append(b.el, h('div', { class: 'kit-main' }, l.el, read));
+</script>
+```
+
+- **Components** (`dom.js`): `bar`, `list`, `facts`, `card`, `buttons`,
+  `codeBlock`, `fold`, `noteField`, and `h`. The `.kit-*` classes are the
+  contract and work from static HTML too.
+- **Keyboard** (`keys.js`): family defaults plus `register`. A clash throws at
+  registration. While a text field has focus, only `Esc` and `inField` keys fire.
+- **API** (`api.js`): `createApi()` sends JSON with the page's cookie. Pass
+  `{token}` to send `X-Local-Token` instead (non-browser callers).
+- **Live** (`live.js`): SSE with a 2 s poll fallback. The wire, which the tool's
+  Go handlers implement:
+  - `GET <events>?since=<cursor>`: `text/event-stream`. Every message is the
+    default event, `id:` is the cursor after it, and `data:` is JSON
+    `{"type", "data"}`.
+  - `GET <poll>?since=<cursor>`: `{"cursor": "...", "events": [{"type", "data"}]}`.
+
+  The client reopens a broken stream itself with the newest cursor.
+
+**TypeScript** consumers keep the kit external and type it from `kit.d.ts`:
+
+```sh
+esbuild app.ts --bundle --format=esm --external:/_kit/*
+```
+```jsonc
+// tsconfig.json; <dir> is `go list -m -f '{{.Dir}}' github.com/schuettc/tools-common`
+{ "compilerOptions": { "moduleResolution": "bundler",
+    "paths": { "/_kit/kit.js": ["<dir>/localweb/page/assets/kit.d.ts"] } } }
+```
+
+The kit's JS tests run in headless Chrome from `go test`. They skip without
+Chrome unless `KIT_BROWSER=required` (as in CI). `KIT_CHROME` names a binary.
+`localweb/page/demo/` rebuilds the approved docket mock and a cull-shaped page
+for visual review.
 
 ## Session identity rule (`harness`)
 
