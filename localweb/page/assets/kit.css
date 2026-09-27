@@ -1,1 +1,77 @@
-/* tools-common localweb/page kit stylesheet. */
+/* tools-common localweb/page — the family's galley-style page kit.
+
+   This file is THE token source. Every --kit-* property is declared once, in
+   the :root block below, with light-dark() holding both themes on one line,
+   so there is no second block to keep in step. A Go test fails if any other
+   file declares a --kit-* property. Tools never set --kit-* tokens; they set
+   the inputs listed further down.
+
+   ONE MEANING EACH, EXCLUSIVELY. Every rule below is written against this
+   list rather than against how a colour looks:
+
+     --kit-bg          the page
+     --kit-panel       the list panel's ground
+     --kit-card        cards, tables, the raised open row
+     --kit-fg          text
+     --kit-muted       secondary text, counts, gutters
+     --kit-line        hairline rules and outlines
+     --kit-signal      YOU: your selection, your pending confirmations, the
+                       active place, the one filled primary button, links
+     --kit-signal-soft the active chip's ground (a wash of the signal)
+     --kit-signal-ink  text on a signal fill; the ink belongs to the fill
+     --kit-agent       THE AGENT / WIRE: its name, its cards' edge, its progress
+     --kit-agent-soft  the agent's wash
+     --kit-wait        WAITING: queued messages, drafts
+     --kit-danger      destructive verbs only
+     --kit-ok          live, verified, active
+     --kit-lift        the single elevation, used only by .kit-float surfaces
+     --kit-mono        controls, labels, keys, status and counts
+     --kit-sans        titles, prose and item titles
+
+   TOOL INPUTS (all optional; defaults are tackle rust and tackle wire):
+     --tool-signal-light / --tool-signal-dark          (#a4512a / #d98f66)
+     --tool-agent-light  / --tool-agent-dark           (#b06f14 / #eba63f)
+     --tool-signal-ink-light / --tool-signal-ink-dark  (#ffffff / #14161d)
+
+   GALLEY'S RULES: mono only for controls, labels, keys and status; sans for
+   titles and prose. 8px radius on cards and tables, 6px on controls. Hairline
+   borders, no gradients, no shadow but --kit-lift. Keyboard focus draws a 1px
+   signal ring; a mouse click draws none. Theme follows the system unless
+   html[data-theme] overrides it (theme.js remembers the choice). */
+
+:root {
+  color-scheme: light dark;
+  --kit-bg: light-dark(#f4f5f8, #14161d);
+  --kit-panel: light-dark(#eef0f4, #1a1d27);
+  --kit-card: light-dark(#ffffff, #1a1d27);
+  --kit-fg: light-dark(#1a1d27, #e8eaf1);
+  --kit-muted: light-dark(#59606f, #969cae);
+  --kit-line: light-dark(#e3e5ec, #2b2f3b);
+  --kit-signal: light-dark(var(--tool-signal-light, #a4512a), var(--tool-signal-dark, #d98f66));
+  --kit-signal-soft: light-dark(color-mix(in srgb, var(--kit-signal) 10%, transparent), color-mix(in srgb, var(--kit-signal) 14%, transparent));
+  --kit-signal-ink: light-dark(var(--tool-signal-ink-light, #ffffff), var(--tool-signal-ink-dark, #14161d));
+  --kit-agent: light-dark(var(--tool-agent-light, #b06f14), var(--tool-agent-dark, #eba63f));
+  --kit-agent-soft: light-dark(color-mix(in srgb, var(--kit-agent) 10%, transparent), color-mix(in srgb, var(--kit-agent) 12%, transparent));
+  --kit-wait: light-dark(#5661b8, #98a3ec);
+  --kit-danger: light-dark(#c22a2a, #e5484d);
+  --kit-ok: light-dark(#1f7d52, #6fc79a);
+  --kit-lift: 0 6px 22px rgba(0, 0, 0, .16);
+  --kit-mono: "SF Mono", ui-monospace, "JetBrains Mono", Menlo, monospace;
+  --kit-sans: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+html[data-theme="light"] { color-scheme: light; }
+html[data-theme="dark"] { color-scheme: dark; }
+
+/* base */
+*, *::before, *::after { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; }
+body {
+  background: var(--kit-bg);
+  color: var(--kit-fg);
+  font: 16px/1.7 var(--kit-sans);
+  -webkit-font-smoothing: antialiased;
+}
+a { color: var(--kit-signal); }
+code { font: .88em var(--kit-mono); }
+:focus-visible { outline: 1px solid var(--kit-signal); outline-offset: 1px; }
+:focus:not(:focus-visible) { outline: none; }

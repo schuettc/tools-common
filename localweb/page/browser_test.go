@@ -137,3 +137,4 @@ func TestHarnessReportsFailure(t *testing.T) {
 		t.Fatalf("want a reported failure, got %q", res)
 	}
 }
+func TestJSTheme(t *testing.T) { runBrowser(t, "theme") }
