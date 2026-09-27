@@ -2,7 +2,9 @@
 // stream is down.
 //
 // Wire contract (each tool's Go handlers implement it):
-//   GET <events>?since=<cursor>   text/event-stream. Every message is the
+//   GET <events>?since=<cursor>   text/event-stream, headers flushed on
+//                                 connect (so the client sees it open before
+//                                 the first event). Every message is the
 //                                 default "message" event; its id is the
 //                                 cursor after it and its data is JSON
 //                                 {type, data}. since is omitted when the
@@ -23,6 +25,7 @@ export function live(opts) {
 
   let cursor = opts.cursor || '';
   let es = null;
+  let esOpen = false;
   let timer = null;
   let status = '';
   let stopped = false;
@@ -36,9 +39,14 @@ export function live(opts) {
     onStatus(s);
   }
 
+  // deliver never lets a page handler's exception stop the stream or polling.
   function deliver(type, data, c) {
     cursor = c;
-    opts.onEvent({ type, data, cursor: c });
+    try {
+      opts.onEvent({ type, data, cursor: c });
+    } catch (err) {
+      console.error('live: onEvent threw', err);
+    }
   }
 
   function schedule() {
@@ -54,8 +62,10 @@ export function live(opts) {
   function openStream() {
     const s = new ES(withSince(opts.events));
     es = s;
+    esOpen = false;
     s.onopen = () => {
       if (stopped || es !== s) return;
+      esOpen = true;
       epoch++;
       cancelPoll();
       setStatus('live');
@@ -97,6 +107,12 @@ export function live(opts) {
     for (const e of body.events || []) deliver(e.type, e.data, body.cursor);
     if (body.cursor) cursor = body.cursor;
     setStatus('polling');
+    // A stream still connecting was opened from an older cursor; replace it,
+    // or it would replay what this poll just delivered.
+    if (es && !esOpen) {
+      es.close();
+      es = null;
+    }
     if (!es) openStream();
     schedule();
   }

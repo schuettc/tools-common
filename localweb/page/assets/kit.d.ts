@@ -82,7 +82,7 @@ export interface LiveEvent<T = unknown> {
 }
 
 export interface LiveOptions {
-  /** SSE endpoint; every message is the default event, id = cursor, data = JSON {type, data}. */
+  /** SSE endpoint: flush headers on connect; every message is the default event, id = cursor, data = JSON {type, data}. */
   events: string;
   /** Poll endpoint: GET ?since=<cursor> → {cursor, events: [{type, data}]}. */
   poll: string;
@@ -147,7 +147,9 @@ export interface Chip {
 }
 
 export interface Row {
-  /** The mono kicker line, and (with title) the row's identity across setItems. */
+  /** The row's identity across setItems; without it, key + title is. */
+  id?: string;
+  /** The mono kicker line. */
   key?: string;
   title: string;
   meta?: string;
@@ -157,7 +159,7 @@ export interface Row {
 
 export interface ListHandle<T> extends ListNav {
   el: HTMLElement;
-  /** Keeps the open row, cursor and selection by row key + title. */
+  /** Keeps the open row, cursor and selection by row id (else key + title); calls onSelect if the selection changed. */
   setItems(items: T[]): void;
   setChips(group: 'view' | 'filter', chips: Chip[]): void;
   move(d: number): void;

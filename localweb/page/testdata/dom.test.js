@@ -227,3 +227,26 @@ test('dom: styles apply', () => {
   eq(cs(l.el.querySelector('.kit-title')).fontSize, '14.5px');
   initTheme('dom').set('system');
 });
+
+test('dom: setItems reports a selection it changed', () => {
+  const sels = [];
+  const l = list({ label: 'l', row: it => ({ id: it.id, key: it.id, title: it.title, selectable: true }), onSelect: s => sels.push(s.map(x => x.id)) });
+  l.setItems([{ id: 'a', title: 'A' }, { id: 'b', title: 'B' }, { id: 'c', title: 'C' }]);
+  l.toggle(0); l.toggle(1); l.open(2);
+  sels.length = 0;
+  l.setItems([{ id: 'a', title: 'A retitled' }, { id: 'c', title: 'C' }]);
+  eq(l.selected().map(x => x.id), ['a'], 'id keeps a through a title edit; b is gone');
+  eq(sels, [['a']], 'onSelect told about the change');
+  eq(l.el.querySelector('.kit-row.open .kit-title').textContent, 'C', 'open row kept by id');
+  sels.length = 0;
+  l.setItems([{ id: 'a', title: 'A retitled' }, { id: 'c', title: 'C' }]);
+  eq(sels, [], 'no call when nothing changed');
+});
+
+test('dom: a lost cursor stays near where it was', () => {
+  const l = list({ label: 'l', row: it => ({ key: it, title: it }) });
+  l.setItems(['a', 'b', 'c', 'd']);
+  l.move(2);
+  l.setItems(['a', 'b', 'd']);
+  eq(l.current(), 2, 'cursor keeps its index when its row vanished');
+});

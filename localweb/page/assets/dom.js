@@ -103,8 +103,10 @@ export function list(o) {
     body,
     o.foot ? h('div', { class: 'kit-foot' }, o.foot) : null);
 
+  // A row's identity across setItems: its id, else key + title, else index.
   const keyOf = (item, i) => {
     const r = o.row(item);
+    if (r.id !== undefined) return 'id:' + r.id;
     return r.key !== undefined ? r.key + '\u0000' + r.title : 'i' + i;
   };
   const clamp = i => Math.max(0, Math.min(items.length - 1, i));
@@ -150,16 +152,19 @@ export function list(o) {
       const old = items;
       const openKey = opened >= 0 ? keyOf(old[opened], opened) : null;
       const curKey = cur >= 0 && old[cur] !== undefined ? keyOf(old[cur], cur) : null;
-      const selKeys = new Set([...sel].map(i => keyOf(old[i], i)));
+      const selKeys = [...sel].sort((a, b) => a - b).map(i => keyOf(old[i], i));
       items = next.slice();
       const keys = items.map(keyOf);
       opened = openKey === null ? -1 : keys.indexOf(openKey);
+      const was = cur;
       cur = curKey === null ? -1 : keys.indexOf(curKey);
-      if (cur < 0) cur = opened >= 0 ? opened : items.length ? 0 : -1;
+      if (cur < 0 && items.length) cur = was >= 0 ? clamp(was) : opened >= 0 ? opened : 0;
       sel.clear();
-      keys.forEach((k, i) => selKeys.has(k) && sel.add(i));
+      keys.forEach((k, i) => selKeys.includes(k) && sel.add(i));
       anchor = -1;
       render();
+      const now = [...sel].sort((a, b) => a - b).map(i => keys[i]);
+      if (o.onSelect && now.join('\n') !== selKeys.join('\n')) o.onSelect(handle.selected());
     },
     setChips(group, chips) {
       (group === 'view' ? views : filters).replaceChildren(...chipRow(group, chips, o.onChip));

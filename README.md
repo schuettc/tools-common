@@ -136,8 +136,8 @@ srv, err := localweb.Start(ctx, localweb.Config{
   `{token}` to send `X-Local-Token` instead (non-browser callers).
 - **Live** (`live.js`): SSE with a 2 s poll fallback. The wire, which the tool's
   Go handlers implement:
-  - `GET <events>?since=<cursor>`: `text/event-stream`. Every message is the
-    default event, `id:` is the cursor after it, and `data:` is JSON
+  - `GET <events>?since=<cursor>`: `text/event-stream`, with headers flushed
+    on connect. Every message is the default event, `id:` is the cursor after it, and `data:` is JSON
     `{"type", "data"}`.
   - `GET <poll>?since=<cursor>`: `{"cursor": "...", "events": [{"type", "data"}]}`.
 

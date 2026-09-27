@@ -63,8 +63,9 @@ func TestWithNilTool(t *testing.T) {
 	if code, _, _ := get(t, srv.URL+"/_kit/kit.css"); code != 200 {
 		t.Errorf("kit.css: %d", code)
 	}
-	if code, _, _ := get(t, srv.URL+"/index.html"); code != 404 {
-		t.Errorf("index with nil tool: %d, want 404", code)
+	// (not /index.html: FileServer redirects that to /, a real kit-only directory)
+	if code, _, _ := get(t, srv.URL+"/app.js"); code != 404 {
+		t.Errorf("tool file with nil tool: %d, want 404", code)
 	}
 }
 
@@ -117,3 +118,30 @@ func TestServedThroughLocalweb(t *testing.T) {
 		}
 	}
 }
+
+func TestWithIsAValidFS(t *testing.T) {
+	kitFiles, _ := fs.ReadDir(FS(), ".")
+	var want []string
+	for _, e := range kitFiles {
+		want = append(want, Prefix+"/"+e.Name())
+	}
+	if err := fstest.TestFS(With(fstest.MapFS{"index.html": {Data: []byte("page")}}), append(want, "index.html")...); err != nil {
+		t.Errorf("With(tool): %v", err)
+	}
+	if err := fstest.TestFS(With(nil), want...); err != nil {
+		t.Errorf("With(nil): %v", err)
+	}
+	if info, err := fs.Stat(With(nil), Prefix); err != nil || info.Name() != Prefix || !info.IsDir() {
+		t.Errorf("Stat(_kit) = %v, %v; want a dir named %s", info, err, Prefix)
+	}
+}
+
+func TestWithSurfacesToolReadDirErrors(t *testing.T) {
+	if _, err := fs.ReadDir(With(brokenFS{}), "."); err == nil {
+		t.Error("a tool ReadDir error was swallowed")
+	}
+}
+
+type brokenFS struct{}
+
+func (brokenFS) Open(string) (fs.File, error) { return nil, fs.ErrPermission }

@@ -135,3 +135,45 @@ test('live: stop cleans up', async () => {
   es.last().emitOpen();
   eq(statuses.length, n, 'no status after stop');
 });
+
+test('live: a throwing onEvent does not stop updates', async () => {
+  const seen = [];
+  const { f, timers, es, statuses, handle } = setup({ onEvent: e => { seen.push(e.type); if (e.type === 'bad') throw new Error('page bug'); } });
+  const orig = console.error;
+  console.error = () => {};
+  try {
+    es.last().emitOpen();
+    es.last().emitMessage('1', { type: 'bad' });
+    es.last().emitMessage('2', { type: 'ok' });
+    es.last().emitError();
+    f.queue.push(f.json({ cursor: '4', events: [{ type: 'bad' }, { type: 'after' }] }));
+    timers.tick();
+    await flush();
+    eq(seen, ['bad', 'ok', 'bad', 'after'], 'every event delivered');
+    eq(statuses.at(-1), 'polling');
+    eq(es.last().url, '/api/events?since=4', 'stream reopened');
+    eq(timers.pending.size, 1, 'next poll scheduled');
+  } finally {
+    console.error = orig;
+    handle.stop();
+  }
+});
+
+test('live: a poll that lands while the reopened stream is still connecting replaces it', async () => {
+  const { f, timers, es, events, handle } = setup();
+  es.last().emitError();
+  f.queue.push(f.json({ cursor: '1', events: [] }));
+  timers.tick();
+  await flush();
+  const connecting = es.last();
+  eq(connecting.url, '/api/events?since=1');
+  f.queue.push(f.json({ cursor: '2', events: [{ type: 'x' }] }));
+  timers.tick(); // the stream has not opened: this poll delivers and moves the cursor
+  await flush();
+  eq(events.map(e => e.type), ['x']);
+  assert(connecting.closed, 'the stale connecting stream is closed');
+  eq(es.last().url, '/api/events?since=2', 'reopened from the new cursor');
+  es.last().emitOpen();
+  eq(timers.pending.size, 0);
+  handle.stop();
+});
