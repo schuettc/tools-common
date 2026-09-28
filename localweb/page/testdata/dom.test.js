@@ -1,4 +1,4 @@
-import { test, eq, assert, fixture } from './harness.js';
+import { test, eq, assert, fixture, blurEl } from './harness.js';
 import { h, bar, list, facts, card, buttons, codeBlock, fold, noteField } from '/_kit/dom.js';
 import { createKeys } from '/_kit/keys.js';
 import { initTheme } from '/_kit/theme.js';
@@ -196,7 +196,7 @@ test('dom: noteField', () => {
     eq(ran, 0, 'page key does not fire in the note');
     n.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
     eq(commits, ['flaky on CI']);
-    n.blur();
+    blurEl(n);
     eq(commits.length, 1, 'unchanged blur does not recommit');
     n.focus();
     n.value = 'scratch';
@@ -205,7 +205,7 @@ test('dom: noteField', () => {
     assert(document.activeElement !== n, 'and blurs');
     n.focus();
     n.value = 'by blur';
-    n.blur();
+    blurEl(n);
     eq(commits, ['flaky on CI', 'by blur']);
   } finally { keys.destroy(); }
 });

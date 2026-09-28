@@ -102,6 +102,40 @@ export interface LiveOptions {
 
 export function live(opts: LiveOptions): { stop(): void; cursor(): string };
 
+// ---- selection.js
+
+/** A set of row ids that several views bind to (a flat list and a board of the same items). */
+export interface Selection {
+  ids(): string[];
+  has(id: string): boolean;
+  toggle(id: string): void;
+  /** Set every id between anchorId and id (in orderedIds) to the anchor's state; an anchor not in orderedIds toggles id. */
+  range(anchorId: string, id: string, orderedIds: string[]): void;
+  all(ids: string[]): void;
+  deselect(ids: string[]): void;
+  clear(): void;
+  /** The id last toggled or ranged to; null after clear(). */
+  anchor(): string | null;
+  /** Called with the ids after every change; returns an unsubscribe function. */
+  onChange(cb: (ids: string[]) => void): () => void;
+}
+
+export function createSelection(): Selection;
+
+// ---- sheet.js
+
+export interface SheetHandle {
+  el: HTMLElement;
+  /** Idempotent; returns focus to where it was and calls onClose. */
+  close(): void;
+}
+
+/** A small modal sheet over a backdrop: Esc or a backdrop click closes it, focus stays inside, page keys wait. */
+export function sheet(o?: { title?: string; body?: Node | string; actions?: Button[]; onClose?(): void }): SheetHandle;
+
+/** Whether any sheet is open (the keyboard layer suspends page keys while one is). */
+export function sheetOpen(): boolean;
+
 // ---- dom.js
 
 type Child = Node | string | number | null | undefined | false;
@@ -168,6 +202,8 @@ export interface Row {
 
 export interface ListHandle<T> extends ListNav {
   el: HTMLElement;
+  /** The store this list binds to: the one passed in, or its own. */
+  selection: Selection;
   /** Keeps the open row, cursor and selection by row id (else key + title); calls onSelect if the selection changed. Tested to 500 rows; paginate beyond that. */
   setItems(items: T[]): void;
   setChips(group: 'view' | 'filter', chips: Chip[]): void;
@@ -184,6 +220,8 @@ export interface ListHandle<T> extends ListNav {
   clearSelection(): void;
   /** The cursor row's index, -1 when empty. */
   current(): number;
+  /** Stop listening to a shared selection (call when the list is discarded). */
+  destroy(): void;
 }
 
 export function list<T>(o: {
@@ -194,6 +232,8 @@ export function list<T>(o: {
   row(item: T): Row;
   onOpen?(item: T, i: number): void;
   onSelect?(selected: T[]): void;
+  /** Bind to a shared selection store; rows need an id. Default: the list's own. */
+  selection?: Selection;
   /** Open the row the cursor moves to (the reading column follows j/k). */
   openOnMove?: boolean;
   foot?: Node;

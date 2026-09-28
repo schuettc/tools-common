@@ -6,6 +6,8 @@
 // "Esc"), optional modifier prefixes ("⌃", "⌥", "⇧", "⌘", in any order), and
 // sequences separated by spaces ("g a", 1 s apart at most).
 
+import { sheet, sheetOpen } from './sheet.js';
+
 const NAMED = { Enter: '↵', ArrowUp: '↑', ArrowDown: '↓', Escape: 'Esc' };
 const MODS = ['⌃', '⌥', '⇧', '⌘'];
 const SEQ_TIMEOUT = 1000;
@@ -80,7 +82,7 @@ export function createKeys(opts = {}) {
     fam('⇧x', 'select range', () => list.toggleRange());
   }
   fam('?', 'show keys', () => showHelp());
-  // Esc with the overlay open is handled in onKey; here there is nothing to close.
+  // Esc with a sheet (or the ? overlay) open is the sheet's; here there is nothing to close.
   fam('Esc', 'close / leave field', () => false);
 
   function fire(b, e) {
@@ -91,14 +93,12 @@ export function createKeys(opts = {}) {
     if (e.isComposing || e.keyCode === 229 || e.defaultPrevented) return;
     const chord = chordOf(e);
     if (!chord) return;
-    if (overlay) {
-      // the overlay is modal: only Esc and ? act while it is open
-      if (chord === 'Esc' || chord === '?') {
-        showHelp(false);
-        e.preventDefault();
-      }
+    if (overlay && chord === '?') {
+      showHelp(false); // ? toggles its own sheet; Esc is the sheet's
+      e.preventDefault();
       return;
     }
+    if (sheetOpen()) return; // a sheet is modal: page keys wait
     const el = e.target instanceof Element ? e.target : null;
     if (el && el.closest(FIELD)) {
       pending = [];
@@ -149,20 +149,16 @@ export function createKeys(opts = {}) {
 
   function showHelp(open = !overlay) {
     if (!open) {
-      if (overlay) overlay.remove();
-      overlay = null;
+      if (overlay) overlay.close();
       return;
     }
-    if (overlay) return;
-    overlay = document.createElement('div');
-    overlay.className = 'kit-float kit-keys';
-    overlay.setAttribute('role', 'dialog');
-    overlay.setAttribute('aria-label', 'keyboard shortcuts');
+    if (overlay || sheetOpen()) return;
+    const body = document.createElement('div');
     for (const [group, rows] of groups()) {
-      const h = document.createElement('div');
-      h.className = 'kit-label';
-      h.textContent = group;
-      overlay.append(h);
+      const g = document.createElement('div');
+      g.className = 'kit-label';
+      g.textContent = group;
+      body.append(g);
       for (const [label, keys] of rows) {
         const row = document.createElement('div');
         row.className = 'kit-keys-row';
@@ -176,11 +172,12 @@ export function createKeys(opts = {}) {
         const l = document.createElement('span');
         l.textContent = label;
         row.append(k, l);
-        overlay.append(row);
+        body.append(row);
       }
     }
-    overlay.addEventListener('click', () => showHelp(false));
-    document.body.append(overlay);
+    overlay = sheet({ title: 'keyboard shortcuts', body, onClose: () => (overlay = null) });
+    overlay.el.classList.add('kit-keys');
+    body.addEventListener('click', () => showHelp(false));
   }
 
   target.addEventListener('keydown', onKey);
