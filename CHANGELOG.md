@@ -4,6 +4,26 @@ Root module releases are tagged `vX.Y.Z`; the separate `sqlitedb` module is
 tagged `sqlitedb/vX.Y.Z`. Releases before this file are described by their
 tags and PRs.
 
+## v0.5.0 (2026-09-27)
+
+### Added
+- New package `localweb/page`: the family's galley-style local page kit, for
+  docket's workbench and cull's label page. `page.With(toolFS)` serves the
+  kit's embedded assets under `/_kit/` beside a tool's own page
+  (`localweb.Config{Assets: page.With(webFS)}`). The assets are plain CSS and
+  vanilla ES modules, with no build step and no node:
+  - `kit.css`, the only place the `--kit-*` tokens are declared (one
+    `light-dark()` block). Tools set only `--tool-signal-*` and
+    `--tool-agent-*`, which default to tackle rust and wire.
+  - `theme`, `keys`, `api`, `live` (SSE with a 2 s poll fallback) and `dom`
+    (bar, list panel, facts, cards, buttons, code block, fold, note field),
+    re-exported by `kit.js` and typed by `kit.d.ts`.
+- Additive: nothing in v0.4.0 changes, and the root module stays stdlib-only.
+
+### CI
+- The kit's JS tests run in headless Chrome from `go test`. The `test` job
+  sets `KIT_BROWSER=required`, so a missing browser fails instead of skipping.
+
 ## sqlitedb v0.1.0 (2026-09-27)
 
 ### Added
