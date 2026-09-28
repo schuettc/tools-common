@@ -4,6 +4,15 @@ Root module releases are tagged `vX.Y.Z`; the separate `sqlitedb` module is
 tagged `sqlitedb/vX.Y.Z`. Releases before this file are described by their
 tags and PRs.
 
+## v0.7.0 (2026-09-27)
+
+### Added
+- `Config.About`: an optional overview. `help` prints it above the command
+  list, and `man` uses it as the DESCRIPTION (blank-line paragraphs become
+  `.PP` breaks). Bare invocation stays the short usage on stderr, exit 2.
+  galley uses it for its push/pull and channel guidance.
+- Additive: without `About`, `help` and `man` are unchanged.
+
 ## v0.6.0 (2026-09-27)
 
 ### Added

@@ -23,6 +23,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"strings"
 )
 
 // UsageError signals a usage (exit code 2) error from a command's Run.
@@ -51,6 +52,7 @@ type Config struct {
 	Domain  string  // e.g. "kempt.tools"
 	Version Version // the tool's own ldflags-stamped values
 	Groups  []Group // optional; empty → flat usage
+	About   string  // optional overview: shown by `help` above the command list and as the man DESCRIPTION
 }
 
 // App is an instance-scoped CLI: it holds the tool name, domain, version, and
@@ -62,6 +64,7 @@ type App struct {
 	registry map[string]Command
 	aliases  map[string]string // alias → canonical Name
 	groups   []Group
+	about    string
 	dlHost   string
 	client   *http.Client
 	exePath  func() (string, error)
@@ -77,6 +80,7 @@ func New(cfg Config) *App {
 		registry: map[string]Command{},
 		aliases:  map[string]string{},
 		groups:   cfg.Groups,
+		about:    cfg.About,
 		dlHost:   "https://" + cfg.Domain,
 		client:   http.DefaultClient,
 		exePath:  os.Executable,
@@ -99,6 +103,9 @@ func New(cfg Config) *App {
 					return nil
 				}
 				return UsageError{Msg: fmt.Sprintf("unknown command %q", args[0])}
+			}
+			if a.about != "" {
+				fmt.Fprintf(out, "%s\n\n", strings.TrimRight(a.about, "\n"))
 			}
 			a.usage(out)
 			return nil
@@ -125,7 +132,7 @@ func New(cfg Config) *App {
 		Summary: "print a roff man page",
 		Run: func(_ []string, out, errw io.Writer) error {
 			cmds := a.commands()
-			fmt.Fprint(out, ManPage(a.name, a.domain, a.groups, cmds))
+			fmt.Fprint(out, manPage(a.name, a.domain, a.about, a.groups, cmds))
 			return nil
 		},
 	})
