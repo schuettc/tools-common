@@ -177,7 +177,7 @@ export function createKeys(opts = {}) {
     }
     overlay = sheet({ title: 'keyboard shortcuts', body, onClose: () => (overlay = null) });
     overlay.el.classList.add('kit-keys');
-    body.addEventListener('click', () => showHelp(false));
+    overlay.el.addEventListener('click', () => showHelp(false));
   }
 
   target.addEventListener('keydown', onKey);

@@ -4,6 +4,21 @@ Root module releases are tagged `vX.Y.Z`; the separate `sqlitedb` module is
 tagged `sqlitedb/vX.Y.Z`. Releases before this file are described by their
 tags and PRs.
 
+## v0.10.1 (2026-09-28)
+
+### Fixed
+- `localweb/page` review fixes for v0.10.0:
+  - `sheet({returnFocus})`: if the opener left the page while the sheet was
+    open, focus goes to `returnFocus`, else the main region (`main`,
+    `[role=main]` or `.kit-read`), else body, instead of nowhere.
+  - `list.setItems` paints once, even when it drops rows that left the list.
+  - The `?` overlay closes on a click anywhere in it again.
+  - `Selection.range` docs: if either end is not in `orderedIds`, it toggles
+    the target.
+- Tests: the destroyed-list test now fails if `destroy()` doesn't unsubscribe,
+  and the harness's `eq` refuses DOM nodes (it compared them as `{}`, so the
+  focus assertions were vacuous; they now compare identity, and pass).
+
 ## v0.10.0 (2026-09-28)
 
 ### Added

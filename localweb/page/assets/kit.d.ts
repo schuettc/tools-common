@@ -109,7 +109,7 @@ export interface Selection {
   ids(): string[];
   has(id: string): boolean;
   toggle(id: string): void;
-  /** Set every id between anchorId and id (in orderedIds) to the anchor's state; an anchor not in orderedIds toggles id. */
+  /** Set every id between anchorId and id (in orderedIds) to the anchor's state. If either anchorId or id is not in orderedIds, this toggles id. */
   range(anchorId: string, id: string, orderedIds: string[]): void;
   all(ids: string[]): void;
   deselect(ids: string[]): void;
@@ -131,7 +131,8 @@ export interface SheetHandle {
 }
 
 /** A small modal sheet over a backdrop: Esc or a backdrop click closes it, focus stays inside, page keys wait. */
-export function sheet(o?: { title?: string; body?: Node | string; actions?: Button[]; onClose?(): void }): SheetHandle;
+/** returnFocus: where focus goes on close if the opener has left the page (default: the main region, else body). */
+export function sheet(o?: { title?: string; body?: Node | string; actions?: Button[]; onClose?(): void; returnFocus?: HTMLElement }): SheetHandle;
 
 /** Whether any sheet is open (the keyboard layer suspends page keys while one is). */
 export function sheetOpen(): boolean;

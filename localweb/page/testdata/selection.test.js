@@ -64,9 +64,14 @@ test('selection: two lists share one store', () => {
   store.clear();
   eq([rowsOf(flat).filter(r => r.classList.contains('sel')).length, rowsOf(lane).filter(r => r.classList.contains('sel')).length], [0, 0]);
   assert(flat.selection === store, 'handle exposes the store');
-  lane.destroy();
-  store.toggle('a');
-  eq(rowsOf(lane).filter(r => r.classList.contains('sel')).length, 0, 'a destroyed list stops listening');
+  let laneSels = 0;
+  const watched = mk(store, { onSelect: () => laneSels++ });
+  watched.setItems(['b', 'd']);
+  laneSels = 0;
+  watched.destroy();
+  store.toggle('b'); // a row the destroyed list renders
+  eq(rowsOf(watched)[0].classList.contains('sel'), false, 'a destroyed list does not repaint');
+  eq(laneSels, 0, 'nor report');
 });
 
 test('selection: a list without a store gets its own', () => {
@@ -75,4 +80,21 @@ test('selection: a list without a store gets its own', () => {
   a.toggle(0);
   eq([a.selectedIds(), b.selectedIds()], [['x'], []]);
   assert(a.selection && a.selection !== b.selection);
+});
+
+test('selection: setItems paints once when it drops rows that left', () => {
+  const l = list({ label: 'l', row: it => ({ key: 'k', title: it, selectable: true }) });
+  l.setItems(['a', 'b', 'c']);
+  l.toggle(1);
+  const orig = DOMTokenList.prototype.toggle;
+  let curToggles = 0;
+  DOMTokenList.prototype.toggle = function (name, ...rest) {
+    if (name === 'cur') curToggles++;
+    return orig.call(this, name, ...rest);
+  };
+  try {
+    l.setItems(['a', 'c']); // b (no id) left: its identity is dropped
+  } finally { DOMTokenList.prototype.toggle = orig; }
+  eq(curToggles, 2, 'one paint of two rows');
+  eq(l.selected(), []);
 });

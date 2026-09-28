@@ -35,7 +35,7 @@ test('sheet: Esc closes it and focus returns', () => {
   press('Escape');
   eq(closed, 1);
   assert(!s.el.isConnected, 'removed');
-  eq(document.activeElement, opener, 'focus returned');
+  assert(document.activeElement === opener, 'focus returned');
   s.close();
   eq(closed, 1, 'close is idempotent');
 });
@@ -55,9 +55,9 @@ test('sheet: focus stays inside', () => {
     b.focus();
     const e = press('Tab');
     assert(e.defaultPrevented, 'tab is trapped at the end');
-    eq(document.activeElement, a, 'wraps to the first');
+    assert(document.activeElement === a, 'wraps to the first');
     press('Tab', { shiftKey: true });
-    eq(document.activeElement, b, 'shift-tab wraps to the last');
+    assert(document.activeElement === b, 'shift-tab wraps to the last');
     focusEl(outside);
     assert(s.el.contains(document.activeElement), 'focus pulled back in');
   } finally { s.close(); }
@@ -97,5 +97,35 @@ test('sheet: the ? overlay is a sheet', () => {
     assert(document.querySelector('.kit-backdrop'));
     press('?');
     assert(!document.querySelector('.kit-keys') && !document.querySelector('.kit-backdrop'), '? closes it');
+  } finally { keys.destroy(); }
+});
+
+test('sheet: focus has a place when the opener is gone', () => {
+  const fx = fixture();
+  const main = h('main', { class: 'kit-read' }, 'read');
+  const opener = h('button', null, 'decide');
+  fx.append(main, opener);
+  opener.focus();
+  const s = sheet({ title: 't', body: h('button', null, 'x') });
+  opener.remove();
+  s.close();
+  assert(document.activeElement === main, 'falls back to the main region');
+  const target = h('button', null, 'here');
+  fx.append(target);
+  const opener2 = h('button', null, 'o');
+  fx.append(opener2);
+  opener2.focus();
+  const s2 = sheet({ title: 't', returnFocus: target });
+  opener2.remove();
+  s2.close();
+  assert(document.activeElement === target, 'returnFocus wins');
+});
+
+test('sheet: the ? overlay closes on a click anywhere in it', () => {
+  const keys = createKeys();
+  try {
+    keys.showHelp(true);
+    document.querySelector('.kit-keys .kit-sheet-head').click();
+    assert(!document.querySelector('.kit-keys'), 'a click on the title closes it');
   } finally { keys.destroy(); }
 });

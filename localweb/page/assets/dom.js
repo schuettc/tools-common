@@ -139,7 +139,9 @@ export function list(o) {
 
   // Every change to the store, from this list or another view, repaints and
   // reports once.
+  let quiet = false; // setItems' own store changes: it reports once itself
   function changed() {
+    if (quiet) return;
     paint();
     const now = snapshot();
     if (now === last) return;
@@ -163,7 +165,6 @@ export function list(o) {
         r.meta !== undefined ? h('span', { class: 'kit-meta' }, r.meta) : null);
     });
     body.replaceChildren(...rows);
-    paint();
   }
 
   const handle = {
@@ -181,8 +182,15 @@ export function list(o) {
       render();
       // Rows without an id belong to this page only: drop their stale identities.
       const gone = store.ids().filter(k => k.startsWith(PRIVATE) && !keys.includes(k));
-      if (gone.length) store.deselect(gone);
-      changed();
+      if (gone.length) {
+        quiet = true;
+        try {
+          store.deselect(gone);
+        } finally {
+          quiet = false;
+        }
+      }
+      changed(); // the one paint and report
     },
     setChips(group, chips) {
       (group === 'view' ? views : filters).replaceChildren(...chipRow(group, chips, o.onChip));
