@@ -17,3 +17,35 @@ jobs:
         env:
           KIT_BROWSER: required # localweb/page's JS tests run in the runner's Chrome
       - run: go build ./...
+
+  # The root module must stay stdlib-only: a tool that imports tools-common
+  # never pulls in a third-party module. SQLite lives in the sqlitedb module.
+  stdlib-only:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - name: root go.mod requires nothing
+        run: |
+          deps="$(go list -m all | tail -n +2)"
+          if [ -n "$deps" ]; then echo "root module gained dependencies:"; echo "$deps"; exit 1; fi
+
+  # sqlitedb is its own module (own go.mod and sqlitedb/vX.Y.Z tags), so the
+  # root job's ./... never reaches it.
+  sqlitedb:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: sqlitedb
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: sqlitedb/go.mod
+          cache-dependency-path: sqlitedb/go.sum
+      - run: test -z "$(gofmt -l .)"
+      - run: go vet ./...
+      - run: go test -race ./...
+      - run: go build ./...

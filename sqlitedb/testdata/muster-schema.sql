@@ -1,0 +1,86 @@
+CREATE TABLE IF NOT EXISTS agents (
+    alias         TEXT PRIMARY KEY,
+    role          TEXT NOT NULL DEFAULT '',
+    model_type    TEXT NOT NULL DEFAULT '',
+    socket_path   TEXT NOT NULL DEFAULT '',
+    pane_id       TEXT NOT NULL DEFAULT '',
+    session_name  TEXT NOT NULL DEFAULT '',
+    session_id    TEXT NOT NULL DEFAULT '',
+    session_created INTEGER NOT NULL DEFAULT 0, -- tmux #{session_created} (unix seconds) at register time: discriminates recycled session IDs across tmux server restarts (0 = unknown/pre-upgrade); see tmuxenv.IsSessionAlive and Store.DepartStaleSiblings
+    device_id     TEXT NOT NULL DEFAULT '', -- the machine this agent registered from (wake-routing key across devices); '' = unknown/pre-upgrade; see internal/device
+    device_name   TEXT NOT NULL DEFAULT '', -- that machine's human-meaningful name, for display and for matching "on my work laptop"; never identity
+    project       TEXT NOT NULL DEFAULT '',
+    label         TEXT NOT NULL DEFAULT '',
+    label_manual  INTEGER NOT NULL DEFAULT 0,
+    last_read_at  INTEGER NOT NULL DEFAULT 0,
+    last_read_entry_id INTEGER NOT NULL DEFAULT 0,
+    last_read_standing_entry_id INTEGER NOT NULL DEFAULT 0, -- read watermark for STANDING broadcasts only; NOT seeded on register (stays 0) so a new session sees standing orders once; advanced by MarkRead alongside last_read_entry_id
+    departed      INTEGER NOT NULL DEFAULT 0, -- 1 = deregistered (tombstoned): identity/project/label/read-state all preserved; see store.migrate and Store.DepartAgent
+    superseded_by TEXT NOT NULL DEFAULT '', -- non-empty on a departed row claimed away via Become: names the alias that now carries this identity forward, so resume reclaim never resurrects a retired seed (see Store.Become, hookSessionStartResume). Cleared on re-register (RegisterAgent's upsert): a revived/re-registered alias is no longer superseded.
+    registered_at INTEGER NOT NULL,
+    last_seen     INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS threads (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    kind       TEXT NOT NULL,                 -- 'message' | 'task'
+    from_agent TEXT NOT NULL,
+    to_kind    TEXT NOT NULL,                 -- 'agent' | 'role' | 'broadcast'
+    to_target  TEXT NOT NULL DEFAULT '',
+    subject    TEXT NOT NULL DEFAULT '',
+    ref        TEXT NOT NULL DEFAULT '',
+    status     TEXT,                          -- NULL for messages
+    intent     TEXT NOT NULL DEFAULT '',       -- '' | fyi | reply-requested | action-requested
+    standing   INTEGER NOT NULL DEFAULT 0,      -- 1 = broadcast replayed to sessions registering after send (until read); broadcast-only. Plain broadcast is live-only.
+    standing_key       TEXT NOT NULL DEFAULT '', -- identity of a keyed standing ORDER within its project (empty = ad-hoc append-only standing broadcast); see muster standing set/retract/list
+    standing_retracted INTEGER NOT NULL DEFAULT 0, -- 1 = this standing order was retracted or superseded by a newer set under the same (to_target, standing_key); filtered from the standing unread branch so it greets no future session
+    wake       INTEGER NOT NULL DEFAULT 0,      -- break-glass: 1 = a broadcast that actively pushes (interrupts) every recipient now, not the polite next-turn default; explicit-only (see wake-discipline design)
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL,
+    origin_project TEXT NOT NULL DEFAULT ''    -- sender's registered project at creation time ('' = unregistered sender); see store.migrate's backfill for pre-existing rows
+);
+CREATE INDEX IF NOT EXISTS idx_threads_recipient ON threads(to_kind, to_target);
+
+CREATE TABLE IF NOT EXISTS entries (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    thread_id     INTEGER NOT NULL REFERENCES threads(id),
+    from_agent    TEXT NOT NULL,
+    body          TEXT NOT NULL DEFAULT '',
+    status_change TEXT,
+    created_at    INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_entries_thread ON entries(thread_id);
+
+CREATE TABLE IF NOT EXISTS kv (
+    key        TEXT PRIMARY KEY,
+    value      TEXT NOT NULL,
+    updated_by TEXT NOT NULL DEFAULT '',
+    updated_at INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS events (
+    id        INTEGER PRIMARY KEY AUTOINCREMENT,
+    ts        INTEGER NOT NULL,
+    kind      TEXT NOT NULL,                 -- send|task|reply|claim|transition|nudge|notify|read
+    agent     TEXT NOT NULL DEFAULT '',
+    target    TEXT NOT NULL DEFAULT '',      -- 'agent:x' / 'role:r' / 'broadcast' / bare alias (nudge)
+    thread_id INTEGER NOT NULL DEFAULT 0,    -- 0 = no thread (e.g. a read)
+    count     INTEGER NOT NULL DEFAULT 0,    -- unread count carried by a notify
+    detail    TEXT NOT NULL DEFAULT ''       -- 'lit' | 'cleared' | 'skipped: …' | 'error: …'
+);
+CREATE INDEX IF NOT EXISTS idx_events_agent ON events(agent, id);
+
+-- Server-side idempotency records: one row per client IdemKey, claimed by the
+-- caller that gets to execute the op and completed with that op's response so
+-- a redelivery replays it instead of re-running it (see internal/store/idem.go).
+-- Local mode never populates this table — a local client sends no IdemKey — but
+-- the table and its methods exist on both backends so the interface is honest
+-- and the conformance suite can hold them to the same behaviour.
+-- No ALTER migration is needed: CREATE TABLE IF NOT EXISTS here covers
+-- pre-existing databases, since store.Open applies this whole file every time.
+CREATE TABLE IF NOT EXISTS idem (
+    key        TEXT PRIMARY KEY,
+    state      TEXT NOT NULL,          -- 'pending' | 'done'
+    resp       BLOB,
+    created_at INTEGER NOT NULL
+);
