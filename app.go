@@ -286,18 +286,15 @@ func hasJSONFlag(args []string) bool {
 }
 
 // hasHelpArg reports whether -h or --help appears in args.
-// isSubcommand reports whether args start with one of cmd's declared
-// sub-verbs, whose -h belongs to the sub-verb rather than the command.
+// isSubcommand reports whether a -h in args belongs to the command itself
+// rather than to tools.App. For a command that owns sub-verbs, tools.App
+// answers only `<cmd> -h`; with any other first word (a sub-verb, or a typo
+// the command should reject) the arguments are the command's to judge.
 func isSubcommand(cmd Command, args []string) bool {
-	if len(args) == 0 {
+	if len(cmd.Subcommands) == 0 || len(args) == 0 {
 		return false
 	}
-	for _, s := range cmd.Subcommands {
-		if args[0] == s {
-			return true
-		}
-	}
-	return false
+	return args[0] != "-h" && args[0] != "--help"
 }
 
 func hasHelpArg(args []string) bool {
