@@ -165,3 +165,4 @@ func TestJSDom(t *testing.T)       { runBrowser(t, "dom") }
 func TestJSKit(t *testing.T)       { runBrowser(t, "kit") }
 func TestJSSelection(t *testing.T) { runBrowser(t, "selection") }
 func TestJSSheet(t *testing.T)     { runBrowser(t, "sheet") }
+func TestJSSearch(t *testing.T)    { runBrowser(t, "search") }

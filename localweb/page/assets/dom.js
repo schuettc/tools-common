@@ -107,8 +107,23 @@ export function list(o) {
   const views = h('div', { class: 'kit-chips', dataset: { group: 'view' } });
   const filters = h('div', { class: 'kit-chips', dataset: { group: 'filter' } });
   const body = h('div', { class: 'kit-rows', role: 'list' });
+  // The optional search field: onInput on every input event (no debounce;
+  // debounce in the page if the query is costly). Esc in it clears the text
+  // first, then leaves the field (the keyboard layer's field rule).
+  const search = o.search
+    ? h('input', { class: 'kit-search', type: 'search', placeholder: o.search.placeholder || 'search', value: o.search.value || '', 'aria-label': o.search.placeholder || 'search' })
+    : null;
+  if (search) {
+    search.addEventListener('input', () => o.search.onInput(search.value));
+    search.addEventListener('keydown', e => {
+      if (e.key !== 'Escape' || e.isComposing || !search.value) return;
+      e.preventDefault(); // handled: the keyboard layer won't also blur
+      search.value = '';
+      o.search.onInput('');
+    });
+  }
   const el = h('aside', { class: 'kit-list' },
-    h('div', { class: 'kit-lh' }, h('div', { class: 'kit-eyebrow' }, o.label), views, filters),
+    h('div', { class: 'kit-lh' }, h('div', { class: 'kit-eyebrow' }, o.label), views, filters, search),
     body,
     o.foot ? h('div', { class: 'kit-foot' }, o.foot) : null);
 
@@ -225,10 +240,14 @@ export function list(o) {
     deselect: ids => store.deselect(ids.map(String)),
     clearSelection: () => store.clear(),
     current: () => cur,
+    setSearch(text) {
+      if (search) search.value = text;
+    },
     destroy() {
       unsubscribe();
     },
   };
+  if (search) handle.focusSearch = () => search.focus();
   handle.setChips('view', o.views);
   handle.setChips('filter', o.filters);
   return handle;

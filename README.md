@@ -173,6 +173,12 @@ srv, err := localweb.Start(ctx, localweb.Config{
   the store directly: `ids()`, `has`, `toggle`, `range(anchorId, id, orderedIds)`,
   `all`, `deselect`, `clear`, `onChange(cb)`. Call `list.destroy()` when a list
   bound to a shared store is discarded.
+- **Search:** `list({search: {placeholder, value, onInput}})` puts a search
+  field in the list header, and `setSearch(text)` sets it without calling
+  `onInput`. `onInput` runs on every input, with no debounce (debounce in the
+  page if its query is costly). `/` focuses the field: a family default only
+  when the list has search, so a page's own `/` then clashes. In the field,
+  Esc clears the text first, then leaves.
 - **Sheets** (`sheet.js`): `sheet({title, body, actions, onClose})` returns
   `{el, close()}`: a small modal over a backdrop. Esc or a backdrop click closes
   it, focus stays inside and returns on close, and page keys wait while one is

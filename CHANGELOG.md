@@ -4,6 +4,16 @@ Root module releases are tagged `vX.Y.Z`; the separate `sqlitedb` module is
 tagged `sqlitedb/vX.Y.Z`. Releases before this file are described by their
 tags and PRs.
 
+## v0.11.0 (2026-09-28)
+
+### Added
+- `localweb/page`: `list({search: {placeholder?, value?, onInput}})`, a search
+  field in the list header (kit tokens: mono, 6px, hairline), and the handle's
+  `setSearch(text)` (no `onInput`). `onInput` fires on every input, no
+  debounce. `/` focuses it: a family default registered only when the list
+  has search, so a page's own `/` clashes. In the field only Esc acts: it
+  clears the text first, then leaves the field.
+
 ## v0.10.1 (2026-09-28)
 
 ### Fixed
