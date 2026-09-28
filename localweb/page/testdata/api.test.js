@@ -48,3 +48,17 @@ test('api: plain-text error and 204', async () => {
   f.queue.push(f.text('', 200));
   eq(await api.get('/empty'), null, 'empty 200 is null');
 });
+
+test('api: 401 is stale and reported once', async () => {
+  const f = fakeFetch();
+  let stale = 0;
+  const api = createApi({ fetch: f.fetch, onStale: () => stale++ });
+  f.queue.push(f.text('token required\n', 401), f.text('token required\n', 401), f.text('nope', 500));
+  let err;
+  try { await api.get('/state'); } catch (e) { err = e; }
+  eq([err.status, err.isStale], [401, true]);
+  try { await api.post('/x', {}); } catch (e) { err = e; }
+  eq(stale, 1, 'onStale once, not per call');
+  try { await api.get('/y'); } catch (e) { err = e; }
+  eq(err.isStale, false, 'a 500 is not stale');
+});

@@ -36,6 +36,9 @@ function parse(keys) {
 function chordOf(e) {
   if (['Shift', 'Meta', 'Control', 'Alt'].includes(e.key)) return null;
   let key = NAMED[e.key] || e.key;
+  // ⌥ changes the character on macOS (⌥a is "å"): match the physical key.
+  const phys = e.altKey && /^(Key[A-Z]|Digit[0-9])$/.exec(e.code || '');
+  if (phys) key = e.code.slice(-1);
   const letter = /^[a-z]$/i.test(key);
   if (key.length === 1) key = key.toLowerCase();
   const shift = e.shiftKey && (letter || key.length > 1);
@@ -87,9 +90,17 @@ export function createKeys(opts = {}) {
   }
 
   function onKey(e) {
-    if (e.isComposing || e.keyCode === 229) return;
+    if (e.isComposing || e.keyCode === 229 || e.defaultPrevented) return;
     const chord = chordOf(e);
     if (!chord) return;
+    if (overlay) {
+      // the overlay is modal: only Esc and ? act while it is open
+      if (chord === 'Esc' || chord === '?') {
+        showHelp(false);
+        e.preventDefault();
+      }
+      return;
+    }
     const el = e.target instanceof Element ? e.target : null;
     if (el && el.closest(FIELD)) {
       pending = [];

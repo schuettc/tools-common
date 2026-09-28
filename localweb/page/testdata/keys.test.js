@@ -142,3 +142,43 @@ test('keys: unregister and destroy', () => {
   eq(ran, 1, 'destroyed');
   assert(!document.querySelector('.kit-keys'), 'no overlay after destroy');
 });
+
+test('keys: ⌥ bindings match the physical key', () => {
+  const keys = createKeys();
+  let ran = 0;
+  try {
+    keys.register({ keys: '⌥a', label: 'alt a', run: () => ran++ });
+    keys.register({ keys: '⌥1', label: 'alt 1', run: () => ran++ });
+    press('å', { altKey: true, code: 'KeyA' });
+    press('¡', { altKey: true, code: 'Digit1' });
+    eq(ran, 2);
+  } finally { keys.destroy(); }
+});
+
+test('keys: while the overlay is open only Esc and ? act', () => {
+  const list = fakeList();
+  const keys = createKeys({ list });
+  let ran = 0;
+  try {
+    keys.register({ keys: '1', label: 'keep', run: () => ran++ });
+    press('?');
+    press('j'); press('1');
+    eq([list.calls.length, ran], [0, 0], 'nothing acts under the overlay');
+    press('?');
+    assert(!document.querySelector('.kit-keys'), '? closes it');
+    press('j');
+    eq(list.calls, ['move1']);
+  } finally { keys.destroy(); }
+});
+
+test('keys: a key another handler took is left alone', () => {
+  const list = fakeList();
+  const keys = createKeys({ list });
+  const el = fixture();
+  const taker = e => e.preventDefault();
+  el.addEventListener('keydown', taker);
+  try {
+    press('j', {}, el);
+    eq(list.calls, []);
+  } finally { el.removeEventListener('keydown', taker); keys.destroy(); }
+});

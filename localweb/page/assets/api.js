@@ -3,6 +3,10 @@
 // localweb requires, so the page never handles the token. A caller that has
 // the token (a test, a non-browser client) passes it and it is sent as
 // X-Local-Token.
+//
+// A 401 means the server restarted and this page's token is gone: the error's
+// isStale is true, and onStale (if given) is called once, so the page can show
+// the tool's stale message.
 
 export class ApiError extends Error {
   constructor(status, message) {
@@ -10,11 +14,17 @@ export class ApiError extends Error {
     this.name = 'ApiError';
     this.status = status;
   }
+
+  /** 401: the server no longer knows this page's token (it restarted). */
+  get isStale() {
+    return this.status === 401;
+  }
 }
 
 export function createApi(opts = {}) {
   const base = opts.base ?? '/api';
   const doFetch = opts.fetch || ((...a) => fetch(...a));
+  let staleSeen = false;
 
   async function request(method, path, body, query) {
     let url = base + path;
@@ -39,7 +49,12 @@ export function createApi(opts = {}) {
       } catch {
         // plain text (localweb's http.Error): keep it
       }
-      throw new ApiError(res.status, message || res.statusText || `HTTP ${res.status}`);
+      const err = new ApiError(res.status, message || res.statusText || `HTTP ${res.status}`);
+      if (err.isStale && !staleSeen) {
+        staleSeen = true;
+        if (opts.onStale) opts.onStale(err);
+      }
+      throw err;
     }
     return text ? JSON.parse(text) : null;
   }

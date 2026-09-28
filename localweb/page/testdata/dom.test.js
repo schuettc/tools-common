@@ -235,7 +235,8 @@ test('dom: setItems reports a selection it changed', () => {
   l.toggle(0); l.toggle(1); l.open(2);
   sels.length = 0;
   l.setItems([{ id: 'a', title: 'A retitled' }, { id: 'c', title: 'C' }]);
-  eq(l.selected().map(x => x.id), ['a'], 'id keeps a through a title edit; b is gone');
+  eq(l.selected().map(x => x.id), ['a'], 'id keeps a through a title edit; b is not rendered');
+  eq(l.selectedIds(), ['a', 'b'], 'b stays selected by id (paging), until deselected');
   eq(sels, [['a']], 'onSelect told about the change');
   eq(l.el.querySelector('.kit-row.open .kit-title').textContent, 'C', 'open row kept by id');
   sels.length = 0;
@@ -249,4 +250,85 @@ test('dom: a lost cursor stays near where it was', () => {
   l.move(2);
   l.setItems(['a', 'b', 'd']);
   eq(l.current(), 2, 'cursor keeps its index when its row vanished');
+});
+
+test('dom: bar stale pill and status tone', () => {
+  const b = bar({ brand: { name: 'x' }, staleText: 'restarted · continued in a new tab' });
+  fixture().append(b.el);
+  b.setLive('stale');
+  const pill = b.el.querySelector('.kit-live');
+  eq([pill.dataset.state, pill.textContent], ['stale', 'restarted · continued in a new tab']);
+  b.setLive('down', 'offline · 3 queued');
+  eq(pill.textContent, 'offline · 3 queued', 'text override');
+  eq(bar({ brand: { name: 'y' } }).el.querySelector('.kit-live').hidden, true);
+  const plain = bar({ brand: { name: 'z' } });
+  plain.setLive('stale');
+  eq(plain.el.querySelector('.kit-live').textContent, 'stale', 'default stale text');
+
+  initTheme('dom').set('light');
+  b.setStatus('offline · 3 queued', { tone: 'danger' });
+  const st = b.el.querySelector('.kit-status');
+  eq(st.dataset.tone, 'danger');
+  eq(cs(st).color, 'rgb(194, 42, 42)');
+  b.setStatus('synced', { tone: 'signal' });
+  eq(cs(st).color, 'rgb(164, 81, 42)');
+  b.setStatus('synced');
+  assert(!st.hasAttribute('data-tone'), 'no tone = muted default');
+  eq(cs(st).color, 'rgb(89, 96, 111)');
+  initTheme('dom').set('system');
+});
+
+test('dom: selection by id beyond the rendered page', () => {
+  const sels = [];
+  const l = list({ label: 'l', row: it => ({ id: it, title: it, selectable: true }), onSelect: s => sels.push(s.length) });
+  const page1 = Array.from({ length: 200 }, (_, i) => 'a' + i);
+  const page2 = Array.from({ length: 200 }, (_, i) => 'b' + i);
+  const all = [...page1, ...page2, 'c0'];
+  l.setItems(page1);
+  l.selectAll(all);
+  eq(l.selectedIds().length, all.length, 'ids beyond the page count');
+  eq(l.selected().length, 200, 'selected() is the rendered ones');
+  eq(l.el.querySelectorAll('.kit-row.sel').length, 200);
+  l.setItems(page2);
+  eq(l.selectedIds().length, all.length, 'survives paging');
+  eq(l.el.querySelectorAll('.kit-row.sel').length, 200);
+  l.toggle(0);
+  assert(!l.selectedIds().includes('b0'), 'toggle off by id');
+  eq(l.selectedIds().length, all.length - 1);
+  l.deselect(['a0', 'a1']);
+  eq(l.selectedIds().length, all.length - 3, 'deselect drops ids off-page');
+  l.clearSelection();
+  eq([l.selectedIds().length, l.el.querySelectorAll('.kit-row.sel').length], [0, 0]);
+  eq(sels.at(-1), 0, 'onSelect on clear');
+});
+
+test('dom: 500 rows render and move', () => {
+  const l = list({ label: 'l', row: it => ({ id: it, key: 'k', title: it, selectable: true }) });
+  fixture().append(l.el);
+  const items = Array.from({ length: 500 }, (_, i) => 'r' + i);
+  const t0 = performance.now();
+  l.setItems(items);
+  l.move(499); l.toggle(); l.toggleRange(0);
+  const ms = performance.now() - t0;
+  eq(l.el.querySelectorAll('.kit-row').length, 500);
+  eq(l.selectedIds().length, 500);
+  assert(ms < 1000, `500 rows took ${ms} ms`);
+});
+
+test('dom: app layout with a rail', () => {
+  const fx = fixture();
+  const app = h('div', { class: 'kit-app', style: 'width:1440px;height:900px' },
+    bar({ brand: { name: 'x' } }).el,
+    list({ label: 'l', row: i => ({ title: i }) }).el,
+    h('main', { class: 'kit-read' }, 'read'),
+    h('aside', { class: 'kit-rail' }, 'rail'));
+  fx.append(app);
+  const w = sel => Math.round(app.querySelector(sel).getBoundingClientRect().width);
+  eq([w('.kit-bar'), w('.kit-list'), w('.kit-read'), w('.kit-rail')], [1440, 400, 680, 360]);
+  const top = sel => Math.round(app.querySelector(sel).getBoundingClientRect().top - app.getBoundingClientRect().top);
+  eq([top('.kit-list'), top('.kit-rail')], [52, 52], 'panes sit under the bar');
+  const noRail = h('div', { class: 'kit-app', style: 'width:1000px;height:600px' },
+    bar({ brand: { name: 'y' } }).el, list({ label: 'l', row: i => ({ title: i }) }).el, h('main', { class: 'kit-read' }));
+  fx.append(noRail);
+  eq(Math.round(noRail.querySelector('.kit-read').getBoundingClientRect().width), 600, 'rail is optional');
 });

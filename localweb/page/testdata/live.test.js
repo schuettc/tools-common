@@ -177,3 +177,16 @@ test('live: a poll that lands while the reopened stream is still connecting repl
   eq(timers.pending.size, 0);
   handle.stop();
 });
+
+test('live: a 401 poll is stale and stops everything', async () => {
+  const { f, timers, es, statuses, handle } = setup();
+  es.last().emitError();
+  f.queue.push(f.text('token required', 401));
+  timers.tick();
+  await flush();
+  eq(statuses.at(-1), 'stale');
+  eq(timers.pending.size, 0, 'no more polling');
+  assert(es.made.every(e => e.closed), 'no stream');
+  eq(es.made.length, 1, 'no reopen');
+  handle.stop();
+});

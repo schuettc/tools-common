@@ -26,7 +26,7 @@ export function h(tag, attrs, ...children) {
 
 const count = n => (n === undefined || n === null || n === '' ? null : h('span', { class: 'kit-n' }, String(n)));
 
-const LIVE_TEXT = { live: 'live', polling: 'polling', down: 'offline' };
+const LIVE_TEXT = { live: 'live', polling: 'polling', down: 'offline', stale: 'stale' };
 
 // bar is the top bar: brand, section controls with counts, status text, the
 // live pill, theme, and the one filled primary button.
@@ -61,13 +61,16 @@ export function bar(o) {
       const c = count(n);
       if (c) el.append(c);
     },
-    setStatus(text) {
+    setStatus(text, opts = {}) {
       status.textContent = text;
+      if (opts.tone && opts.tone !== 'muted') status.dataset.tone = opts.tone;
+      else status.removeAttribute('data-tone');
     },
-    setLive(s) {
+    setLive(s, text) {
       pill.hidden = false;
       pill.dataset.state = s;
-      pill.replaceChildren(h('i'), LIVE_TEXT[s] || s);
+      const label = text ?? (s === 'stale' && o.staleText) ?? LIVE_TEXT[s] ?? s;
+      pill.replaceChildren(h('i'), label || LIVE_TEXT[s] || s);
     },
     setPrimary(p) {
       run = p ? p.run : null;
@@ -90,10 +93,14 @@ function chipRow(group, chips, onChip) {
 // where j/k are; the open row (.open) is the one in the reading column.
 export function list(o) {
   let items = [];
+  let keys = [];
   let rows = [];
   let cur = -1;
   let opened = -1;
   let anchor = -1;
+  // Selection is by row identity, so it covers rows not rendered (other pages,
+  // select-all-in-view) and survives setItems. Identities are "id:<id>" for
+  // rows with an id, else key + title.
   const sel = new Set();
   const views = h('div', { class: 'kit-chips', dataset: { group: 'view' } });
   const filters = h('div', { class: 'kit-chips', dataset: { group: 'filter' } });
@@ -110,16 +117,19 @@ export function list(o) {
     return r.key !== undefined ? r.key + '\u0000' + r.title : 'i' + i;
   };
   const clamp = i => Math.max(0, Math.min(items.length - 1, i));
+  const isSel = i => sel.has(keys[i]);
+  // What onSelect reports on: the id set and which rendered rows are selected.
+  const snapshot = () => [...sel].join('\n') + '\u0001' + keys.filter(k => sel.has(k)).join('\n');
 
   function paint() {
     rows.forEach((r, i) => {
       r.classList.toggle('cur', i === cur);
       r.classList.toggle('open', i === opened);
-      r.classList.toggle('sel', sel.has(i));
+      r.classList.toggle('sel', isSel(i));
       if (i === opened) r.setAttribute('aria-current', 'true');
       else r.removeAttribute('aria-current');
       const box = r.querySelector('.kit-box');
-      if (box) box.setAttribute('aria-checked', String(sel.has(i)));
+      if (box) box.setAttribute('aria-checked', String(isSel(i)));
     });
   }
 
@@ -149,22 +159,20 @@ export function list(o) {
   const handle = {
     el,
     setItems(next) {
-      const old = items;
-      const openKey = opened >= 0 ? keyOf(old[opened], opened) : null;
-      const curKey = cur >= 0 && old[cur] !== undefined ? keyOf(old[cur], cur) : null;
-      const selKeys = [...sel].sort((a, b) => a - b).map(i => keyOf(old[i], i));
+      const openKey = opened >= 0 ? keys[opened] : null;
+      const curKey = cur >= 0 ? keys[cur] : null;
+      const before = snapshot();
       items = next.slice();
-      const keys = items.map(keyOf);
+      keys = items.map(keyOf);
       opened = openKey === null ? -1 : keys.indexOf(openKey);
       const was = cur;
       cur = curKey === null ? -1 : keys.indexOf(curKey);
       if (cur < 0 && items.length) cur = was >= 0 ? clamp(was) : opened >= 0 ? opened : 0;
-      sel.clear();
-      keys.forEach((k, i) => selKeys.includes(k) && sel.add(i));
+      // Rows without an id belong to this page only: drop their stale identities.
+      for (const k of [...sel]) if (!k.startsWith('id:') && !keys.includes(k)) sel.delete(k);
       anchor = -1;
       render();
-      const now = [...sel].sort((a, b) => a - b).map(i => keys[i]);
-      if (o.onSelect && now.join('\n') !== selKeys.join('\n')) o.onSelect(handle.selected());
+      if (o.onSelect && snapshot() !== before) o.onSelect(handle.selected());
     },
     setChips(group, chips) {
       (group === 'view' ? views : filters).replaceChildren(...chipRow(group, chips, o.onChip));
@@ -184,25 +192,39 @@ export function list(o) {
     },
     toggle(i = cur) {
       if (i < 0 || i >= items.length || !o.row(items[i]).selectable) return;
-      if (sel.has(i)) sel.delete(i);
-      else sel.add(i);
+      if (isSel(i)) sel.delete(keys[i]);
+      else sel.add(keys[i]);
       anchor = i;
       selectedChanged();
     },
     toggleRange(i = cur) {
       if (i < 0 || i >= items.length) return;
       if (anchor < 0) return handle.toggle(i);
-      const on = sel.has(anchor);
+      const on = isSel(anchor);
       const [a, b] = anchor < i ? [anchor, i] : [i, anchor];
       for (let j = a; j <= b; j++) {
         if (!o.row(items[j]).selectable) continue;
-        if (on) sel.add(j);
-        else sel.delete(j);
+        if (on) sel.add(keys[j]);
+        else sel.delete(keys[j]);
       }
       anchor = i;
       selectedChanged();
     },
-    selected: () => [...sel].sort((a, b) => a - b).map(i => items[i]),
+    selected: () => items.filter((_, i) => isSel(i)),
+    selectedIds: () => [...sel].filter(k => k.startsWith('id:')).map(k => k.slice(3)),
+    selectAll(ids) {
+      for (const id of ids) sel.add('id:' + id);
+      selectedChanged();
+    },
+    deselect(ids) {
+      for (const id of ids) sel.delete('id:' + id);
+      selectedChanged();
+    },
+    clearSelection() {
+      sel.clear();
+      anchor = -1;
+      selectedChanged();
+    },
     current: () => cur,
   };
   handle.setChips('view', o.views);

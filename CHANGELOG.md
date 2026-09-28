@@ -4,6 +4,26 @@ Root module releases are tagged `vX.Y.Z`; the separate `sqlitedb` module is
 tagged `sqlitedb/vX.Y.Z`. Releases before this file are described by their
 tags and PRs.
 
+## v0.9.0 (2026-09-28)
+
+### Added
+- `localweb/page`, for casebook's page and cull's review page:
+  - Stale session: `ApiError.isStale`, `createApi({onStale})` (called once),
+    a `stale` status from `live()` on a 401 poll (it stops for good), and
+    `bar({staleText})` for the tool's own wording.
+  - `.kit-app` grid (bar; list | reading column | optional `.kit-rail`).
+  - Selection by row id across pages: `selectedIds()`, `selectAll(ids)`,
+    `deselect(ids)`, `clearSelection()`. Tested to 500 rendered rows.
+  - `setStatus(text, {tone})` and `setLive(state, text)`.
+
+### Changed
+- Keys: `⌥` bindings match the physical key (macOS changes the character);
+  while the `?` overlay is open only `Esc` and `?` act; a key another handler
+  already took (`preventDefault`) is left alone.
+- List selection is by identity, so a row that leaves the list stays selected
+  by id until `deselect`/`clearSelection`; `onSelect` fires when the id set or
+  the rendered selection changes.
+
 ## v0.8.2 (2026-09-28)
 
 ### Fixed
