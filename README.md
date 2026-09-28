@@ -160,7 +160,8 @@ srv, err := localweb.Start(ctx, localweb.Config{
   with `bar({staleText})` and `setLive('stale')`.
 - **Layout:** `.kit-app` is the page grid: the bar across the top, then
   `.kit-list` | `.kit-read` | an optional `.kit-rail` (360px, the tool's own
-  dock). `.kit-page` + `.kit-main` is the same without a rail.
+  dock). `.kit-page` + `.kit-main` is the same without a rail. It is a desktop layout:
+  below about 1080px wide it scrolls sideways rather than squeezing the reading column.
 - **Selection:** by row `id`, so it covers rows that aren't rendered.
   `selectedIds()`, `selectAll(ids)`, `deselect(ids)`, `clearSelection()`.
   `selected()` is the rendered selected items. Lists are tested to 500 rendered

@@ -332,3 +332,25 @@ test('dom: app layout with a rail', () => {
   fx.append(noRail);
   eq(Math.round(noRail.querySelector('.kit-read').getBoundingClientRect().width), 600, 'rail is optional');
 });
+
+test('dom: setLive labels without a staleText', () => {
+  const b = bar({ brand: { name: 'x' } });
+  const pill = b.el.querySelector('.kit-live');
+  for (const [s, want] of [['live', 'live'], ['polling', 'polling'], ['down', 'offline'], ['stale', 'stale']]) {
+    b.setLive(s);
+    eq(pill.textContent, want, s);
+  }
+  const t = bar({ brand: { name: 'y' }, staleText: 'restarted' });
+  t.setLive('live');
+  eq(t.el.querySelector('.kit-live').textContent, 'live', 'staleText only for stale');
+});
+
+test('dom: the app grid scrolls below its minimum width', () => {
+  const app = h('div', { class: 'kit-app', style: 'width:600px;height:400px' },
+    bar({ brand: { name: 'x' } }).el, list({ label: 'l', row: i => ({ title: i }) }).el,
+    h('main', { class: 'kit-read' }), h('aside', { class: 'kit-rail' }));
+  fixture().append(app);
+  eq(cs(app).overflowX, 'auto');
+  assert(app.scrollWidth > 600, `content keeps its width (${app.scrollWidth})`);
+  assert(app.querySelector('.kit-read').getBoundingClientRect().width >= 320, 'reading column keeps a minimum');
+});

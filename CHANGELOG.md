@@ -4,6 +4,16 @@ Root module releases are tagged `vX.Y.Z`; the separate `sqlitedb` module is
 tagged `sqlitedb/vX.Y.Z`. Releases before this file are described by their
 tags and PRs.
 
+## v0.9.1 (2026-09-28)
+
+### Fixed
+- `localweb/page`: a 401 poll is `stale` even if a stream opened while the
+  poll was in flight (it used to be dropped as out of date, leaving `live`).
+- `setLive` picks its label without relying on a second fallback; `staleText`
+  applies only to `stale`.
+- `.kit-app` scrolls sideways below its minimum width instead of overflowing
+  (reading column minimum 320px). Removed a dead branch in the Esc binding.
+
 ## v0.9.0 (2026-09-28)
 
 ### Added
