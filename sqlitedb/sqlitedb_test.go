@@ -201,23 +201,48 @@ func TestRefusesUnversionedDatabaseByDefault(t *testing.T) {
 	}
 }
 
-// musterSchema is muster's internal/store/schema.sql at muster dev 106bce7:
+// musterSchema is muster's internal/store/schema.sql, unchanged through muster
+// dev c0c411d:
 // a real unversioned database, the case AdoptUnversioned exists for.
 //
 //go:embed testdata/muster-schema.sql
 var musterSchema string
 
+// musterAlters is muster's store.migrate() ALTER list at muster dev c0c411d.
+// schema.sql does not carry the last several columns, so on a database built
+// from schema.sql alone the later entries genuinely add columns.
+var musterAlters = []string{
+	`ALTER TABLE agents ADD COLUMN project TEXT NOT NULL DEFAULT ''`,
+	`ALTER TABLE agents ADD COLUMN label TEXT NOT NULL DEFAULT ''`,
+	`ALTER TABLE agents ADD COLUMN label_manual INTEGER NOT NULL DEFAULT 0`,
+	`ALTER TABLE agents ADD COLUMN last_read_at INTEGER NOT NULL DEFAULT 0`,
+	`ALTER TABLE events ADD COLUMN target TEXT NOT NULL DEFAULT ''`,
+	`ALTER TABLE threads ADD COLUMN intent TEXT NOT NULL DEFAULT ''`,
+	`ALTER TABLE agents ADD COLUMN last_read_entry_id INTEGER NOT NULL DEFAULT 0`,
+	`ALTER TABLE threads ADD COLUMN origin_project TEXT NOT NULL DEFAULT ''`,
+	`ALTER TABLE agents ADD COLUMN departed INTEGER NOT NULL DEFAULT 0`,
+	`ALTER TABLE agents ADD COLUMN session_created INTEGER NOT NULL DEFAULT 0`,
+	`ALTER TABLE agents ADD COLUMN device_id TEXT NOT NULL DEFAULT ''`,
+	`ALTER TABLE agents ADD COLUMN harness_session_id TEXT NOT NULL DEFAULT ''`,
+	`ALTER TABLE agents ADD COLUMN superseded_by TEXT NOT NULL DEFAULT ''`,
+	`ALTER TABLE agents ADD COLUMN device_name TEXT NOT NULL DEFAULT ''`,
+	`ALTER TABLE agents ADD COLUMN transcript_path TEXT NOT NULL DEFAULT ''`,
+	`ALTER TABLE agents ADD COLUMN last_read_standing_entry_id INTEGER NOT NULL DEFAULT 0`,
+	`ALTER TABLE threads ADD COLUMN standing INTEGER NOT NULL DEFAULT 0`,
+	`ALTER TABLE threads ADD COLUMN standing_key TEXT NOT NULL DEFAULT ''`,
+	`ALTER TABLE threads ADD COLUMN standing_retracted INTEGER NOT NULL DEFAULT 0`,
+	`ALTER TABLE threads ADD COLUMN wake INTEGER NOT NULL DEFAULT 0`,
+}
+
 // musterStep1 is how muster would adopt the module: its embedded schema
 // (CREATE TABLE IF NOT EXISTS throughout) plus its additive ALTERs, each
 // tolerating a column that is already there. Idempotent by construction.
+// (muster's re-runnable backfills would follow the ALTERs in the same step.)
 func musterStep1(ctx context.Context, tx *sql.Tx) error {
 	if _, err := tx.ExecContext(ctx, musterSchema); err != nil {
 		return err
 	}
-	for _, ddl := range []string{
-		`ALTER TABLE agents ADD COLUMN project TEXT NOT NULL DEFAULT ''`,
-		`ALTER TABLE threads ADD COLUMN wake INTEGER NOT NULL DEFAULT 0`,
-	} {
+	for _, ddl := range musterAlters {
 		if _, err := tx.ExecContext(ctx, ddl); err != nil && !strings.Contains(err.Error(), "duplicate column name") {
 			return err
 		}
@@ -225,10 +250,19 @@ func musterStep1(ctx context.Context, tx *sql.Tx) error {
 	return nil
 }
 
+func hasColumn(t *testing.T, d *DB, table, column string) bool {
+	t.Helper()
+	var n int
+	if err := d.QueryRow(`SELECT count(*) FROM pragma_table_info(?) WHERE name = ?`, table, column).Scan(&n); err != nil {
+		t.Fatal(err)
+	}
+	return n == 1
+}
+
 func TestAdoptUnversionedMusterDatabase(t *testing.T) {
 	p := dbPath(t)
-	// Build the database the way muster's store.Open does today: no
-	// user_version, no foreign keys, the schema applied as-is.
+	// An unversioned muster database from before its later ALTERs: no
+	// user_version, no foreign keys, schema.sql applied as-is.
 	raw := rawDB(t, p)
 	if _, err := raw.Exec(musterSchema); err != nil {
 		t.Fatal(err)
@@ -251,7 +285,29 @@ func TestAdoptUnversionedMusterDatabase(t *testing.T) {
 	if err := d.QueryRow(`SELECT alias FROM agents`).Scan(&alias); err != nil || alias != "keeper" {
 		t.Fatalf("existing row lost: %q, %v", alias, err)
 	}
+	for _, col := range []string{"harness_session_id", "transcript_path"} {
+		if !hasColumn(t, d, "agents", col) {
+			t.Fatalf("step 1 did not add agents.%s to the adopted database", col)
+		}
+	}
 	_ = d.Close()
+
+	// An unversioned database that already has every column (muster today)
+	// adopts too: every ALTER hits the duplicate-column guard.
+	current := dbPath(t)
+	raw = rawDB(t, current)
+	if _, err := raw.Exec(musterSchema); err != nil {
+		t.Fatal(err)
+	}
+	for _, ddl := range musterAlters {
+		if _, err := raw.Exec(ddl); err != nil && !strings.Contains(err.Error(), "duplicate column name") {
+			t.Fatal(err)
+		}
+	}
+	_ = raw.Close()
+	if v := version(t, open(t, current, Options{Migrations: []Step{musterStep1, later}, NoForeignKeys: true, AdoptUnversioned: true})); v != 2 {
+		t.Fatalf("fully-altered database user_version %d, want 2", v)
+	}
 
 	// A fresh machine takes the same path from an empty file.
 	fresh := open(t, dbPath(t), Options{Migrations: []Step{musterStep1, later}, NoForeignKeys: true, AdoptUnversioned: true})
@@ -320,6 +376,7 @@ func rawDB(t *testing.T, p string) *sql.DB {
 	if err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(func() { _ = raw.Close() })
 	return raw
 }
 

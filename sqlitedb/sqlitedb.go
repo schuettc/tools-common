@@ -71,6 +71,10 @@ type Options struct {
 	// IF NOT EXISTS plus ALTERs that tolerate an existing column. Without it,
 	// Open refuses such a database (ErrUnversioned) rather than run a first
 	// step that was written for an empty file.
+	//
+	// Nothing checks that the unversioned database is this tool's: any file
+	// at user_version 0 with tables gets step 1, even another program's. Set
+	// it only when path can only ever hold your own database.
 	AdoptUnversioned bool
 }
 

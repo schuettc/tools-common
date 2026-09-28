@@ -143,7 +143,8 @@ err = db.Tx(ctx, func(tx *sql.Tx) error { ... }) // commit on nil; roll back on 
   backfills) and set `AdoptUnversioned: true`. Step 1 then runs once over the
   existing tables and the database is at version 1. Without the flag, such a
   database is refused with `ErrUnversioned` rather than meet a first step
-  written for an empty file.
+  written for an empty file. Nothing checks that the unversioned database is
+  your tool's own: set the flag only for a path that can only ever hold it.
 - The package decides nothing about schemas: no table helpers, no ORM.
 
 **One driver version for the family:** sqlitedb pins `modernc.org/sqlite`
