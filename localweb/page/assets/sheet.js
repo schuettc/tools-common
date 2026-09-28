@@ -1,7 +1,8 @@
 // A floating sheet: a small modal dialog over a backdrop, for forms such as a
 // decide or change sheet. Esc or a backdrop click closes it, focus stays
 // inside while it is open and returns where it was on close, and the keyboard
-// layer's page keys are suspended (keys.js asks sheetOpen()).
+// layer's page keys are suspended (keys.js asks sheetOpen()). o.returnFocus
+// names where focus goes on close if the opener has left the page.
 
 import { h, buttons } from './dom.js';
 
@@ -64,10 +65,24 @@ export function sheet(o = {}) {
       document.removeEventListener('focusin', onFocus, true);
       el.remove();
       backdrop.remove();
-      if (returnTo && returnTo.isConnected && typeof returnTo.focus === 'function') returnTo.focus();
+      restoreFocus();
       if (o.onClose) o.onClose();
     },
   };
+
+  // Focus goes back where it was; if that element left the page, to
+  // o.returnFocus, else the page's main region, else body, so keyboard users
+  // keep a place.
+  function restoreFocus() {
+    const main = document.querySelector('main, [role="main"], .kit-read');
+    for (const t of [returnTo, o.returnFocus, main]) {
+      if (!t || !t.isConnected || typeof t.focus !== 'function' || t === document.body) continue;
+      if (t === main && !t.hasAttribute('tabindex') && t.tabIndex < 0) t.setAttribute('tabindex', '-1');
+      t.focus();
+      if (document.activeElement === t) return;
+    }
+    document.body.focus();
+  }
 
   backdrop.addEventListener('click', () => handle.close());
   document.addEventListener('keydown', onKey, true);

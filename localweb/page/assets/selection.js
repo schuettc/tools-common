@@ -27,7 +27,7 @@ export function createSelection() {
       apply(() => (sel.has(id) ? sel.delete(id) : sel.add(id)));
     },
     // range sets every id between anchorId and id (in orderedIds) to the
-    // anchor's state. An anchor not in orderedIds makes this a toggle of id.
+    // anchor's state. If either is not in orderedIds, it toggles id.
     range(anchorId, id, orderedIds) {
       const a = orderedIds.indexOf(anchorId), b = orderedIds.indexOf(id);
       if (a < 0 || b < 0) return store.toggle(id);

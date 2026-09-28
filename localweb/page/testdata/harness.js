@@ -9,6 +9,9 @@ export function assert(cond, msg) {
 }
 
 export function eq(actual, expected, msg) {
+  if (actual instanceof Node || expected instanceof Node) {
+    throw new Error(`${msg ? msg + ': ' : ''}eq compares JSON, and every DOM node is {}; use assert(a === b)`);
+  }
   const a = JSON.stringify(actual), e = JSON.stringify(expected);
   if (a !== e) throw new Error(`${msg ? msg + ': ' : ''}got ${a}, want ${e}`);
 }
