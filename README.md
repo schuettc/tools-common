@@ -58,14 +58,23 @@ func main() {
 }
 ```
 
-`New` auto-registers three built-in commands:
+`New` auto-registers five built-in commands:
 
 - `version` — prints `"<Name> <Version>"` (e.g. `kempt 0.1.0 (abc, 2026-08-30)`).
-- `help` — prints usage.
+- `help` — prints usage, or `help <command>` for one command.
 - `update` — self-updates via the `/dl` contract below.
+- `man` — prints a roff man page.
+- `commands` — lists commands; `commands --json` is the machine-readable index.
 
 A tool can override any built-in by registering a command with the same `Name`
 (e.g. wrap `update` with domain-specific convergence).
+
+`Command.Aliases` lists extra words that run the same command (muster accepts
+its MCP tool names, e.g. `muster get_inbox` = `muster inbox`). Aliases work in
+dispatch, `help <alias>` and `<alias> -h`; help shows an `aliases:` line and
+`commands --json` an `aliases` array, but usage and `man` list only the
+canonical name. `Register` panics if a name or alias is already taken by a
+different command; re-registering a `Name` replaces its aliases.
 
 ### Exit codes (family-wide)
 

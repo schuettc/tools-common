@@ -70,6 +70,9 @@ func HelpFor(w io.Writer, name string, c Command) {
 		syn = c.Name
 	}
 	fmt.Fprintf(w, "Usage: %s %s\n", name, syn)
+	if len(c.Aliases) > 0 {
+		fmt.Fprintf(w, "aliases: %s\n", strings.Join(c.Aliases, ", "))
+	}
 	if c.Help != "" {
 		fmt.Fprintf(w, "\n%s\n", c.Help)
 	}
@@ -153,13 +156,14 @@ func CommandsJSON(name string, cmds []Command) ([]byte, error) {
 		Group      string     `json:"group"`
 		Help       string     `json:"help"`
 		SelfRouted bool       `json:"selfRouted"`
+		Aliases    []string   `json:"aliases"`
 		Flags      []flagJSON `json:"flags"`
 	}
 	sorted := append([]Command(nil), cmds...)
 	sort.Slice(sorted, func(i, j int) bool { return sorted[i].Name < sorted[j].Name })
 	out := make([]cmdJSON, 0, len(sorted))
 	for _, c := range sorted {
-		cj := cmdJSON{Name: c.Name, Synopsis: c.Synopsis, Summary: c.Summary, Group: c.Group, Help: c.Help, SelfRouted: c.Run == nil, Flags: []flagJSON{}}
+		cj := cmdJSON{Name: c.Name, Synopsis: c.Synopsis, Summary: c.Summary, Group: c.Group, Help: c.Help, SelfRouted: c.Run == nil, Aliases: append([]string{}, c.Aliases...), Flags: []flagJSON{}}
 		if c.NewFlags != nil {
 			for _, fi := range FlagsOf(c.NewFlags()) {
 				cj.Flags = append(cj.Flags, flagJSON{fi.Name, fi.Type, fi.Default, fi.Usage})

@@ -4,6 +4,21 @@ Root module releases are tagged `vX.Y.Z`; the separate `sqlitedb` module is
 tagged `sqlitedb/vX.Y.Z`. Releases before this file are described by their
 tags and PRs.
 
+## v0.6.0 (2026-09-27)
+
+### Added
+- `Command.Aliases`: extra words that dispatch to the same command, resolved
+  by `Dispatch`, `help <alias>` and `<alias> -h`. `HelpFor` prints an
+  `aliases:` line and `CommandsJSON` an `aliases` array (empty when none);
+  grouped usage and `man` list only the canonical name.
+- `Register` panics when a name or alias is already taken by a different
+  command. Re-registering a `Name` (overriding a built-in) replaces its
+  aliases.
+- Additive: nothing in v0.5.0 changes for tools that set no aliases.
+
+### Docs
+- README lists all five built-in commands (`man` and `commands` were missing).
+
 ## v0.5.0 (2026-09-27)
 
 ### Added
