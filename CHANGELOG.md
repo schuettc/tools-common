@@ -11,6 +11,8 @@ tags and PRs.
   synopsis (muster's `send <target> "body"`) had its quotes eaten by `.B` and
   was split into separate arguments; a help line starting with `.` would have
   been read as a roff request.
+- `help <cmd>` and `<cmd> -h` print the command's one-line summary between the
+  usage line and the long help (it was only in the grouped list).
 
 ## v0.8.1 (2026-09-28)
 

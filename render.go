@@ -76,6 +76,9 @@ func HelpFor(w io.Writer, name string, c Command) {
 	if len(c.Subcommands) > 0 {
 		fmt.Fprintf(w, "subcommands: %s\n", strings.Join(c.Subcommands, ", "))
 	}
+	if c.Summary != "" {
+		fmt.Fprintf(w, "\n%s\n", c.Summary)
+	}
 	if c.Help != "" {
 		fmt.Fprintf(w, "\n%s\n", c.Help)
 	}

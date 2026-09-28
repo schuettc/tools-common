@@ -29,3 +29,13 @@ func TestManKeepsQuotedSynopsisWhole(t *testing.T) {
 		t.Fatalf("synopsis quotes not escaped:\n%s", page)
 	}
 }
+
+// help <cmd> leads with the command's one-line summary, then its long help.
+func TestHelpForShowsSummary(t *testing.T) {
+	var b strings.Builder
+	HelpFor(&b, "muster", Command{Name: "send", Synopsis: "send <target>", Summary: "Send a message.", Help: "Long form."})
+	s := b.String()
+	if !strings.Contains(s, "Usage: muster send <target>\n\nSend a message.\n\nLong form.") {
+		t.Fatalf("help %q lacks the summary before the long help", s)
+	}
+}
