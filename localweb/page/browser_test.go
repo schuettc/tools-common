@@ -157,9 +157,11 @@ func TestHarnessReportsFailure(t *testing.T) {
 		t.Fatalf("want a reported failure, got %q", res)
 	}
 }
-func TestJSTheme(t *testing.T) { runBrowser(t, "theme") }
-func TestJSKeys(t *testing.T)  { runBrowser(t, "keys") }
-func TestJSApi(t *testing.T)   { runBrowser(t, "api") }
-func TestJSLive(t *testing.T)  { runBrowser(t, "live") }
-func TestJSDom(t *testing.T)   { runBrowser(t, "dom") }
-func TestJSKit(t *testing.T)   { runBrowser(t, "kit") }
+func TestJSTheme(t *testing.T)     { runBrowser(t, "theme") }
+func TestJSKeys(t *testing.T)      { runBrowser(t, "keys") }
+func TestJSApi(t *testing.T)       { runBrowser(t, "api") }
+func TestJSLive(t *testing.T)      { runBrowser(t, "live") }
+func TestJSDom(t *testing.T)       { runBrowser(t, "dom") }
+func TestJSKit(t *testing.T)       { runBrowser(t, "kit") }
+func TestJSSelection(t *testing.T) { runBrowser(t, "selection") }
+func TestJSSheet(t *testing.T)     { runBrowser(t, "sheet") }

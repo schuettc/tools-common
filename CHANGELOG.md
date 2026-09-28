@@ -4,6 +4,28 @@ Root module releases are tagged `vX.Y.Z`; the separate `sqlitedb` module is
 tagged `sqlitedb/vX.Y.Z`. Releases before this file are described by their
 tags and PRs.
 
+## v0.10.0 (2026-09-28)
+
+### Added
+- `localweb/page`: `createSelection()`, a selection store several views bind
+  to (`ids`, `has`, `toggle`, `range(anchorId, id, orderedIds)`, `all`,
+  `deselect`, `clear`, `anchor`, `onChange`), and `list({selection})`, plus the
+  handle's `selection` and `destroy()`. A list without one creates its own, so
+  existing callers are unchanged.
+- `sheet({title, body, actions, onClose})` → `{el, close()}`: a modal sheet
+  with a backdrop, Esc and backdrop-click to close, focus containment and
+  return, and page keys suspended while open; `sheetOpen()`.
+
+### Changed
+- The list's toggle, range and by-id logic now lives in the selection store.
+  A range anchor is an id, so shift-range works across a re-render.
+- The `?` overlay is built on `sheet` (it gains the backdrop and focus
+  handling); `?` or Esc still closes it.
+
+### Fixed
+- The kit's browser tests no longer flake when headless Chrome runs the page
+  without window focus (focus events are fired explicitly in the tests).
+
 ## v0.9.1 (2026-09-28)
 
 ### Fixed

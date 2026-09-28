@@ -167,6 +167,16 @@ srv, err := localweb.Start(ctx, localweb.Config{
   `selected()` is the rendered selected items. Lists are tested to 500 rendered
   rows; paginate beyond that, and selection survives paging.
 - **Status:** `setStatus(text, {tone: 'muted'|'signal'|'danger'})`.
+- **Shared selection** (`selection.js`): `createSelection()` is a store of row
+  ids; `list({selection})` binds to it (a list creates its own otherwise), so a
+  flat list and a board of the same items show one selection. Other views use
+  the store directly: `ids()`, `has`, `toggle`, `range(anchorId, id, orderedIds)`,
+  `all`, `deselect`, `clear`, `onChange(cb)`. Call `list.destroy()` when a list
+  bound to a shared store is discarded.
+- **Sheets** (`sheet.js`): `sheet({title, body, actions, onClose})` returns
+  `{el, close()}`: a small modal over a backdrop. Esc or a backdrop click closes
+  it, focus stays inside and returns on close, and page keys wait while one is
+  open (`sheetOpen()`). The `?` overlay is a sheet.
 - **Live** (`live.js`): SSE with a 2 s poll fallback. The wire, which the tool's
   Go handlers implement:
   - `GET <events>?since=<cursor>`: `text/event-stream`, with headers flushed

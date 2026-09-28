@@ -1,3 +1,5 @@
+import { createSelection } from './selection.js';
+
 // DOM builders for the kit's components. Each returns plain elements styled by
 // kit.css; the CSS classes are the contract and also work from static HTML.
 
@@ -97,11 +99,11 @@ export function list(o) {
   let rows = [];
   let cur = -1;
   let opened = -1;
-  let anchor = -1;
-  // Selection is by row identity, so it covers rows not rendered (other pages,
-  // select-all-in-view) and survives setItems. Identities are "id:<id>" for
-  // rows with an id, else key + title.
-  const sel = new Set();
+  // Selection lives in a store (shared with other views when o.selection is
+  // given), keyed by row identity: the row's id, else a private key + title
+  // identity that only this list uses. It covers rows not rendered and
+  // survives setItems.
+  const store = o.selection || createSelection();
   const views = h('div', { class: 'kit-chips', dataset: { group: 'view' } });
   const filters = h('div', { class: 'kit-chips', dataset: { group: 'filter' } });
   const body = h('div', { class: 'kit-rows', role: 'list' });
@@ -110,16 +112,18 @@ export function list(o) {
     body,
     o.foot ? h('div', { class: 'kit-foot' }, o.foot) : null);
 
-  // A row's identity across setItems: its id, else key + title, else index.
+  const PRIVATE = '\u0000';
   const keyOf = (item, i) => {
     const r = o.row(item);
-    if (r.id !== undefined) return 'id:' + r.id;
-    return r.key !== undefined ? r.key + '\u0000' + r.title : 'i' + i;
+    if (r.id !== undefined) return String(r.id);
+    return PRIVATE + (r.key !== undefined ? r.key + PRIVATE + r.title : 'i' + i);
   };
   const clamp = i => Math.max(0, Math.min(items.length - 1, i));
-  const isSel = i => sel.has(keys[i]);
+  const isSel = i => store.has(keys[i]);
+  const selectable = i => !!o.row(items[i]).selectable;
   // What onSelect reports on: the id set and which rendered rows are selected.
-  const snapshot = () => [...sel].join('\n') + '\u0001' + keys.filter(k => sel.has(k)).join('\n');
+  const snapshot = () => store.ids().join('\n') + '\u0001' + keys.filter(k => store.has(k)).join('\n');
+  let last = snapshot();
 
   function paint() {
     rows.forEach((r, i) => {
@@ -133,10 +137,16 @@ export function list(o) {
     });
   }
 
-  function selectedChanged() {
+  // Every change to the store, from this list or another view, repaints and
+  // reports once.
+  function changed() {
     paint();
+    const now = snapshot();
+    if (now === last) return;
+    last = now;
     if (o.onSelect) o.onSelect(handle.selected());
   }
+  const unsubscribe = store.onChange(changed);
 
   function render() {
     rows = items.map((item, i) => {
@@ -158,21 +168,21 @@ export function list(o) {
 
   const handle = {
     el,
+    selection: store,
     setItems(next) {
       const openKey = opened >= 0 ? keys[opened] : null;
       const curKey = cur >= 0 ? keys[cur] : null;
-      const before = snapshot();
       items = next.slice();
       keys = items.map(keyOf);
       opened = openKey === null ? -1 : keys.indexOf(openKey);
       const was = cur;
       cur = curKey === null ? -1 : keys.indexOf(curKey);
       if (cur < 0 && items.length) cur = was >= 0 ? clamp(was) : opened >= 0 ? opened : 0;
-      // Rows without an id belong to this page only: drop their stale identities.
-      for (const k of [...sel]) if (!k.startsWith('id:') && !keys.includes(k)) sel.delete(k);
-      anchor = -1;
       render();
-      if (o.onSelect && snapshot() !== before) o.onSelect(handle.selected());
+      // Rows without an id belong to this page only: drop their stale identities.
+      const gone = store.ids().filter(k => k.startsWith(PRIVATE) && !keys.includes(k));
+      if (gone.length) store.deselect(gone);
+      changed();
     },
     setChips(group, chips) {
       (group === 'view' ? views : filters).replaceChildren(...chipRow(group, chips, o.onChip));
@@ -191,41 +201,25 @@ export function list(o) {
       if (o.onOpen) o.onOpen(items[i], i);
     },
     toggle(i = cur) {
-      if (i < 0 || i >= items.length || !o.row(items[i]).selectable) return;
-      if (isSel(i)) sel.delete(keys[i]);
-      else sel.add(keys[i]);
-      anchor = i;
-      selectedChanged();
+      if (i < 0 || i >= items.length || !selectable(i)) return;
+      store.toggle(keys[i]);
     },
     toggleRange(i = cur) {
       if (i < 0 || i >= items.length) return;
-      if (anchor < 0) return handle.toggle(i);
-      const on = isSel(anchor);
-      const [a, b] = anchor < i ? [anchor, i] : [i, anchor];
-      for (let j = a; j <= b; j++) {
-        if (!o.row(items[j]).selectable) continue;
-        if (on) sel.add(keys[j]);
-        else sel.delete(keys[j]);
-      }
-      anchor = i;
-      selectedChanged();
+      const order = keys.filter((_, j) => selectable(j));
+      const anchor = store.anchor();
+      if (anchor === null || !order.includes(anchor)) return handle.toggle(i);
+      if (selectable(i)) store.range(anchor, keys[i], order);
     },
     selected: () => items.filter((_, i) => isSel(i)),
-    selectedIds: () => [...sel].filter(k => k.startsWith('id:')).map(k => k.slice(3)),
-    selectAll(ids) {
-      for (const id of ids) sel.add('id:' + id);
-      selectedChanged();
-    },
-    deselect(ids) {
-      for (const id of ids) sel.delete('id:' + id);
-      selectedChanged();
-    },
-    clearSelection() {
-      sel.clear();
-      anchor = -1;
-      selectedChanged();
-    },
+    selectedIds: () => store.ids().filter(k => !k.startsWith(PRIVATE)),
+    selectAll: ids => store.all(ids.map(String)),
+    deselect: ids => store.deselect(ids.map(String)),
+    clearSelection: () => store.clear(),
     current: () => cur,
+    destroy() {
+      unsubscribe();
+    },
   };
   handle.setChips('view', o.views);
   handle.setChips('filter', o.filters);
