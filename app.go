@@ -38,12 +38,16 @@ type Group struct{ Key, Heading string }
 type Command struct {
 	Name     string
 	Summary  string
-	Synopsis string                                         // arg shape after the name; "" → just the name
-	Help     string                                         // long-form for help <cmd>/man; "" → omitted
-	Group    string                                         // group key; "" → default bucket
-	Aliases  []string                                       // extra words that dispatch to this command; not listed as rows
-	NewFlags func() *flag.FlagSet                           // side-effect-free flag constructor; nil → no flags
-	Run      func(args []string, out, errw io.Writer) error // nil → self-routed (Task 8)
+	Synopsis string   // arg shape after the name; "" → just the name
+	Help     string   // long-form for help <cmd>/man; "" → omitted
+	Group    string   // group key; "" → default bucket
+	Aliases  []string // extra words that dispatch to this command; not listed as rows
+	// Subcommands names the command's own sub-verbs. `<cmd> -h` shows this
+	// command's help; `<cmd> <sub> ... -h` is passed through to Run, so each
+	// sub-verb can print its own flags.
+	Subcommands []string
+	NewFlags    func() *flag.FlagSet                           // side-effect-free flag constructor; nil → no flags
+	Run         func(args []string, out, errw io.Writer) error // nil → self-routed (Task 8)
 }
 
 // Config configures a family App.
@@ -236,7 +240,7 @@ func (a *App) Dispatch(args []string, out, errw io.Writer) int {
 		a.usage(errw)
 		return 2
 	}
-	if (cmd.Help != "" || cmd.Synopsis != "" || cmd.NewFlags != nil) && hasHelpArg(args[1:]) {
+	if (cmd.Help != "" || cmd.Synopsis != "" || cmd.NewFlags != nil) && hasHelpArg(args[1:]) && !isSubcommand(cmd, args[1:]) {
 		HelpFor(out, a.name, cmd)
 		return 0
 	}
@@ -282,6 +286,20 @@ func hasJSONFlag(args []string) bool {
 }
 
 // hasHelpArg reports whether -h or --help appears in args.
+// isSubcommand reports whether args start with one of cmd's declared
+// sub-verbs, whose -h belongs to the sub-verb rather than the command.
+func isSubcommand(cmd Command, args []string) bool {
+	if len(args) == 0 {
+		return false
+	}
+	for _, s := range cmd.Subcommands {
+		if args[0] == s {
+			return true
+		}
+	}
+	return false
+}
+
 func hasHelpArg(args []string) bool {
 	for _, a := range args {
 		if a == "-h" || a == "--help" {
