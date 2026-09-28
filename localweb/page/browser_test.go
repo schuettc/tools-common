@@ -56,7 +56,7 @@ func dumpDOM(t *testing.T, url string) (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 	args := []string{"--disable-gpu", "--no-first-run", "--no-default-browser-check",
-		"--user-data-dir=" + t.TempDir(), "--virtual-time-budget=15000", "--dump-dom", url}
+		"--user-data-dir=" + profileDir(t), "--virtual-time-budget=15000", "--dump-dom", url}
 	if !strings.Contains(filepath.Base(chrome), "headless-shell") {
 		args = append([]string{"--headless=new"}, args...)
 	}
@@ -84,6 +84,26 @@ func dumpDOM(t *testing.T, url string) (string, error) {
 		return buf.String(), ctx.Err()
 	}
 	return buf.String(), nil
+}
+
+// profileDir is Chrome's throwaway profile. Not t.TempDir: on Linux, Chrome's
+// child processes outlive the killed browser for a moment and keep writing
+// here, which fails t.TempDir's strict cleanup. Removal is retried, best-effort.
+func profileDir(t *testing.T) string {
+	t.Helper()
+	dir, err := os.MkdirTemp("", "kit-chrome-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		for i := 0; i < 20; i++ {
+			if os.RemoveAll(dir) == nil {
+				return
+			}
+			time.Sleep(100 * time.Millisecond)
+		}
+	})
+	return dir
 }
 
 var resultRE = regexp.MustCompile(`(?s)<pre id="result">(.*?)</pre>`)
