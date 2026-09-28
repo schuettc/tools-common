@@ -69,8 +69,8 @@ export function bar(o) {
     setLive(s, text) {
       pill.hidden = false;
       pill.dataset.state = s;
-      const label = text ?? (s === 'stale' && o.staleText) ?? LIVE_TEXT[s] ?? s;
-      pill.replaceChildren(h('i'), label || LIVE_TEXT[s] || s);
+      const fallback = s === 'stale' && o.staleText ? o.staleText : LIVE_TEXT[s] || s;
+      pill.replaceChildren(h('i'), text ?? fallback);
     },
     setPrimary(p) {
       run = p ? p.run : null;

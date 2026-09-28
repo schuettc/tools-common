@@ -80,10 +80,8 @@ export function createKeys(opts = {}) {
     fam('⇧x', 'select range', () => list.toggleRange());
   }
   fam('?', 'show keys', () => showHelp());
-  fam('Esc', 'close / leave field', () => {
-    if (overlay) showHelp(false);
-    else return false; // nothing to close: let Esc through
-  });
+  // Esc with the overlay open is handled in onKey; here there is nothing to close.
+  fam('Esc', 'close / leave field', () => false);
 
   function fire(b, e) {
     if (b.run(e) !== false) e.preventDefault();

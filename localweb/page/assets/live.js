@@ -99,7 +99,8 @@ export function live(opts) {
     try {
       const res = await doFetch(withSince(opts.poll), { credentials: 'same-origin' });
       if (res.status === 401) {
-        if (stopped || mine !== epoch) return;
+        // stale whatever the epoch: a stream that opened meanwhile is dead too
+        if (stopped) return;
         setStatus('stale');
         halt();
         return;

@@ -190,3 +190,32 @@ test('live: a 401 poll is stale and stops everything', async () => {
   eq(es.made.length, 1, 'no reopen');
   handle.stop();
 });
+
+test('live: a 401 after the stream had opened is still stale', async () => {
+  const { f, timers, es, statuses, handle } = setup();
+  es.last().emitOpen(); // epoch moves
+  es.last().emitError();
+  f.queue.push(f.text('token required', 401));
+  timers.tick();
+  await flush();
+  eq(statuses.at(-1), 'stale');
+  eq(timers.pending.size, 0);
+  handle.stop();
+});
+
+test('live: a 401 that lands after a reopened stream connected is still stale', async () => {
+  const { f, timers, es, statuses, handle } = setup();
+  es.last().emitError();
+  f.queue.push(f.json({ cursor: '1', events: [] }));
+  timers.tick();
+  await flush();
+  let release;
+  f.queue.push(() => new Promise(r => { release = r; }));
+  timers.tick();
+  es.last().emitOpen(); // epoch moves while the 401 is in flight
+  release(new Response('token required', { status: 401 }));
+  await flush();
+  eq(statuses.at(-1), 'stale');
+  assert(es.made.every(e => e.closed), 'stream closed');
+  handle.stop();
+});
