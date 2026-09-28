@@ -331,3 +331,31 @@ func count(t *testing.T, d *DB) int {
 	}
 	return n
 }
+
+// A path with URI-significant characters must open that exact file: '?' would
+// otherwise start the query string and '#' a fragment, leaving the module
+// chmodding one file while SQLite writes another.
+func TestPathWithURICharacters(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "odd ?#% dir")
+	p := filepath.Join(dir, "a&b?c#d%20e.db")
+	d := open(t, p, Options{Migrations: []Step{stepA}})
+	if _, err := d.Exec("INSERT INTO parent(id) VALUES (1)"); err != nil {
+		t.Fatal(err)
+	}
+	_ = d.Close()
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var names []string
+	for _, e := range entries {
+		names = append(names, e.Name())
+	}
+	if len(names) != 1 || names[0] != "a&b?c#d%20e.db" {
+		t.Fatalf("files in dir: %q, want exactly the database", names)
+	}
+	d = open(t, p, Options{Migrations: []Step{stepA}})
+	if n := count(t, d); n != 1 {
+		t.Fatalf("reopened %d rows, want 1: a different file was opened", n)
+	}
+}

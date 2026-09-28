@@ -26,10 +26,13 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
+	"time"
 
-	_ "modernc.org/sqlite" // registers the "sqlite" driver
+	"modernc.org/sqlite" // also registers the "sqlite" driver
+	sqlite3 "modernc.org/sqlite/lib"
 )
 
 // Step moves the schema from one version to the next. It runs inside tx; the
@@ -110,9 +113,15 @@ func Open(ctx context.Context, path string, opts Options) (*DB, error) {
 		return nil, err
 	}
 
-	dsn := "file:" + filepath.ToSlash(path) + "?_pragma=journal_mode(WAL)&_pragma=busy_timeout(5000)"
+	dsn := fileURI(path) + "?_pragma=journal_mode(WAL)&_pragma=busy_timeout(5000)"
 	if !opts.NoForeignKeys {
 		dsn += "&_pragma=foreign_keys(1)"
+	}
+	if err := enableWAL(ctx, path); err != nil {
+		return nil, err
+	}
+	if err := migrate(ctx, path, dsn, opts); err != nil {
+		return nil, err
 	}
 	sdb, err := sql.Open("sqlite", dsn)
 	if err != nil {
@@ -120,15 +129,55 @@ func Open(ctx context.Context, path string, opts Options) (*DB, error) {
 	}
 	sdb.SetMaxOpenConns(1)
 	d := &DB{DB: sdb, Path: path}
-	if err := d.migrate(ctx, opts); err != nil {
-		_ = sdb.Close()
-		return nil, err
-	}
 	if err := secure(path); err != nil {
 		_ = sdb.Close()
 		return nil, err
 	}
 	return d, nil
+}
+
+// fileURI renders path as a SQLite file: URI with the path percent-encoded,
+// so a '?', '#' or '%' in a directory or file name stays part of the name
+// instead of starting the query string or an escape (SQLite decodes it).
+func fileURI(path string) string {
+	return "file:" + (&url.URL{Path: filepath.ToSlash(path)}).EscapedPath()
+}
+
+// walWait bounds how long enableWAL retries; it matches busy_timeout.
+const walWait = 5 * time.Second
+
+// enableWAL switches the database to WAL once, before any other connection
+// opens it. On a brand-new file the switch needs an exclusive lock, and SQLite
+// returns SQLITE_BUSY for it at once instead of honouring busy_timeout, so
+// several processes opening one new database together would fail. This
+// retries until the switch lands (WAL is persistent: later opens find it set
+// and need no exclusive lock) or walWait passes.
+func enableWAL(ctx context.Context, path string) error {
+	db, err := sql.Open("sqlite", fileURI(path)+"?_pragma=busy_timeout(5000)")
+	if err != nil {
+		return err
+	}
+	defer func() { _ = db.Close() }()
+	deadline := time.Now().Add(walWait)
+	for {
+		var mode string
+		err := db.QueryRowContext(ctx, "PRAGMA journal_mode = WAL").Scan(&mode)
+		if err == nil {
+			if mode != "wal" {
+				return fmt.Errorf("%s: journal_mode is %q, want wal", path, mode)
+			}
+			return nil
+		}
+		var serr *sqlite.Error
+		if !errors.As(err, &serr) || serr.Code()&0xff != sqlite3.SQLITE_BUSY || time.Now().After(deadline) {
+			return fmt.Errorf("%s: enable WAL: %w", path, err)
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(20 * time.Millisecond):
+		}
+	}
 }
 
 // secure makes the database and its sidecar files 0600. It matters for a
@@ -142,38 +191,67 @@ func secure(path string) error {
 	return nil
 }
 
-func (d *DB) migrate(ctx context.Context, opts Options) error {
-	have, err := d.Version(ctx)
+// migrate brings the database up to len(opts.Migrations). It runs on its own
+// connection whose transactions take SQLite's write lock at BEGIN
+// (_txlock=immediate), and each step re-reads user_version inside its
+// transaction. Several processes opening one new database at once therefore
+// queue on the lock (busy_timeout), and each step runs exactly once: a
+// process that waited finds the version already bumped and moves on. With
+// deferred transactions they would all read version 0 and all run step 1.
+// Transactions on the returned DB are unaffected (SQLite's default, deferred).
+func migrate(ctx context.Context, path, dsn string, opts Options) (err error) {
+	mdb, err := sql.Open("sqlite", dsn+"&_txlock=immediate")
 	if err != nil {
 		return err
 	}
+	defer func() {
+		if cerr := mdb.Close(); err == nil {
+			err = cerr
+		}
+	}()
+	mdb.SetMaxOpenConns(1)
+	m := &DB{DB: mdb, Path: path}
 	known := len(opts.Migrations)
-	if have > known {
-		return &NewerError{Path: d.Path, Have: have, Known: known}
-	}
-	if have == 0 && known > 0 && !opts.AdoptUnversioned {
-		var n int
-		if err := d.QueryRowContext(ctx,
-			`SELECT count(*) FROM sqlite_master WHERE name NOT LIKE 'sqlite_%'`).Scan(&n); err != nil {
-			return err
-		}
-		if n > 0 {
-			return fmt.Errorf("%s: %w (set AdoptUnversioned if the first migration is idempotent)", d.Path, ErrUnversioned)
-		}
-	}
-	for ; have < known; have++ {
-		if err := d.Tx(ctx, func(tx *sql.Tx) error {
-			if err := opts.Migrations[have](ctx, tx); err != nil {
+	for {
+		done := false
+		var step int
+		err := m.Tx(ctx, func(tx *sql.Tx) error {
+			var have int
+			if err := tx.QueryRowContext(ctx, "PRAGMA user_version").Scan(&have); err != nil {
 				return err
 			}
-			// Pragmas take no bound parameters; have is our own loop counter.
-			_, err := tx.ExecContext(ctx, fmt.Sprintf("PRAGMA user_version = %d", have+1))
+			if have > known {
+				return &NewerError{Path: path, Have: have, Known: known}
+			}
+			if have == known {
+				done = true
+				return nil
+			}
+			if have == 0 && !opts.AdoptUnversioned {
+				var n int
+				if err := tx.QueryRowContext(ctx,
+					`SELECT count(*) FROM sqlite_master WHERE name NOT LIKE 'sqlite\_%' ESCAPE '\'`).Scan(&n); err != nil {
+					return err
+				}
+				if n > 0 {
+					return fmt.Errorf("%s: %w (set AdoptUnversioned if the first migration is idempotent)", path, ErrUnversioned)
+				}
+			}
+			step = have + 1
+			if err := opts.Migrations[have](ctx, tx); err != nil {
+				return fmt.Errorf("%s: migration %d: %w", path, step, err)
+			}
+			// Pragmas take no bound parameters; step is our own counter.
+			_, err := tx.ExecContext(ctx, fmt.Sprintf("PRAGMA user_version = %d", step))
 			return err
-		}); err != nil {
-			return fmt.Errorf("%s: migration %d: %w", d.Path, have+1, err)
+		})
+		if err != nil {
+			return err
+		}
+		if done {
+			return nil
 		}
 	}
-	return nil
 }
 
 // Version reports the database's schema version (PRAGMA user_version).
@@ -184,8 +262,9 @@ func (d *DB) Version(ctx context.Context) (int, error) {
 }
 
 // Tx runs fn in one transaction: it commits when fn returns nil and rolls
-// back when fn returns an error or panics (the panic is re-raised).
-func (d *DB) Tx(ctx context.Context, fn func(*sql.Tx) error) (err error) {
+// back when fn returns an error or panics (the panic is re-raised). If the
+// rollback itself fails, its error is joined to fn's.
+func (d *DB) Tx(ctx context.Context, fn func(*sql.Tx) error) error {
 	tx, err := d.BeginTx(ctx, nil)
 	if err != nil {
 		return err
@@ -197,7 +276,9 @@ func (d *DB) Tx(ctx context.Context, fn func(*sql.Tx) error) (err error) {
 		}
 	}()
 	if err := fn(tx); err != nil {
-		_ = tx.Rollback()
+		if rerr := tx.Rollback(); rerr != nil {
+			return errors.Join(err, fmt.Errorf("rollback: %w", rerr))
+		}
 		return err
 	}
 	return tx.Commit()

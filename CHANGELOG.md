@@ -16,6 +16,12 @@ tags and PRs.
   transaction each; `*NewerError` for a newer database; `AdoptUnversioned` and
   `ErrUnversioned` for existing unversioned databases; `(*DB).Tx` and
   `(*DB).Version`. Pins `modernc.org/sqlite` v1.59.0.
+- Several processes may open one new database at the same moment: the switch
+  to WAL is retried while SQLite reports it busy, and migrations take the
+  write lock at the start of each step and re-read the version, so each step
+  runs exactly once.
+- Paths are percent-encoded into the SQLite URI, so `?`, `#` and `%` in a
+  path name that exact file.
 
 ### CI
 - New `sqlitedb` job (gofmt, vet, `test -race`, build in the submodule) and a
