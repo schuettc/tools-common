@@ -4,6 +4,14 @@ Root module releases are tagged `vX.Y.Z`; the separate `sqlitedb` module is
 tagged `sqlitedb/vX.Y.Z`. Releases before this file are described by their
 tags and PRs.
 
+## v0.8.2 (2026-09-28)
+
+### Fixed
+- `man` escapes double quotes and a leading `.` or `'` on a line. A quoted
+  synopsis (muster's `send <target> "body"`) had its quotes eaten by `.B` and
+  was split into separate arguments; a help line starting with `.` would have
+  been read as a roff request.
+
 ## v0.8.1 (2026-09-28)
 
 ### Fixed

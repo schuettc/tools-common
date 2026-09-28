@@ -100,11 +100,21 @@ func HelpFor(w io.Writer, name string, c Command) {
 	}
 }
 
-// roffEscape escapes the characters roff treats specially in body text.
+// roffEscape escapes the characters roff treats specially in body text:
+// backslashes, hyphens, double quotes (which .B/.TP would otherwise eat,
+// splitting a quoted synopsis into separate arguments), and a "." or "'" at
+// the start of a line (which roff would read as a request).
 func roffEscape(s string) string {
 	s = strings.ReplaceAll(s, `\`, `\\`)
 	s = strings.ReplaceAll(s, "-", `\-`)
-	return s
+	s = strings.ReplaceAll(s, `"`, `\(dq`)
+	lines := strings.Split(s, "\n")
+	for i, l := range lines {
+		if strings.HasPrefix(l, ".") || strings.HasPrefix(l, "'") {
+			lines[i] = `\&` + l
+		}
+	}
+	return strings.Join(lines, "\n")
 }
 
 // ManPage renders the registry as a roff man page (section 1).
