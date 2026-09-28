@@ -40,6 +40,7 @@ type Command struct {
 	Synopsis string                                         // arg shape after the name; "" → just the name
 	Help     string                                         // long-form for help <cmd>/man; "" → omitted
 	Group    string                                         // group key; "" → default bucket
+	Aliases  []string                                       // extra words that dispatch to this command; not listed as rows
 	NewFlags func() *flag.FlagSet                           // side-effect-free flag constructor; nil → no flags
 	Run      func(args []string, out, errw io.Writer) error // nil → self-routed (Task 8)
 }
@@ -59,6 +60,7 @@ type App struct {
 	domain   string
 	version  Version
 	registry map[string]Command
+	aliases  map[string]string // alias → canonical Name
 	groups   []Group
 	dlHost   string
 	client   *http.Client
@@ -73,6 +75,7 @@ func New(cfg Config) *App {
 		domain:   cfg.Domain,
 		version:  cfg.Version,
 		registry: map[string]Command{},
+		aliases:  map[string]string{},
 		groups:   cfg.Groups,
 		dlHost:   "https://" + cfg.Domain,
 		client:   http.DefaultClient,
@@ -91,7 +94,7 @@ func New(cfg Config) *App {
 		Summary: "show usage, or `help <command>` for one command",
 		Run: func(args []string, out, errw io.Writer) error {
 			if len(args) > 0 {
-				if c, ok := a.registry[args[0]]; ok {
+				if c, ok := a.lookup(args[0]); ok {
 					HelpFor(out, a.name, c)
 					return nil
 				}
@@ -121,10 +124,7 @@ func New(cfg Config) *App {
 		Name:    "man",
 		Summary: "print a roff man page",
 		Run: func(_ []string, out, errw io.Writer) error {
-			cmds := make([]Command, 0, len(a.registry))
-			for _, c := range a.registry {
-				cmds = append(cmds, c)
-			}
+			cmds := a.commands()
 			fmt.Fprint(out, ManPage(a.name, a.domain, a.groups, cmds))
 			return nil
 		},
@@ -138,10 +138,7 @@ func New(cfg Config) *App {
 			return fs
 		},
 		Run: func(args []string, out, errw io.Writer) error {
-			cmds := make([]Command, 0, len(a.registry))
-			for _, c := range a.registry {
-				cmds = append(cmds, c)
-			}
+			cmds := a.commands()
 			if hasJSONFlag(args) {
 				b, err := CommandsJSON(a.name, cmds)
 				if err != nil {
@@ -158,17 +155,57 @@ func New(cfg Config) *App {
 }
 
 // Register adds or overrides a command by Name. A tool can override a built-in
-// (e.g. wrap "update" with domain-specific logic).
-func (a *App) Register(cmd Command) { a.registry[cmd.Name] = cmd }
+// (e.g. wrap "update" with domain-specific logic); an override replaces the
+// old command's aliases. Register panics when the Name or an alias is already
+// taken by a different command: two words meaning different things is a
+// registration bug, and panicking surfaces it in any test that builds the App.
+func (a *App) Register(cmd Command) {
+	if old, ok := a.registry[cmd.Name]; ok {
+		for _, al := range old.Aliases {
+			delete(a.aliases, al)
+		}
+	}
+	if owner, ok := a.aliases[cmd.Name]; ok {
+		panic(fmt.Sprintf("%s: command %q is already an alias of %q", a.name, cmd.Name, owner))
+	}
+	for _, al := range cmd.Aliases {
+		if _, ok := a.registry[al]; ok && al != cmd.Name {
+			panic(fmt.Sprintf("%s: alias %q of %q is already a command", a.name, al, cmd.Name))
+		}
+		if owner, ok := a.aliases[al]; ok {
+			panic(fmt.Sprintf("%s: alias %q of %q is already an alias of %q", a.name, al, cmd.Name, owner))
+		}
+	}
+	a.registry[cmd.Name] = cmd
+	for _, al := range cmd.Aliases {
+		a.aliases[al] = cmd.Name
+	}
+}
 
-func (a *App) groupList() []Group { return a.groups }
+// lookup resolves a command word, canonical name or alias.
+func (a *App) lookup(word string) (Command, bool) {
+	if c, ok := a.registry[word]; ok {
+		return c, true
+	}
+	if name, ok := a.aliases[word]; ok {
+		return a.registry[name], true
+	}
+	return Command{}, false
+}
 
-func (a *App) usage(w io.Writer) {
+// commands returns every registered command once (aliases are not rows).
+func (a *App) commands() []Command {
 	cmds := make([]Command, 0, len(a.registry))
 	for _, c := range a.registry {
 		cmds = append(cmds, c)
 	}
-	GroupedUsage(w, a.name, a.groups, cmds)
+	return cmds
+}
+
+func (a *App) groupList() []Group { return a.groups }
+
+func (a *App) usage(w io.Writer) {
+	GroupedUsage(w, a.name, a.groups, a.commands())
 }
 
 // Dispatch routes args to a registered command and returns the process exit
@@ -186,7 +223,7 @@ func (a *App) Dispatch(args []string, out, errw io.Writer) int {
 		name = "help"
 	}
 	jsonMode := hasJSONFlag(args[1:])
-	cmd, ok := a.registry[name]
+	cmd, ok := a.lookup(name)
 	if !ok {
 		fmt.Fprintf(errw, "%s: unknown command %q\n\n", a.name, name)
 		a.usage(errw)
