@@ -4,6 +4,14 @@ Root module releases are tagged `vX.Y.Z`; the separate `sqlitedb` module is
 tagged `sqlitedb/vX.Y.Z`. Releases before this file are described by their
 tags and PRs.
 
+## v0.8.1 (2026-09-28)
+
+### Fixed
+- A command that declares `Subcommands` gets `-h` from tools.App only as
+  `<cmd> -h`. Any other first word goes to `Run`, so a mistyped sub-verb
+  (`galley ledger bogus -h`) is rejected by the command instead of exiting 0
+  with the parent's help (v0.8.0 intercepted it).
+
 ## v0.8.0 (2026-09-28)
 
 ### Added

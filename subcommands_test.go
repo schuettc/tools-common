@@ -55,14 +55,18 @@ func TestSubcommandHelpPassesThrough(t *testing.T) {
 	}
 }
 
-// A word that is not a declared sub-verb keeps today's behaviour: -h anywhere
-// shows the command's help.
-func TestUndeclaredWordStillShowsHelp(t *testing.T) {
+// For a command that owns sub-verbs, only `<cmd> -h` is tools.App's. Any
+// other word is the command's to judge: `ledger bogus -h` reaches Run, which
+// rejects the unknown sub-verb, instead of exiting 0 with the parent's help.
+func TestUndeclaredWordReachesRun(t *testing.T) {
 	var ran []string
 	var out, errw bytes.Buffer
 	subApp(&ran).Dispatch([]string{"ledger", "bogus", "-h"}, &out, &errw)
-	if ran != nil || !strings.Contains(out.String(), "Usage: galley ledger") {
-		t.Fatalf("ran %v, out %q", ran, out.String())
+	if strings.Join(ran, " ") != "bogus -h" {
+		t.Fatalf("Run got %v, want [bogus -h]", ran)
+	}
+	if out.Len() != 0 {
+		t.Fatalf("tools.App printed the parent's help for an unknown sub-verb: %q", out.String())
 	}
 }
 
