@@ -4,6 +4,17 @@ Root module releases are tagged `vX.Y.Z`; the separate `sqlitedb` module is
 tagged `sqlitedb/vX.Y.Z`. Releases before this file are described by their
 tags and PRs.
 
+## v0.8.0 (2026-09-28)
+
+### Added
+- `Command.Subcommands`: a command's own sub-verbs (galley `ledger
+  sync|rebuild|stats`, muster `standing ...`). `<cmd> -h` shows the command's
+  help, now with a `subcommands:` line; `<cmd> <sub> ... -h` is passed through
+  to `Run` so the sub-verb prints its own flags. `commands --json` carries a
+  `subcommands` array. Before this, a command with sub-verbs had to leave its
+  Synopsis and Help empty, or `-h` never reached the sub-verb.
+- Additive: commands without Subcommands behave as before.
+
 ## v0.7.0 (2026-09-27)
 
 ### Added

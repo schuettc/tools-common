@@ -72,6 +72,9 @@ A tool can override any built-in by registering a command with the same `Name`
 `Config.About` is an optional overview: `help` prints it above the command
 list and `man` uses it as the DESCRIPTION.
 
+`Command.Subcommands` names a command's own sub-verbs: `<cmd> -h` shows the
+command's help, and `<cmd> <sub> ... -h` goes to the sub-verb.
+
 `Command.Aliases` lists extra words that run the same command (muster accepts
 its MCP tool names, e.g. `muster get_inbox` = `muster inbox`). Aliases work in
 dispatch, `help <alias>` and `<alias> -h`; help shows an `aliases:` line and
