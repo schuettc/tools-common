@@ -106,12 +106,26 @@ func roffEscape(s string) string {
 
 // ManPage renders the registry as a roff man page (section 1).
 func ManPage(name, domain string, groups []Group, cmds []Command) string {
+	return manPage(name, domain, "", groups, cmds)
+}
+
+// manPage is ManPage with an optional overview (Config.About) as the
+// DESCRIPTION; paragraphs (blank-line separated) become .PP breaks.
+func manPage(name, domain, about string, groups []Group, cmds []Command) string {
 	var b strings.Builder
 	up := strings.ToUpper(name)
 	fmt.Fprintf(&b, ".TH %s 1\n", up)
 	fmt.Fprintf(&b, ".SH NAME\n%s \\- %s command-line interface\n", name, name)
 	fmt.Fprintf(&b, ".SH SYNOPSIS\n.B %s\n<command> [args]\n", name)
-	fmt.Fprintf(&b, ".SH DESCRIPTION\nCommands for %s (%s).\n", name, domain)
+	if about == "" {
+		fmt.Fprintf(&b, ".SH DESCRIPTION\nCommands for %s (%s).\n", name, domain)
+	} else {
+		paras := strings.Split(strings.TrimSpace(about), "\n\n")
+		for i, p := range paras {
+			paras[i] = roffEscape(p)
+		}
+		fmt.Fprintf(&b, ".SH DESCRIPTION\n%s\n", strings.Join(paras, "\n.PP\n"))
+	}
 
 	sorted := append([]Command(nil), cmds...)
 	sort.Slice(sorted, func(i, j int) bool { return sorted[i].Name < sorted[j].Name })
