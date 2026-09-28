@@ -4,7 +4,7 @@ Root module releases are tagged `vX.Y.Z`; the separate `sqlitedb` module is
 tagged `sqlitedb/vX.Y.Z`. Releases before this file are described by their
 tags and PRs.
 
-## sqlitedb [Unreleased] (planned sqlitedb/v0.1.0)
+## sqlitedb v0.1.0 (2026-09-27)
 
 ### Added
 - New module `github.com/schuettc/tools-common/sqlitedb`: the family's SQLite
