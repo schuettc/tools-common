@@ -12,6 +12,9 @@
 //   GET <poll>?since=<cursor>     JSON {cursor, events: [{type, data}]}: what
 //                                 happened after since, and the new cursor.
 //
+// A 401 from the poll means the server restarted and the token is gone:
+// status becomes "stale" and the client stops for good (no stream, no polls).
+//
 // The client closes a broken stream itself and reopens it with the newest
 // cursor, rather than letting the browser retry with a stale Last-Event-ID.
 
@@ -95,6 +98,12 @@ export function live(opts) {
     let body;
     try {
       const res = await doFetch(withSince(opts.poll), { credentials: 'same-origin' });
+      if (res.status === 401) {
+        if (stopped || mine !== epoch) return;
+        setStatus('stale');
+        halt();
+        return;
+      }
       if (!res.ok) throw new Error(`poll: HTTP ${res.status}`);
       body = await res.json();
     } catch {
@@ -117,15 +126,17 @@ export function live(opts) {
     schedule();
   }
 
+  function halt() {
+    stopped = true;
+    cancelPoll();
+    if (es) es.close();
+    es = null;
+  }
+
   openStream();
 
   return {
     cursor: () => cursor,
-    stop() {
-      stopped = true;
-      cancelPoll();
-      if (es) es.close();
-      es = null;
-    },
+    stop: halt,
   };
 }

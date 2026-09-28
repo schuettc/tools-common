@@ -113,6 +113,21 @@ code { font: .88em var(--kit-mono); }
 .kit-page { display: flex; flex-direction: column; height: 100%; }
 .kit-main { flex: 1; display: flex; min-height: 0; }
 
+/* The app grid: the bar across the top, then list | reading column | an
+   optional rail (a tool's dock, e.g. casebook's agent). Children in order:
+   .kit-bar, .kit-list, .kit-read, [.kit-rail]. */
+.kit-app {
+  display: grid; height: 100%; min-height: 0;
+  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-columns: auto minmax(0, 1fr) auto;
+}
+.kit-app > .kit-bar { grid-column: 1 / -1; }
+.kit-app > .kit-list, .kit-app > .kit-read, .kit-app > .kit-rail { min-height: 0; }
+.kit-rail {
+  width: 360px; display: flex; flex-direction: column; min-height: 0;
+  border-left: 1px solid var(--kit-line);
+}
+
 /* the bar: galley's shape */
 .kit-bar {
   display: flex; align-items: center; gap: 10px; flex: none;
@@ -129,12 +144,16 @@ code { font: .88em var(--kit-mono); }
 .kit-ctl.on { background: var(--kit-card); border-color: var(--kit-muted); }
 .kit-ctl .kit-n { color: var(--kit-muted); margin-left: 6px; }
 .kit-status { color: var(--kit-muted); margin-left: 6px; }
+.kit-status[data-tone="signal"] { color: var(--kit-signal); }
+.kit-status[data-tone="danger"] { color: var(--kit-danger); }
 .kit-sp { flex: 1; }
 .kit-live { display: flex; align-items: center; gap: 8px; border: 1px solid var(--kit-line); border-radius: 6px; padding: 4px 12px; }
 .kit-live[hidden] { display: none; }
 .kit-live i { width: 9px; height: 9px; border-radius: 50%; background: var(--kit-ok); }
 .kit-live[data-state="polling"] i { background: var(--kit-wait); }
 .kit-live[data-state="down"] i { background: var(--kit-danger); }
+.kit-live[data-state="stale"] { color: var(--kit-muted); }
+.kit-live[data-state="stale"] i { background: var(--kit-muted); }
 .kit-primary {
   font: 700 13px var(--kit-mono); background: var(--kit-signal); color: var(--kit-signal-ink);
   border: 0; border-radius: 6px; padding: 7px 26px; cursor: pointer;

@@ -58,6 +58,8 @@ export function createKeys(opts?: { list?: ListNav; target?: EventTarget; now?: 
 
 export class ApiError extends Error {
   status: number;
+  /** status 401: the server restarted and this page's token is gone. */
+  readonly isStale: boolean;
   constructor(status: number, message: string);
 }
 
@@ -68,12 +70,13 @@ export interface Api {
   del<T = unknown>(path: string): Promise<T>;
 }
 
-/** JSON over the tool's /api/. 204 or an empty body resolves null; non-2xx throws ApiError. */
-export function createApi(opts?: { base?: string; token?: string; fetch?: typeof fetch }): Api;
+/** JSON over the tool's /api/. 204 or an empty body resolves null; non-2xx throws ApiError. onStale runs once, on the first 401. */
+export function createApi(opts?: { base?: string; token?: string; fetch?: typeof fetch; onStale?(err: ApiError): void }): Api;
 
 // ---- live.js
 
-export type LiveStatus = 'live' | 'polling' | 'down';
+/** stale: a poll got 401 (the server restarted); the client has stopped for good. */
+export type LiveStatus = 'live' | 'polling' | 'down' | 'stale';
 
 export interface LiveEvent<T = unknown> {
   type: string;
@@ -118,13 +121,17 @@ export interface Primary {
   run(): void;
 }
 
+export type StatusTone = 'muted' | 'signal' | 'danger';
+
 export interface BarHandle {
   el: HTMLElement;
   themeControl: HTMLElement;
   setSection(id: string): void;
   setCount(id: string, count?: string | number | null): void;
-  setStatus(text: string): void;
-  setLive(s: LiveStatus): void;
+  /** tone: muted (default), signal, or danger (e.g. "offline · 3 queued"). */
+  setStatus(text: string, opts?: { tone?: StatusTone }): void;
+  /** The pill; text overrides its label (stale defaults to the bar's staleText). */
+  setLive(s: LiveStatus, text?: string): void;
   /** The one filled button; null hides it. */
   setPrimary(p: Primary | null): void;
 }
@@ -137,6 +144,8 @@ export function bar(o: {
   status?: string;
   primary?: Primary | null;
   theme?: HTMLElement;
+  /** The tool's words for the stale pill, e.g. "restarted · continued in a new tab". */
+  staleText?: string;
 }): BarHandle;
 
 export interface Chip {
@@ -159,14 +168,20 @@ export interface Row {
 
 export interface ListHandle<T> extends ListNav {
   el: HTMLElement;
-  /** Keeps the open row, cursor and selection by row id (else key + title); calls onSelect if the selection changed. */
+  /** Keeps the open row, cursor and selection by row id (else key + title); calls onSelect if the selection changed. Tested to 500 rows; paginate beyond that. */
   setItems(items: T[]): void;
   setChips(group: 'view' | 'filter', chips: Chip[]): void;
   move(d: number): void;
   open(i?: number): void;
   toggle(i?: number): void;
   toggleRange(i?: number): void;
+  /** The selected items among those rendered now. */
   selected(): T[];
+  /** Every selected row id, rendered or not (other pages, select-all-in-view). Rows need an id. */
+  selectedIds(): string[];
+  selectAll(ids: string[]): void;
+  deselect(ids: string[]): void;
+  clearSelection(): void;
   /** The cursor row's index, -1 when empty. */
   current(): number;
 }

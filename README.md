@@ -154,6 +154,18 @@ srv, err := localweb.Start(ctx, localweb.Config{
   registration. While a text field has focus, only `Esc` and `inField` keys fire.
 - **API** (`api.js`): `createApi()` sends JSON with the page's cookie. Pass
   `{token}` to send `X-Local-Token` instead (non-browser callers).
+- **Stale session:** when the tool's server restarts, the page's token is
+  gone and every call returns 401. `ApiError.isStale` is true, `createApi({onStale})`
+  runs once, and `live()` reports `stale` and stops. Show the tool's own words
+  with `bar({staleText})` and `setLive('stale')`.
+- **Layout:** `.kit-app` is the page grid: the bar across the top, then
+  `.kit-list` | `.kit-read` | an optional `.kit-rail` (360px, the tool's own
+  dock). `.kit-page` + `.kit-main` is the same without a rail.
+- **Selection:** by row `id`, so it covers rows that aren't rendered.
+  `selectedIds()`, `selectAll(ids)`, `deselect(ids)`, `clearSelection()`.
+  `selected()` is the rendered selected items. Lists are tested to 500 rendered
+  rows; paginate beyond that, and selection survives paging.
+- **Status:** `setStatus(text, {tone: 'muted'|'signal'|'danger'})`.
 - **Live** (`live.js`): SSE with a 2 s poll fallback. The wire, which the tool's
   Go handlers implement:
   - `GET <events>?since=<cursor>`: `text/event-stream`, with headers flushed
@@ -176,7 +188,7 @@ esbuild app.ts --bundle --format=esm --external:/_kit/*
 
 The kit's JS tests run in headless Chrome from `go test`. They skip without
 Chrome unless `KIT_BROWSER=required` (as in CI). `KIT_CHROME` names a binary.
-`localweb/page/demo/` rebuilds the approved docket mock and a cull-shaped page
+`localweb/page/demo/` rebuilds the approved casebook mock and a cull-shaped page
 for visual review.
 
 ## Session identity rule (`harness`)

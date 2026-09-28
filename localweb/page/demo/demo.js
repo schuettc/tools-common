@@ -10,7 +10,7 @@ const mark = () => {
 const app = document.getElementById('app');
 const view = new URLSearchParams(location.search).get('view') || 'attention';
 
-// ------------------------------------------------------------ docket: attention
+// ------------------------------------------------------------ casebook: attention
 const ITEMS = [
   ['pr', 'bettor-help-platform#673', 'bump vitest from 4.1.10 to 5.0.0', '14d'],
   ['pr', 'bettor-help-platform#672', 'bump the minor-and-patch group (5 updates)', '14d'],
@@ -132,7 +132,7 @@ function labelView(b) {
 
 // ------------------------------------------------------------------- the page
 const b = bar({
-  brand: { name: view === 'label' ? 'cull' : 'docket', mark: mark() },
+  brand: { name: view === 'label' ? 'cull' : 'casebook', mark: mark() },
   sections: view === 'label'
     ? [{ id: 'label', label: 'label', count: '' }, { id: 'eval', label: 'eval' }]
     : [{ id: 'attention', label: 'attention', count: 46 }, { id: 'rules', label: 'rules', count: 6 }, { id: 'apply', label: 'to apply', count: '1,166' }],
@@ -145,6 +145,15 @@ const theme = initTheme('kitdemo', b.themeControl);
 const forced = new URLSearchParams(location.search).get('theme');
 if (forced) theme.set(forced); // screenshots: ?theme=light|dark
 b.setLive('live');
-const main = h('div', { class: 'kit-main' }, ...(view === 'label' ? labelView(b) : attention(b)));
-app.append(b.el, main);
+if (view === 'label') {
+  app.append(b.el, h('div', { class: 'kit-main' }, ...labelView(b)));
+} else {
+  // The app grid with a rail: the tool's own dock goes here (casebook's agent).
+  app.className = 'kit-app';
+  const rail = h('aside', { class: 'kit-rail' },
+    h('div', { class: 'kit-lh' }, h('div', { class: 'kit-eyebrow' }, 'the tool’s rail')),
+    h('div', { style: 'padding:0 16px' }, card({ edge: 'agent', head: 'pi · 3m', body: "Done: 38 close, 2 keep. They're in proposed." })));
+  app.append(b.el, ...attention(b), rail);
+  b.setStatus('offline · 3 queued', { tone: 'danger' });
+}
 document.body.dataset.ok = '1';
