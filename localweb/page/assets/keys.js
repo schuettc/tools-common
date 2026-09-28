@@ -80,6 +80,7 @@ export function createKeys(opts = {}) {
     fam('↵', 'open', () => list.open());
     fam('x', 'select', () => list.toggle());
     fam('⇧x', 'select range', () => list.toggleRange());
+    if (typeof list.focusSearch === 'function') fam('/', 'search', () => list.focusSearch());
   }
   fam('?', 'show keys', () => showHelp());
   // Esc with a sheet (or the ? overlay) open is the sheet's; here there is nothing to close.

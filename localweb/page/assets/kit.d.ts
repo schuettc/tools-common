@@ -28,6 +28,8 @@ export interface ListNav {
   open(): void;
   toggle(): void;
   toggleRange(): void;
+  /** When present, createKeys binds / to it. */
+  focusSearch?(): void;
 }
 
 export interface KeyBinding {
@@ -51,7 +53,7 @@ export interface Keys {
   destroy(): void;
 }
 
-/** Family defaults: j/↓ k/↑ move, o/↵ open, x select, ⇧x range (when list is given); ? keys; Esc closes or leaves a field. */
+/** Family defaults: j/↓ k/↑ move, o/↵ open, x select, ⇧x range (when list is given), / search (when the list has one); ? keys; Esc closes or leaves a field. */
 export function createKeys(opts?: { list?: ListNav; target?: EventTarget; now?: () => number }): Keys;
 
 // ---- api.js
@@ -221,6 +223,10 @@ export interface ListHandle<T> extends ListNav {
   clearSelection(): void;
   /** The cursor row's index, -1 when empty. */
   current(): number;
+  /** Set the search text (e.g. restored from the URL) without calling onInput. */
+  setSearch(text: string): void;
+  /** Present only when the list has a search field; the keyboard layer binds / to it. */
+  focusSearch?(): void;
   /** Stop listening to a shared selection (call when the list is discarded). */
   destroy(): void;
 }
@@ -233,6 +239,8 @@ export function list<T>(o: {
   row(item: T): Row;
   onOpen?(item: T, i: number): void;
   onSelect?(selected: T[]): void;
+  /** A search field in the header. onInput runs on every input (no debounce). Esc clears it, then leaves it; / focuses it. */
+  search?: { placeholder?: string; value?: string; onInput(text: string): void };
   /** Bind to a shared selection store; rows need an id. Default: the list's own. */
   selection?: Selection;
   /** Open the row the cursor moves to (the reading column follows j/k). */
