@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>localweb/page kit demo</title>
+<!-- A review aid, not shipped: the approved docket mock and a cull-shaped
+     page, rebuilt on the kit. Serve with page.With(os.DirFS(".")) and open
+     /demo/ (?view=attention|label). -->
+<script src="/_kit/boot.js" data-tool="kitdemo"></script>
+<link rel="stylesheet" href="/_kit/kit.css">
+<style>:root { --tool-signal-light: #a4512a; --tool-signal-dark: #d98f66; }</style>
+</head>
+<body>
+<div class="kit-page" id="app"></div>
+<script>
+  addEventListener('error', e => { document.body.dataset.err = String(e.message); });
+  addEventListener('unhandledrejection', e => { document.body.dataset.err = String(e.reason); });
+</script>
+<script type="module" src="./demo.js"></script>
+</body>
+</html>

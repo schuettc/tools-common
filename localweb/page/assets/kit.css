@@ -1,0 +1,253 @@
+/* tools-common localweb/page — the family's galley-style page kit.
+
+   This file is THE token source. Every --kit-* property is declared once, in
+   the :root block below, with light-dark() holding both themes on one line,
+   so there is no second block to keep in step. A Go test fails if any other
+   file declares a --kit-* property. Tools never set --kit-* tokens; they set
+   the inputs listed further down.
+
+   ONE MEANING EACH, EXCLUSIVELY. Every rule below is written against this
+   list rather than against how a colour looks:
+
+     --kit-bg          the page
+     --kit-panel       the list panel's ground
+     --kit-card        cards, tables, the raised open row
+     --kit-fg          text
+     --kit-muted       secondary text, counts, gutters
+     --kit-line        hairline rules and outlines
+     --kit-signal      YOU: your selection, your pending confirmations, the
+                       active place, the one filled primary button, links
+     --kit-signal-soft the active chip's ground (a wash of the signal)
+     --kit-signal-ink  text on a signal fill; the ink belongs to the fill
+     --kit-agent       THE AGENT / WIRE: its name, its cards' edge, its progress
+     --kit-agent-soft  the agent's wash
+     --kit-wait        WAITING: queued messages, drafts
+     --kit-danger      destructive verbs only
+     --kit-ok          live, verified, active
+     --kit-lift        the single elevation, used only by .kit-float surfaces
+     --kit-mono        controls, labels, keys, status and counts
+     --kit-sans        titles, prose and item titles
+
+   TOOL INPUTS (all optional; defaults are tackle rust and tackle wire):
+     --tool-signal-light / --tool-signal-dark          (#a4512a / #d98f66)
+     --tool-agent-light  / --tool-agent-dark           (#b06f14 / #eba63f)
+     --tool-signal-ink-light / --tool-signal-ink-dark  (#ffffff / #14161d)
+
+   GALLEY'S RULES: mono only for controls, labels, keys and status; sans for
+   titles and prose. 8px radius on cards and tables, 6px on controls. Hairline
+   borders, no gradients, no shadow but --kit-lift. Keyboard focus draws a 1px
+   signal ring; a mouse click draws none. Theme follows the system unless
+   html[data-theme] overrides it (theme.js remembers the choice). */
+
+:root {
+  color-scheme: light dark;
+  --kit-bg: light-dark(#f4f5f8, #14161d);
+  --kit-panel: light-dark(#eef0f4, #1a1d27);
+  --kit-card: light-dark(#ffffff, #1a1d27);
+  --kit-fg: light-dark(#1a1d27, #e8eaf1);
+  --kit-muted: light-dark(#59606f, #969cae);
+  --kit-line: light-dark(#e3e5ec, #2b2f3b);
+  --kit-signal: light-dark(var(--tool-signal-light, #a4512a), var(--tool-signal-dark, #d98f66));
+  --kit-signal-soft: light-dark(color-mix(in srgb, var(--kit-signal) 10%, transparent), color-mix(in srgb, var(--kit-signal) 14%, transparent));
+  --kit-signal-ink: light-dark(var(--tool-signal-ink-light, #ffffff), var(--tool-signal-ink-dark, #14161d));
+  --kit-agent: light-dark(var(--tool-agent-light, #b06f14), var(--tool-agent-dark, #eba63f));
+  --kit-agent-soft: light-dark(color-mix(in srgb, var(--kit-agent) 10%, transparent), color-mix(in srgb, var(--kit-agent) 12%, transparent));
+  --kit-wait: light-dark(#5661b8, #98a3ec);
+  --kit-danger: light-dark(#c22a2a, #e5484d);
+  --kit-ok: light-dark(#1f7d52, #6fc79a);
+  --kit-lift: 0 6px 22px rgba(0, 0, 0, .16);
+  --kit-mono: "SF Mono", ui-monospace, "JetBrains Mono", Menlo, monospace;
+  --kit-sans: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+html[data-theme="light"] { color-scheme: light; }
+html[data-theme="dark"] { color-scheme: dark; }
+
+/* base */
+*, *::before, *::after { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; }
+body {
+  background: var(--kit-bg);
+  color: var(--kit-fg);
+  font: 16px/1.7 var(--kit-sans);
+  -webkit-font-smoothing: antialiased;
+}
+a { color: var(--kit-signal); }
+code { font: .88em var(--kit-mono); }
+:focus-visible { outline: 1px solid var(--kit-signal); outline-offset: 1px; }
+:focus:not(:focus-visible) { outline: none; }
+
+/* floating surfaces: the only users of --kit-lift */
+.kit-float {
+  position: fixed;
+  z-index: 100;
+  background: var(--kit-card);
+  border: 1px solid var(--kit-line);
+  border-radius: 8px;
+  box-shadow: var(--kit-lift);
+}
+
+/* the ? overlay */
+.kit-keys {
+  top: 12vh;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(440px, 92vw);
+  max-height: 76vh;
+  overflow: auto;
+  padding: 8px 20px 18px;
+  font: 13px var(--kit-mono);
+}
+.kit-keys .kit-label { margin: 14px 0 6px; }
+.kit-keys-row { display: grid; grid-template-columns: 120px 1fr; gap: 12px; padding: 3px 0; }
+.kit-keys-k { display: flex; gap: 4px; }
+.kit-keys kbd {
+  font: 12px var(--kit-mono);
+  border: 1px solid var(--kit-line);
+  border-radius: 6px;
+  padding: 0 6px;
+  color: var(--kit-fg);
+}
+
+/* ---------------------------------------------------------------- the shell
+   The page is a column: the bar, then .kit-main (list | reading column). */
+.kit-page { display: flex; flex-direction: column; height: 100%; }
+.kit-main { flex: 1; display: flex; min-height: 0; }
+
+/* the bar: galley's shape */
+.kit-bar {
+  display: flex; align-items: center; gap: 10px; flex: none;
+  height: 52px; padding: 0 20px;
+  border-bottom: 1px solid var(--kit-line);
+  font: 13px var(--kit-mono);
+}
+.kit-brand { display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 15px; margin-right: 6px; }
+.kit-brand svg { width: 18px; height: 18px; }
+.kit-ctl {
+  font: 13px var(--kit-mono); color: var(--kit-fg); background: transparent;
+  border: 1px solid var(--kit-line); border-radius: 6px; padding: 4px 14px; cursor: pointer;
+}
+.kit-ctl.on { background: var(--kit-card); border-color: var(--kit-muted); }
+.kit-ctl .kit-n { color: var(--kit-muted); margin-left: 6px; }
+.kit-status { color: var(--kit-muted); margin-left: 6px; }
+.kit-sp { flex: 1; }
+.kit-live { display: flex; align-items: center; gap: 8px; border: 1px solid var(--kit-line); border-radius: 6px; padding: 4px 12px; }
+.kit-live[hidden] { display: none; }
+.kit-live i { width: 9px; height: 9px; border-radius: 50%; background: var(--kit-ok); }
+.kit-live[data-state="polling"] i { background: var(--kit-wait); }
+.kit-live[data-state="down"] i { background: var(--kit-danger); }
+.kit-primary {
+  font: 700 13px var(--kit-mono); background: var(--kit-signal); color: var(--kit-signal-ink);
+  border: 0; border-radius: 6px; padding: 7px 26px; cursor: pointer;
+}
+.kit-primary[hidden] { display: none; }
+
+/* the list panel: a quiet ground */
+.kit-list {
+  width: 400px; flex: none; display: flex; flex-direction: column; min-height: 0;
+  background: var(--kit-panel); border-right: 1px solid var(--kit-line);
+}
+.kit-lh { padding: 18px 20px 10px; }
+.kit-eyebrow, .kit-label {
+  font: 10.5px var(--kit-mono); letter-spacing: .08em; text-transform: uppercase; color: var(--kit-muted);
+}
+.kit-chips { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px; }
+.kit-chips:empty { display: none; }
+.kit-chip {
+  font: 12.5px var(--kit-mono); color: var(--kit-muted); background: transparent;
+  border: 1px solid var(--kit-line); border-radius: 6px; padding: 2px 9px; cursor: pointer;
+}
+.kit-chip.on { color: var(--kit-fg); background: var(--kit-signal-soft); border-color: transparent; }
+.kit-chip .kit-n { margin-left: 5px; opacity: .8; }
+.kit-rows { overflow: auto; flex: 1; min-height: 0; padding: 4px 12px 12px; }
+.kit-row {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px;
+  padding: 10px; border-radius: 8px; margin-bottom: 2px; cursor: pointer;
+}
+.kit-row.has-box { grid-template-columns: 16px minmax(0, 1fr) auto; }
+.kit-row:hover, .kit-row.cur { background: var(--kit-card); }
+.kit-row.open { background: var(--kit-card); box-shadow: inset 3px 0 0 var(--kit-signal); }
+.kit-box { width: 14px; height: 14px; border: 1.5px solid var(--kit-muted); border-radius: 4px; margin-top: 5px; }
+.kit-row.sel .kit-box { background: var(--kit-signal); border-color: var(--kit-signal); }
+.kit-kicker { font: 11.5px var(--kit-mono); color: var(--kit-muted); }
+.kit-title { font-size: 14.5px; line-height: 1.45; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.kit-sub { font-size: 12.5px; color: var(--kit-agent); margin-top: 2px; }
+.kit-meta { font: 11.5px var(--kit-mono); color: var(--kit-muted); padding-top: 2px; }
+.kit-foot {
+  display: flex; align-items: center; gap: 8px; padding: 10px 20px;
+  border-top: 1px solid var(--kit-line); font: 12.5px var(--kit-mono);
+}
+.kit-foot .kit-n { color: var(--kit-signal); font-weight: 600; }
+
+/* the reading column: galley's document */
+.kit-read { flex: 1; overflow: auto; min-width: 0; }
+.kit-doc { max-width: 640px; margin: 0 auto; padding: 44px 32px 60px; }
+.kit-doc p { margin: 0 0 16px; }
+.kit-kick { font: 12px var(--kit-mono); color: var(--kit-muted); }
+.kit-h1 { font-size: 30px; line-height: 1.2; letter-spacing: -.02em; font-weight: 700; margin: 10px 0 18px; }
+.kit-facts { display: flex; gap: 18px; flex-wrap: wrap; font-size: 14px; color: var(--kit-muted); margin-bottom: 26px; }
+.kit-facts b { color: var(--kit-fg); font-weight: 600; }
+.kit-doc .kit-label { margin: 30px 0 10px; }
+
+/* hairline tables */
+.kit-table { background: var(--kit-card); border: 1px solid var(--kit-line); border-radius: 8px; overflow: hidden; margin: 0 0 8px; }
+.kit-tr {
+  display: grid; grid-template-columns: 120px 70px 1fr; gap: 10px; align-items: center;
+  padding: 9px 14px; border-top: 1px solid var(--kit-line); font-size: 14.5px;
+}
+.kit-tr:first-child { border-top: 0; }
+
+/* cards with a coloured edge; the card holds its own actions */
+.kit-card {
+  background: var(--kit-card); border: 1px solid var(--kit-line); border-radius: 8px;
+  padding: 14px 16px; margin: 0 0 14px;
+}
+.kit-card.edge-signal { border-left: 3px solid var(--kit-signal); }
+.kit-card.edge-agent { border-left: 3px solid var(--kit-agent); }
+.kit-card.edge-wait { border-left: 3px solid var(--kit-wait); }
+.kit-card-head {
+  font: 10.5px var(--kit-mono); letter-spacing: .06em; text-transform: uppercase;
+  color: var(--kit-muted); margin-bottom: 6px;
+}
+.kit-card.edge-signal .kit-card-head { color: var(--kit-signal); }
+.kit-card.edge-agent .kit-card-head { color: var(--kit-agent); }
+.kit-card.edge-wait .kit-card-head { color: var(--kit-wait); }
+.kit-card-body { font-size: 15px; margin: 0 0 12px; }
+.kit-card-body:last-child { margin-bottom: 0; }
+
+/* buttons: lowercase mono, outlined; one fill per card; red text destroys */
+.kit-btns { display: flex; gap: 8px; flex-wrap: wrap; }
+.kit-btn {
+  font: 13px var(--kit-mono); color: var(--kit-fg); background: transparent;
+  border: 1px solid var(--kit-line); border-radius: 6px; padding: 4px 12px; cursor: pointer;
+}
+.kit-btn.fill { background: var(--kit-signal); border-color: var(--kit-signal); color: var(--kit-signal-ink); font-weight: 700; }
+.kit-btn.danger { color: var(--kit-danger); }
+.kit-btn:disabled { opacity: .45; cursor: default; }
+
+/* pills */
+.kit-pill { font: 11px var(--kit-mono); border-radius: 6px; padding: 1px 7px; }
+.kit-pill.wait { color: var(--kit-wait); background: color-mix(in srgb, var(--kit-wait) 10%, transparent); }
+.kit-pill.ok { color: var(--kit-ok); background: color-mix(in srgb, var(--kit-ok) 10%, transparent); }
+
+/* code: a gutter and the source, side by side; scrolls, never wraps */
+.kit-code {
+  display: grid; grid-template-columns: auto 1fr; overflow-x: auto;
+  background: var(--kit-card); border: 1px solid var(--kit-line); border-radius: 8px;
+  margin: 0 0 16px;
+}
+.kit-code pre { margin: 0; padding: 10px 14px; font: 12.5px/1.6 var(--kit-mono); white-space: pre; tab-size: 4; }
+.kit-gutter { color: var(--kit-muted); text-align: right; user-select: none; border-right: 1px solid var(--kit-line); }
+
+/* collapsible sections */
+.kit-fold { margin: 0 0 8px; }
+.kit-fold > summary { cursor: pointer; list-style: none; margin: 22px 0 10px; }
+.kit-fold > summary::-webkit-details-marker { display: none; }
+.kit-fold > summary::before { content: "▸"; display: inline-block; width: 1.4em; }
+.kit-fold[open] > summary::before { content: "▾"; }
+
+/* the inline note */
+.kit-note {
+  width: 100%; font: 14.5px var(--kit-sans); color: var(--kit-fg); background: var(--kit-card);
+  border: 1px solid var(--kit-line); border-radius: 6px; padding: 6px 10px;
+}
+.kit-note:focus-visible { outline: 1px solid var(--kit-signal); outline-offset: 0; }

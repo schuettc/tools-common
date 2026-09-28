@@ -1,0 +1,24 @@
+<!doctype html>
+<meta charset="utf-8">
+<link rel="stylesheet" href="/_kit/kit.css">
+<body>
+<div id="fx"></div>
+<script type="module">
+const out = document.createElement('pre');
+out.id = 'result';
+const errors = [];
+addEventListener('error', e => errors.push(String(e.message)));
+addEventListener('unhandledrejection', e => errors.push(String(e.reason)));
+try {
+  const name = new URLSearchParams(location.search).get('t');
+  const h = await import('./harness.js');
+  await import(`./${name}.test.js`);
+  out.textContent = await h.run();
+} catch (e) {
+  out.textContent = `FAIL 1\nload: ${e && e.stack ? e.stack : e}`;
+}
+if (errors.length && out.textContent.startsWith('PASS')) {
+  out.textContent = `FAIL ${errors.length}\n` + errors.map(e => `uncaught: ${e}`).join('\n');
+}
+document.body.append(out);
+</script>
