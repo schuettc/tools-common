@@ -9,7 +9,7 @@ tags and PRs.
 ### Changed
 - Adopted the .tools family CI standard: the standard `justfile` (family
   `justfile.head` verbatim plus `tools-common` slots), `lefthook.yml`, a
-  standard `ci.yml` (tools-actions `go-ci@v0.10.0` gate plus `extra` and
+  standard `ci.yml` (tools-actions `go-ci@v0.10.1` gate plus `extra` and
   `browser` jobs that fold in the stdlib-only guard, the `sqlitedb` module
   checks, and the `localweb/page` browser tests), and `.github/dependabot.yml`.
 - Cleared the family Go gate's lint findings (bodyclose, errcheck, gosec,
