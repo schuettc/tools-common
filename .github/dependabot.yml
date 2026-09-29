@@ -1,0 +1,11 @@
+version: 2
+updates:
+  # The family CI actions: take each tools-actions release as a PR.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 3
+    allow:
+      - dependency-name: "schuettc/tools-actions"
