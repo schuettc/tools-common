@@ -4,6 +4,17 @@ Root module releases are tagged `vX.Y.Z`; the separate `sqlitedb` module is
 tagged `sqlitedb/vX.Y.Z`. Releases before this file are described by their
 tags and PRs.
 
+## Unreleased
+
+### Changed
+- Adopted the .tools family CI standard: the standard `justfile` (family
+  `justfile.head` verbatim plus `tools-common` slots), `lefthook.yml`, a
+  standard `ci.yml` (tools-actions `go-ci@v0.10.0` gate plus `extra` and
+  `browser` jobs that fold in the stdlib-only guard, the `sqlitedb` module
+  checks, and the `localweb/page` browser tests), and `.github/dependabot.yml`.
+- Cleared the family Go gate's lint findings (bodyclose, errcheck, gosec,
+  staticcheck, unparam) with no change to the exported API or behaviour.
+
 ## v0.11.0 (2026-09-28)
 
 ### Added
