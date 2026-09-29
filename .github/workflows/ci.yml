@@ -1,51 +1,46 @@
+# .tools family standard: identical in every family repo except the branch
+# list and the gate's OS list. The same checks `just verify` runs locally.
 name: ci
-
 on:
   push:
+    branches: [main]
   pull_request:
-
+permissions:
+  contents: read
 jobs:
-  test:
-    runs-on: ubuntu-latest
+  gate:
+    strategy:
+      matrix:
+        # tools-common is a stdlib-only library; the gate runs on Linux.
+        os: [ubuntu-26.04]
+    runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-go@v7
+      - uses: actions/checkout@v7.0.1
+      - uses: actions/setup-go@v7.0.0
         with:
           go-version-file: go.mod
-      - run: go vet ./...
-      - run: go test ./...
-        env:
-          KIT_BROWSER: required # localweb/page's JS tests run in the runner's Chrome
-      - run: go build ./...
-
-  # The root module must stay stdlib-only: a tool that imports tools-common
-  # never pulls in a third-party module. SQLite lives in the sqlitedb module.
-  stdlib-only:
-    runs-on: ubuntu-latest
+      - uses: extractions/setup-just@v4.0.0
+      - run: just prepare
+      - uses: schuettc/tools-actions/go-ci@v0.10.1
+        with:
+          setup-go: "false"
+  extra:
+    runs-on: ubuntu-26.04
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-go@v7
+      - uses: actions/checkout@v7.0.1
+      - uses: actions/setup-go@v7.0.0
         with:
           go-version-file: go.mod
-      - name: root go.mod requires nothing
-        run: |
-          deps="$(go list -m all | tail -n +2)"
-          if [ -n "$deps" ]; then echo "root module gained dependencies:"; echo "$deps"; exit 1; fi
-
-  # sqlitedb is its own module (own go.mod and sqlitedb/vX.Y.Z tags), so the
-  # root job's ./... never reaches it.
-  sqlitedb:
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: sqlitedb
+      - uses: extractions/setup-just@v4.0.0
+      - run: just verify-extra
+  # The localweb/page kit's JS suites need a browser, too slow for the push
+  # gate; CI runs them as their own required job.
+  browser:
+    runs-on: ubuntu-26.04
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-go@v7
+      - uses: actions/checkout@v7.0.1
+      - uses: actions/setup-go@v7.0.0
         with:
-          go-version-file: sqlitedb/go.mod
-          cache-dependency-path: sqlitedb/go.sum
-      - run: test -z "$(gofmt -l .)"
-      - run: go vet ./...
-      - run: go test -race ./...
-      - run: go build ./...
+          go-version-file: go.mod
+      - uses: extractions/setup-just@v4.0.0
+      - run: just verify-slow

@@ -28,6 +28,6 @@ func FreePort() (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	defer ln.Close()
+	defer func() { _ = ln.Close() }()
 	return ln.Addr().(*net.TCPAddr).Port, nil
 }

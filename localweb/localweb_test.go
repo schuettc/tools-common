@@ -18,7 +18,7 @@ func start(t *testing.T, port int) (*Server, context.CancelFunc) {
 	t.Helper()
 	t.Setenv("XDG_STATE_HOME", t.TempDir())
 	t.Setenv("LWTEST_HOME", "")
-	api := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { fmt.Fprint(w, "api:"+r.Method) })
+	api := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { _, _ = fmt.Fprint(w, "api:"+r.Method) })
 	ctx, cancel := context.WithCancel(context.Background())
 	s, err := Start(ctx, Config{Tool: "lwtest", Assets: fstest.MapFS{"index.html": {Data: []byte("page")}}, API: api, Port: port})
 	if err != nil {
@@ -30,7 +30,16 @@ func start(t *testing.T, port int) (*Server, context.CancelFunc) {
 
 var noRedirect = &http.Client{CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
 
-func do(t *testing.T, s *Server, method, path string, mut func(*http.Request)) *http.Response {
+// result is do's view of a response: it reads and closes the body, so callers
+// (and bodyclose) never leak a connection.
+type result struct {
+	Status  int
+	Header  http.Header
+	Cookies []*http.Cookie
+	Body    string
+}
+
+func do(t *testing.T, s *Server, method, path string, mut func(*http.Request)) result {
 	t.Helper()
 	req, _ := http.NewRequest(method, "http://"+s.Addr()+path, nil)
 	if mut != nil {
@@ -40,7 +49,9 @@ func do(t *testing.T, s *Server, method, path string, mut func(*http.Request)) *
 	if err != nil {
 		t.Fatal(err)
 	}
-	return resp
+	defer func() { _ = resp.Body.Close() }()
+	b, _ := io.ReadAll(resp.Body)
+	return result{Status: resp.StatusCode, Header: resp.Header, Cookies: resp.Cookies(), Body: string(b)}
 }
 
 func TestBindsLoopbackOnly(t *testing.T) {
@@ -53,33 +64,31 @@ func TestBindsLoopbackOnly(t *testing.T) {
 
 func TestServesAssetsWithoutToken(t *testing.T) {
 	s, _ := start(t, 0)
-	resp := do(t, s, "GET", "/", nil)
-	b, _ := io.ReadAll(resp.Body)
-	if resp.StatusCode != 200 || string(b) != "page" {
-		t.Fatalf("%d %q", resp.StatusCode, b)
+	r := do(t, s, "GET", "/", nil)
+	if r.Status != 200 || r.Body != "page" {
+		t.Fatalf("%d %q", r.Status, r.Body)
 	}
 }
 
 func TestAPIRequiresToken(t *testing.T) {
 	s, _ := start(t, 0)
-	if r := do(t, s, "GET", "/api/x", nil); r.StatusCode != 401 {
-		t.Fatalf("no token: %d", r.StatusCode)
+	if r := do(t, s, "GET", "/api/x", nil); r.Status != 401 {
+		t.Fatalf("no token: %d", r.Status)
 	}
 	r := do(t, s, "POST", "/api/x", func(q *http.Request) { q.Header.Set(TokenHeader, s.Token) })
-	b, _ := io.ReadAll(r.Body)
-	if r.StatusCode != 200 || string(b) != "api:POST" {
-		t.Fatalf("header token: %d %q", r.StatusCode, b)
+	if r.Status != 200 || r.Body != "api:POST" {
+		t.Fatalf("header token: %d %q", r.Status, r.Body)
 	}
 }
 
 func TestTokenQueryRedirectsAndSetsCookie(t *testing.T) {
 	s, _ := start(t, 0)
 	r := do(t, s, "GET", "/board?t="+s.Token, nil)
-	if r.StatusCode != http.StatusSeeOther || r.Header.Get("Location") != "/board" {
-		t.Fatalf("status %d location %q", r.StatusCode, r.Header.Get("Location"))
+	if r.Status != http.StatusSeeOther || r.Header.Get("Location") != "/board" {
+		t.Fatalf("status %d location %q", r.Status, r.Header.Get("Location"))
 	}
 	var ck *http.Cookie
-	for _, c := range r.Cookies() {
+	for _, c := range r.Cookies {
 		if c.Name == "lwtest_token" {
 			ck = c
 		}
@@ -87,7 +96,7 @@ func TestTokenQueryRedirectsAndSetsCookie(t *testing.T) {
 	if ck == nil || ck.Value != s.Token || !ck.HttpOnly || ck.SameSite != http.SameSiteStrictMode {
 		t.Fatalf("cookie %+v", ck)
 	}
-	if r := do(t, s, "GET", "/board?t=wrong", nil); r.StatusCode == http.StatusSeeOther {
+	if r := do(t, s, "GET", "/board?t=wrong", nil); r.Status == http.StatusSeeOther {
 		t.Fatal("wrong token must not set a cookie")
 	}
 }
@@ -95,19 +104,19 @@ func TestTokenQueryRedirectsAndSetsCookie(t *testing.T) {
 func TestCookieAuthNeedsSameOriginForWrites(t *testing.T) {
 	s, _ := start(t, 0)
 	withCookie := func(q *http.Request) { q.AddCookie(&http.Cookie{Name: "lwtest_token", Value: s.Token}) }
-	if r := do(t, s, "GET", "/api/x", withCookie); r.StatusCode != 200 {
-		t.Fatalf("cookie GET: %d", r.StatusCode)
+	if r := do(t, s, "GET", "/api/x", withCookie); r.Status != 200 {
+		t.Fatalf("cookie GET: %d", r.Status)
 	}
-	if r := do(t, s, "POST", "/api/x", withCookie); r.StatusCode != 403 {
-		t.Fatalf("cookie POST without Origin: %d", r.StatusCode)
+	if r := do(t, s, "POST", "/api/x", withCookie); r.Status != 403 {
+		t.Fatalf("cookie POST without Origin: %d", r.Status)
 	}
 	bad := func(q *http.Request) { withCookie(q); q.Header.Set("Origin", "http://evil.example") }
-	if r := do(t, s, "POST", "/api/x", bad); r.StatusCode != 403 {
-		t.Fatalf("cross-origin POST: %d", r.StatusCode)
+	if r := do(t, s, "POST", "/api/x", bad); r.Status != 403 {
+		t.Fatalf("cross-origin POST: %d", r.Status)
 	}
 	good := func(q *http.Request) { withCookie(q); q.Header.Set("Origin", "http://"+s.Addr()) }
-	if r := do(t, s, "POST", "/api/x", good); r.StatusCode != 200 {
-		t.Fatalf("same-origin POST: %d", r.StatusCode)
+	if r := do(t, s, "POST", "/api/x", good); r.Status != 200 {
+		t.Fatalf("same-origin POST: %d", r.Status)
 	}
 }
 
@@ -118,12 +127,12 @@ func TestRejectsForeignHost(t *testing.T) {
 		q.Host = "evil.example:" + port
 		q.Header.Set(TokenHeader, s.Token)
 	})
-	if r.StatusCode != 403 {
-		t.Fatalf("rebinding host: %d", r.StatusCode)
+	if r.Status != 403 {
+		t.Fatalf("rebinding host: %d", r.Status)
 	}
 	r = do(t, s, "GET", "/", func(q *http.Request) { q.Host = "localhost:" + port })
-	if r.StatusCode != 200 {
-		t.Fatalf("localhost host: %d", r.StatusCode)
+	if r.Status != 200 {
+		t.Fatalf("localhost host: %d", r.Status)
 	}
 }
 
@@ -165,7 +174,7 @@ func TestPortHintFallback(t *testing.T) {
 	_ = s.Wait()
 
 	busy, _ := net.Listen("tcp", "127.0.0.1:0")
-	defer busy.Close()
+	defer func() { _ = busy.Close() }()
 	_ = os.WriteFile(hint, []byte(strconv.Itoa(busy.Addr().(*net.TCPAddr).Port)), 0o600)
 	ctx2, cancel2 := context.WithCancel(context.Background())
 	s2, err := Start(ctx2, Config{Tool: "lwtest", Assets: fstest.MapFS{}})
@@ -182,7 +191,7 @@ func TestPortHintFallback(t *testing.T) {
 func TestExplicitBusyPortErrors(t *testing.T) {
 	t.Setenv("XDG_STATE_HOME", t.TempDir())
 	busy, _ := net.Listen("tcp", "127.0.0.1:0")
-	defer busy.Close()
+	defer func() { _ = busy.Close() }()
 	_, err := Start(context.Background(), Config{Tool: "lwtest", Assets: fstest.MapFS{}, Port: busy.Addr().(*net.TCPAddr).Port})
 	if err == nil {
 		t.Fatal("explicit busy port must error")
@@ -212,6 +221,7 @@ func TestNilAssetsServe404(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusNotFound {
 		t.Fatalf("nil Assets: got %d, want 404", resp.StatusCode)
 	}

@@ -29,10 +29,10 @@ func SetUsage(fs *flag.FlagSet, usage, long string) {
 	fs.Usage = func() {
 		w := fs.Output()
 		if usage != "" {
-			fmt.Fprintf(w, "Usage: %s\n\n", usage)
+			_, _ = fmt.Fprintf(w, "Usage: %s\n\n", usage)
 		}
 		if long = strings.TrimSpace(long); long != "" {
-			fmt.Fprintf(w, "%s\n\n", long)
+			_, _ = fmt.Fprintf(w, "%s\n\n", long)
 		}
 		fs.PrintDefaults()
 	}

@@ -48,13 +48,13 @@ func dlServer(t *testing.T, name, latest string, tarball []byte, sidecar string)
 	asset := assetName(name)
 	mux := http.NewServeMux()
 	mux.HandleFunc("/dl/"+name+"/latest", func(w http.ResponseWriter, r *http.Request) {
-		fmt.Fprintln(w, latest)
+		_, _ = fmt.Fprintln(w, latest)
 	})
 	mux.HandleFunc("/dl/"+name+"/"+latest+"/"+asset, func(w http.ResponseWriter, r *http.Request) {
-		w.Write(tarball)
+		_, _ = w.Write(tarball)
 	})
 	mux.HandleFunc("/dl/"+name+"/"+latest+"/"+asset+".sha256", func(w http.ResponseWriter, r *http.Request) {
-		fmt.Fprint(w, sidecar)
+		_, _ = fmt.Fprint(w, sidecar)
 	})
 	return httptest.NewServer(mux)
 }
@@ -77,7 +77,7 @@ func TestSelfUpdateNoop(t *testing.T) {
 	defer srv.Close()
 
 	exe := filepath.Join(t.TempDir(), "kempt")
-	os.WriteFile(exe, []byte("old"), 0o755)
+	_ = os.WriteFile(exe, []byte("old"), 0o755)
 	a := newUpdateApp(t, srv, "0.1.0", exe)
 
 	updated, ver, err := a.SelfUpdate(io.Discard, io.Discard)
@@ -102,7 +102,7 @@ func TestSelfUpdateSuccess(t *testing.T) {
 	defer srv.Close()
 
 	exe := filepath.Join(t.TempDir(), "kempt")
-	os.WriteFile(exe, []byte("old"), 0o755)
+	_ = os.WriteFile(exe, []byte("old"), 0o755)
 	a := newUpdateApp(t, srv, "0.1.0", exe)
 
 	updated, ver, err := a.SelfUpdate(io.Discard, io.Discard)
@@ -127,7 +127,7 @@ func TestSelfUpdateBadChecksum(t *testing.T) {
 	defer srv.Close()
 
 	exe := filepath.Join(t.TempDir(), "kempt")
-	os.WriteFile(exe, []byte("old"), 0o755)
+	_ = os.WriteFile(exe, []byte("old"), 0o755)
 	a := newUpdateApp(t, srv, "0.1.0", exe)
 
 	updated, _, err := a.SelfUpdate(io.Discard, io.Discard)
@@ -148,7 +148,7 @@ func TestSelfUpdateMissingBinary(t *testing.T) {
 	defer srv.Close()
 
 	exe := filepath.Join(t.TempDir(), "kempt")
-	os.WriteFile(exe, []byte("old"), 0o755)
+	_ = os.WriteFile(exe, []byte("old"), 0o755)
 	a := newUpdateApp(t, srv, "0.1.0", exe)
 
 	updated, _, err := a.SelfUpdate(io.Discard, io.Discard)

@@ -84,7 +84,7 @@ func (a *App) download(url string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("GET %s: %s", url, resp.Status)
 	}
@@ -108,7 +108,7 @@ func extractBinary(assetBytes []byte, bin string) ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("gzip: %w", err)
 	}
-	defer gz.Close()
+	defer func() { _ = gz.Close() }()
 	tr := tar.NewReader(gz)
 	for {
 		hdr, err := tr.Next()
@@ -134,16 +134,16 @@ func stageAndRename(final, bin string, data []byte) error {
 	dir := filepath.Dir(final)
 	staged := filepath.Join(dir, fmt.Sprintf(".%s.new.%d", bin, os.Getpid()))
 	if err := os.WriteFile(staged, data, 0o755); err != nil {
-		os.Remove(staged)
+		_ = os.Remove(staged)
 		return err
 	}
 	// WriteFile respects umask; force mode explicitly.
 	if err := os.Chmod(staged, 0o755); err != nil {
-		os.Remove(staged)
+		_ = os.Remove(staged)
 		return err
 	}
 	if err := os.Rename(staged, final); err != nil {
-		os.Remove(staged)
+		_ = os.Remove(staged)
 		return err
 	}
 	return nil

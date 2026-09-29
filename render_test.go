@@ -26,7 +26,7 @@ func TestGroupedUsageWithGroups(t *testing.T) {
 	}
 	// Talk heading precedes Watch heading precedes Other; send under Talk.
 	iTalk, iWatch, iOther := strings.Index(s, "Talk"), strings.Index(s, "Watch"), strings.Index(s, "Other")
-	if !(iTalk < iWatch && iWatch < iOther) {
+	if iTalk >= iWatch || iWatch >= iOther {
 		t.Fatalf("group order wrong: %q", s)
 	}
 	if !strings.Contains(s, "send") || !strings.Contains(s, "debug") {

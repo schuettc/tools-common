@@ -47,7 +47,7 @@ func TestWriteFileAtomicFailureKeepsOriginal(t *testing.T) {
 	if err := os.Chmod(dir, 0o500); err != nil { // no create in dir
 		t.Fatal(err)
 	}
-	defer os.Chmod(dir, 0o700)
+	defer func() { _ = os.Chmod(dir, 0o700) }()
 	if err := WriteFileAtomic(p, []byte("new"), 0o600); err == nil {
 		t.Fatal("expected an error writing into a read-only dir")
 	}
