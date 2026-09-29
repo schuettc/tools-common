@@ -20,9 +20,9 @@ func helpCmd() Command {
 			return err
 		}
 		if *yes {
-			out.Write([]byte("skipped prompt\n"))
+			_, _ = out.Write([]byte("skipped prompt\n"))
 		} else {
-			out.Write([]byte("would prompt\n"))
+			_, _ = out.Write([]byte("would prompt\n"))
 		}
 		return nil
 	}}

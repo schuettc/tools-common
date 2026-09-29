@@ -71,7 +71,7 @@ func TestDispatch(t *testing.T) {
 func TestRegisterOverridesBuiltin(t *testing.T) {
 	a := newTestApp()
 	a.Register(Command{Name: "update", Run: func(args []string, out, errw io.Writer) error {
-		io.WriteString(out, "custom update ran\n")
+		_, _ = io.WriteString(out, "custom update ran\n")
 		return nil
 	}})
 	var out, errw bytes.Buffer

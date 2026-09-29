@@ -93,7 +93,7 @@ func New(cfg Config) *App {
 		Name:    "version",
 		Summary: "print " + a.name + " version",
 		Run: func(args []string, out, errw io.Writer) error {
-			fmt.Fprintf(out, "%s %s\n", a.name, a.version.String())
+			_, _ = fmt.Fprintf(out, "%s %s\n", a.name, a.version.String())
 			return nil
 		},
 	})
@@ -109,7 +109,7 @@ func New(cfg Config) *App {
 				return UsageError{Msg: fmt.Sprintf("unknown command %q", args[0])}
 			}
 			if a.about != "" {
-				fmt.Fprintf(out, "%s\n\n", strings.TrimRight(a.about, "\n"))
+				_, _ = fmt.Fprintf(out, "%s\n\n", strings.TrimRight(a.about, "\n"))
 			}
 			a.usage(out)
 			return nil
@@ -124,9 +124,9 @@ func New(cfg Config) *App {
 				return err
 			}
 			if updated {
-				fmt.Fprintf(out, "%s updated to %s\n", a.name, newVersion)
+				_, _ = fmt.Fprintf(out, "%s updated to %s\n", a.name, newVersion)
 			} else {
-				fmt.Fprintf(out, "%s is already the latest (%s)\n", a.name, a.version.Number)
+				_, _ = fmt.Fprintf(out, "%s is already the latest (%s)\n", a.name, a.version.Number)
 			}
 			return nil
 		},
@@ -136,7 +136,7 @@ func New(cfg Config) *App {
 		Summary: "print a roff man page",
 		Run: func(_ []string, out, errw io.Writer) error {
 			cmds := a.commands()
-			fmt.Fprint(out, manPage(a.name, a.domain, a.about, a.groups, cmds))
+			_, _ = fmt.Fprint(out, manPage(a.name, a.domain, a.about, a.groups, cmds))
 			return nil
 		},
 	})
@@ -155,7 +155,7 @@ func New(cfg Config) *App {
 				if err != nil {
 					return err
 				}
-				fmt.Fprintf(out, "%s\n", b)
+				_, _ = fmt.Fprintf(out, "%s\n", b)
 				return nil
 			}
 			GroupedUsage(out, a.name, a.groups, cmds)
@@ -236,7 +236,7 @@ func (a *App) Dispatch(args []string, out, errw io.Writer) int {
 	jsonMode := hasJSONFlag(args[1:])
 	cmd, ok := a.lookup(name)
 	if !ok {
-		fmt.Fprintf(errw, "%s: unknown command %q\n\n", a.name, name)
+		_, _ = fmt.Fprintf(errw, "%s: unknown command %q\n\n", a.name, name)
 		a.usage(errw)
 		return 2
 	}
@@ -317,8 +317,8 @@ func (a *App) writeErr(errw io.Writer, name string, jsonMode bool, code int, msg
 		_ = PrintJSON(errw, env)
 		return
 	}
-	fmt.Fprintf(errw, "%s %s: %s\n", a.name, name, msg)
+	_, _ = fmt.Fprintf(errw, "%s %s: %s\n", a.name, name, msg)
 	if hint != "" {
-		fmt.Fprintf(errw, "%s\n", hint)
+		_, _ = fmt.Fprintf(errw, "%s\n", hint)
 	}
 }

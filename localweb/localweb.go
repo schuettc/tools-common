@@ -23,7 +23,7 @@ import (
 )
 
 // TokenHeader is how non-browser clients (CLI, channel process) authenticate.
-const TokenHeader = "X-Local-Token"
+const TokenHeader = "X-Local-Token" //nolint:gosec // G101: an HTTP header name, not a credential
 
 // Config configures Start.
 type Config struct {
@@ -54,7 +54,7 @@ func Start(ctx context.Context, c Config) (*Server, error) {
 	}
 	tok := make([]byte, 32)
 	if _, err := rand.Read(tok); err != nil {
-		ln.Close()
+		_ = ln.Close()
 		return nil, err
 	}
 	s := &Server{Token: hex.EncodeToString(tok), cfg: c, ln: ln, done: make(chan error, 1)}
@@ -68,6 +68,7 @@ func Start(ctx context.Context, c Config) (*Server, error) {
 		}
 		s.done <- err
 	}()
+	//nolint:gosec // G118: ctx is already cancelled here; Shutdown needs a fresh timeout context
 	go func() {
 		<-ctx.Done()
 		sctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
@@ -94,6 +95,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if t := r.URL.Query().Get("t"); t != "" && r.Method == http.MethodGet && s.tokenOK(t) {
+		//nolint:gosec // G124: loopback http; Secure would break the cookie, HttpOnly+SameSite=Strict suffice
 		http.SetCookie(w, &http.Cookie{Name: s.cookieName(), Value: s.Token, Path: "/", HttpOnly: true, SameSite: http.SameSiteStrictMode})
 		q := r.URL.Query()
 		q.Del("t")
@@ -101,6 +103,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if enc := q.Encode(); enc != "" {
 			loc += "?" + enc
 		}
+		//nolint:gosec // G710: loc is this request's own path, a same-origin relative redirect
 		http.Redirect(w, r, loc, http.StatusSeeOther)
 		return
 	}

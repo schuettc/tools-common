@@ -14,12 +14,12 @@ import (
 // bucket for commands whose Group is "" or matches no key. When groups is
 // empty, the commands are printed as one flat list with no headings.
 func GroupedUsage(w io.Writer, name string, groups []Group, cmds []Command) {
-	fmt.Fprintf(w, "usage: %s <command> [args]\n", name)
+	_, _ = fmt.Fprintf(w, "usage: %s <command> [args]\n", name)
 	byName := append([]Command(nil), cmds...)
 	sort.Slice(byName, func(i, j int) bool { return byName[i].Name < byName[j].Name })
 
 	if len(groups) == 0 {
-		fmt.Fprintln(w, "\ncommands:")
+		_, _ = fmt.Fprintln(w, "\ncommands:")
 		writeRows(w, byName)
 		return
 	}
@@ -39,7 +39,7 @@ func GroupedUsage(w io.Writer, name string, groups []Group, cmds []Command) {
 		if len(rows) == 0 {
 			continue
 		}
-		fmt.Fprintf(w, "\n%s\n", g.Heading)
+		_, _ = fmt.Fprintf(w, "\n%s\n", g.Heading)
 		writeRows(w, rows)
 	}
 	var other []Command
@@ -49,7 +49,7 @@ func GroupedUsage(w io.Writer, name string, groups []Group, cmds []Command) {
 		}
 	}
 	if len(other) > 0 {
-		fmt.Fprintf(w, "\nOther\n")
+		_, _ = fmt.Fprintf(w, "\nOther\n")
 		writeRows(w, other)
 	}
 }
@@ -57,9 +57,9 @@ func GroupedUsage(w io.Writer, name string, groups []Group, cmds []Command) {
 func writeRows(w io.Writer, cmds []Command) {
 	tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
 	for _, c := range cmds {
-		fmt.Fprintf(tw, "  %s\t%s\n", c.Name, c.Summary)
+		_, _ = fmt.Fprintf(tw, "  %s\t%s\n", c.Name, c.Summary)
 	}
-	tw.Flush()
+	_ = tw.Flush()
 }
 
 // HelpFor prints one command's help: the usage line, its long Help, and its
@@ -69,23 +69,23 @@ func HelpFor(w io.Writer, name string, c Command) {
 	if syn == "" {
 		syn = c.Name
 	}
-	fmt.Fprintf(w, "Usage: %s %s\n", name, syn)
+	_, _ = fmt.Fprintf(w, "Usage: %s %s\n", name, syn)
 	if len(c.Aliases) > 0 {
-		fmt.Fprintf(w, "aliases: %s\n", strings.Join(c.Aliases, ", "))
+		_, _ = fmt.Fprintf(w, "aliases: %s\n", strings.Join(c.Aliases, ", "))
 	}
 	if len(c.Subcommands) > 0 {
-		fmt.Fprintf(w, "subcommands: %s\n", strings.Join(c.Subcommands, ", "))
+		_, _ = fmt.Fprintf(w, "subcommands: %s\n", strings.Join(c.Subcommands, ", "))
 	}
 	if c.Summary != "" {
-		fmt.Fprintf(w, "\n%s\n", c.Summary)
+		_, _ = fmt.Fprintf(w, "\n%s\n", c.Summary)
 	}
 	if c.Help != "" {
-		fmt.Fprintf(w, "\n%s\n", c.Help)
+		_, _ = fmt.Fprintf(w, "\n%s\n", c.Help)
 	}
 	if c.NewFlags != nil {
 		infos := FlagsOf(c.NewFlags())
 		if len(infos) > 0 {
-			fmt.Fprintln(w, "\nflags:")
+			_, _ = fmt.Fprintln(w, "\nflags:")
 			tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
 			for _, fi := range infos {
 				label := "  -" + fi.Name
@@ -96,9 +96,9 @@ func HelpFor(w io.Writer, name string, c Command) {
 				if fi.Default != "" && fi.Default != "false" {
 					usage += fmt.Sprintf(" (default %s)", fi.Default)
 				}
-				fmt.Fprintf(tw, "%s\t%s\n", label, usage)
+				_, _ = fmt.Fprintf(tw, "%s\t%s\n", label, usage)
 			}
-			tw.Flush()
+			_ = tw.Flush()
 		}
 	}
 }
@@ -127,6 +127,8 @@ func ManPage(name, domain string, groups []Group, cmds []Command) string {
 
 // manPage is ManPage with an optional overview (Config.About) as the
 // DESCRIPTION; paragraphs (blank-line separated) become .PP breaks.
+//
+//nolint:unparam // groups mirrors the exported ManPage signature; the man page lists commands flat, not grouped
 func manPage(name, domain, about string, groups []Group, cmds []Command) string {
 	var b strings.Builder
 	up := strings.ToUpper(name)
@@ -197,7 +199,7 @@ func CommandsJSON(name string, cmds []Command) ([]byte, error) {
 		cj := cmdJSON{Name: c.Name, Synopsis: c.Synopsis, Summary: c.Summary, Group: c.Group, Help: c.Help, SelfRouted: c.Run == nil, Aliases: append([]string{}, c.Aliases...), Subcommands: append([]string{}, c.Subcommands...), Flags: []flagJSON{}}
 		if c.NewFlags != nil {
 			for _, fi := range FlagsOf(c.NewFlags()) {
-				cj.Flags = append(cj.Flags, flagJSON{fi.Name, fi.Type, fi.Default, fi.Usage})
+				cj.Flags = append(cj.Flags, flagJSON(fi))
 			}
 		}
 		out = append(out, cj)
