@@ -12,7 +12,7 @@ jobs:
     strategy:
       matrix:
         # tools-common is a stdlib-only library; the gate runs on Linux.
-        os: [ubuntu-latest]
+        os: [ubuntu-26.04]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v7.0.1
@@ -25,7 +25,7 @@ jobs:
         with:
           setup-go: "false"
   extra:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     steps:
       - uses: actions/checkout@v7.0.1
       - uses: actions/setup-go@v7.0.0
@@ -36,7 +36,7 @@ jobs:
   # The localweb/page kit's JS suites need a browser, too slow for the push
   # gate; CI runs them as their own required job.
   browser:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     steps:
       - uses: actions/checkout@v7.0.1
       - uses: actions/setup-go@v7.0.0
