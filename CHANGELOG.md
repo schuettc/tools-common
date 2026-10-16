@@ -4,7 +4,7 @@ Root module releases are tagged `vX.Y.Z`; the separate `sqlitedb` module is
 tagged `sqlitedb/vX.Y.Z`. Releases before this file are described by their
 tags and PRs.
 
-## Unreleased
+## 0.12.0 (sqlitedb 0.2.0)
 
 ### Changed
 - Module path is now `github.com/subaud-tools/tools-common` (and
