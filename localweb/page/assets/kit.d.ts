@@ -3,7 +3,7 @@
 // TypeScript consumers bundle with esbuild and leave the kit external:
 //   esbuild --external:/_kit/*
 //   tsconfig "paths": { "/_kit/kit.js": ["<tools-common dir>/localweb/page/assets/kit.d.ts"] }
-// where <tools-common dir> is `go list -m -f '{{.Dir}}' github.com/schuettc/tools-common`.
+// where <tools-common dir> is `go list -m -f '{{.Dir}}' github.com/subaud-tools/tools-common`.
 
 // ---- theme.js
 

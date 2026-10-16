@@ -19,7 +19,7 @@ import (
 	"strings"
 	"time"
 
-	tools "github.com/schuettc/tools-common"
+	tools "github.com/subaud-tools/tools-common"
 )
 
 // TokenHeader is how non-browser clients (CLI, channel process) authenticate.

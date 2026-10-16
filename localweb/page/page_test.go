@@ -9,7 +9,7 @@ import (
 	"testing"
 	"testing/fstest"
 
-	"github.com/schuettc/tools-common/localweb"
+	"github.com/subaud-tools/tools-common/localweb"
 )
 
 // manifest is every file the kit ships; each task that adds an asset adds it here.
