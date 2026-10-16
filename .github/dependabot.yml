@@ -8,4 +8,4 @@ updates:
     cooldown:
       default-days: 3
     allow:
-      - dependency-name: "schuettc/tools-actions"
+      - dependency-name: "subaud-tools/tools-actions"

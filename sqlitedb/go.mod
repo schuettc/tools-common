@@ -1,4 +1,4 @@
-module github.com/schuettc/tools-common/sqlitedb
+module github.com/subaud-tools/tools-common/sqlitedb
 
 go 1.26
 

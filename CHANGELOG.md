@@ -4,9 +4,12 @@ Root module releases are tagged `vX.Y.Z`; the separate `sqlitedb` module is
 tagged `sqlitedb/vX.Y.Z`. Releases before this file are described by their
 tags and PRs.
 
-## Unreleased
+## 0.12.0 (sqlitedb 0.2.0)
 
 ### Changed
+- Module path is now `github.com/subaud-tools/tools-common` (and
+  `github.com/subaud-tools/tools-common/sqlitedb`); CI pins
+  `subaud-tools/tools-actions` `go-ci@v0.11.0`.
 - Adopted the .tools family CI standard: the standard `justfile` (family
   `justfile.head` verbatim plus `tools-common` slots), `lefthook.yml`, a
   standard `ci.yml` (tools-actions `go-ci@v0.10.1` gate plus `extra` and

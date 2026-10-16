@@ -18,7 +18,7 @@ and `localweb/page` imports nothing from the module.
 | `tools-common/localweb` | loopback local-page server: per-launch token, rebinding/CSRF guards, remembered port, `OpenBrowser` |
 | `tools-common/localweb/page` | the galley-style page kit: tokens, bar, list panel, reading-column components, keyboard layer, API and live clients, served under `/_kit/` |
 
-**Separate module:** `github.com/schuettc/tools-common/sqlitedb` has its own
+**Separate module:** `github.com/subaud-tools/tools-common/sqlitedb` has its own
 `go.mod` and `sqlitedb/vX.Y.Z` tags, because it needs the SQLite driver
 (`modernc.org/sqlite`). Importing the root or any package above never pulls it
 in. See [SQLite databases](#sqlite-databases-sqlitedb).
@@ -31,7 +31,7 @@ package main
 import (
 	"os"
 
-	tools "github.com/schuettc/tools-common"
+	tools "github.com/subaud-tools/tools-common"
 )
 
 // Stamped by CI via `-ldflags -X`.
@@ -198,7 +198,7 @@ srv, err := localweb.Start(ctx, localweb.Config{
 esbuild app.ts --bundle --format=esm --external:/_kit/*
 ```
 ```jsonc
-// tsconfig.json; <dir> is `go list -m -f '{{.Dir}}' github.com/schuettc/tools-common`
+// tsconfig.json; <dir> is `go list -m -f '{{.Dir}}' github.com/subaud-tools/tools-common`
 { "compilerOptions": { "moduleResolution": "bundler",
     "paths": { "/_kit/kit.js": ["<dir>/localweb/page/assets/kit.d.ts"] } } }
 ```
@@ -222,7 +222,7 @@ Only a parent that runs a process as part of its own session may set
 ## SQLite databases (`sqlitedb`)
 
 ```
-go get github.com/schuettc/tools-common/sqlitedb@sqlitedb/v0.1.0
+go get github.com/subaud-tools/tools-common/sqlitedb@sqlitedb/v0.2.0
 ```
 
 One way to open a tool's local database: modernc.org/sqlite, WAL, a 5 s busy
