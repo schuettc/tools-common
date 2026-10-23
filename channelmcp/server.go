@@ -15,7 +15,6 @@ package channelmcp
 import (
 	"bufio"
 	"encoding/json"
-	"fmt"
 	"io"
 	"sync"
 )
@@ -96,17 +95,11 @@ func (s *Server) send(m rpcMsg) error {
 }
 
 // Notify emits notifications/claude/channel. Meta keys must be identifiers
-// (letters, digits, underscore) — the client silently DROPS anything else, so
-// a bad key is refused here where the caller can see it. Notify waits for Run
+// (letters, digits, underscore; see checkMeta). Notify waits for Run
 // to attach the writer; a nil error means queued in order, not read.
 func (s *Server) Notify(content string, meta map[string]string) error {
-	for k := range meta {
-		for _, r := range k {
-			ok := r == '_' || (r >= '0' && r <= '9') || (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z')
-			if !ok {
-				return fmt.Errorf("meta key %q is not an identifier — the client would drop it silently", k)
-			}
-		}
+	if err := checkMeta(meta); err != nil {
+		return err
 	}
 	params, err := json.Marshal(map[string]any{"content": content, "meta": meta})
 	if err != nil {
