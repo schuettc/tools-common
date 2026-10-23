@@ -4,7 +4,7 @@ Root module releases are tagged `vX.Y.Z`; the separate `sqlitedb` module is
 tagged `sqlitedb/vX.Y.Z`. Releases before this file are described by their
 tags and PRs.
 
-## 0.16.0
+## 0.17.0
 
 ### Fixed
 - A tool's Claude Code mod stays quiet inside pi's claude-bridge, where the
