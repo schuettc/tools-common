@@ -140,27 +140,33 @@ export function bar(o) {
       el.querySelector('.kit-n')?.remove();
       const c = count(n);
       if (c) el.append(c);
+      also.fit();
     },
     setStatus(text, opts = {}) {
       status.textContent = text;
       if (opts.tone && opts.tone !== 'muted') status.dataset.tone = opts.tone;
       else status.removeAttribute('data-tone');
+      also.fit();
     },
     setLive(s, text) {
       pill.hidden = false;
       pill.dataset.state = s;
       const fallback = s === 'stale' && o.staleText ? o.staleText : LIVE_TEXT[s] || s;
       pill.replaceChildren(h('i'), text ?? fallback);
+      also.fit();
     },
     setPrimary(p) {
       run = p ? p.run : null;
       primary.hidden = !p;
       primary.textContent = p ? p.label : '';
+      also.fit();
     },
     setElsewhere(items) {
       also.set(items || []);
     },
   };
+  // The area refits when the bar resizes, and when a setter above changes the
+  // bar's other content (a fixed-width bar does not resize for that).
   if (typeof ResizeObserver !== 'undefined') new ResizeObserver(() => also.fit()).observe(handle.el);
   handle.setSection(o.active);
   handle.setPrimary(o.primary || null);

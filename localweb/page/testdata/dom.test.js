@@ -483,3 +483,37 @@ test('dom: bar also-open refits when the bar is resized', () => {
     assert(area.clientWidth >= more.offsetWidth, 'the area is as wide as the more chip');
   } finally { fx.style.width = ''; }
 });
+
+// A fixed-width header doesn't resize when its own content grows, so the
+// setters that change bar content refit the area themselves.
+test('dom: bar also-open refits when other bar content grows', () => {
+  const { fx, b, area } = alsoBar(1400, [{ id: 'start', label: 'Start', count: 1 }]);
+  const clipped = () => shown(area).filter(c => c.getBoundingClientRect().right > area.getBoundingClientRect().right + 0.5);
+  try {
+    b.setElsewhere(plans(2));
+    eq(shown(area).length, 2, 'both fit at first');
+    const grow = [
+      ['setStatus', () => b.setStatus('synced 4m ago · courts-macbook-pro-2 · a long status line that takes room')],
+      ['setLive', () => b.setLive('stale', 'restarted · continued in a new tab · reopen from the terminal')],
+      ['setPrimary', () => b.setPrimary({ label: 'A very long primary button label', run() {} })],
+      ['setCount', () => b.setCount('start', '1,234,567 of 9,876,543 · 1,234,567 of 9,876,543 · 1,234,567')],
+    ];
+    for (const [name, run] of grow) {
+      b.setStatus('');
+      b.setLive('live');
+      b.setPrimary(null);
+      b.setCount('start', 1);
+      b.setElsewhere(plans(2));
+      eq(shown(area).length, 2, `${name}: both fit before`);
+      run();
+      const more = area.querySelector('.kit-also-more');
+      assert(shown(area).length < 2 && !more.hidden, `${name}: the overflow folds into +N more (shown ${shown(area).length})`);
+      eq(more.textContent, `+${2 - shown(area).length} more`, name);
+      eq(clipped().length, 0, `${name}: no chip clipped`);
+      assert(area.scrollWidth <= area.clientWidth, `${name}: nothing spills`);
+    }
+    b.setCount('start', 1);
+    b.setStatus('');
+    eq(shown(area).length, 2, 'shrinking the content gives the room back');
+  } finally { fx.style.width = ''; }
+});
