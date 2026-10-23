@@ -17,6 +17,10 @@
 //
 // The client closes a broken stream itself and reopens it with the newest
 // cursor, rather than letting the browser retry with a stale Last-Event-ID.
+//
+// A hidden tab holds no connection: browsers allow about six to one host, so
+// a stream per background tab froze every tab of the tool. It closes the
+// stream when the tab is hidden and reopens it, from its cursor, when shown.
 
 export function live(opts) {
   const ES = opts.EventSource || globalThis.EventSource;
@@ -25,6 +29,7 @@ export function live(opts) {
   const clearT = opts.clearTimeout || (id => clearTimeout(id));
   const interval = opts.interval ?? 2000;
   const onStatus = opts.onStatus || (() => {});
+  const doc = opts.document || globalThis.document;
 
   let cursor = opts.cursor || '';
   let es = null;
@@ -84,7 +89,7 @@ export function live(opts) {
       deliver(msg.type, msg.data, m.lastEventId || cursor);
     };
     s.onerror = () => {
-      if (stopped || es !== s) return;
+      if (stopped || es !== s || hidden()) return;
       s.close();
       es = null;
       if (status !== 'down') setStatus('polling');
@@ -94,6 +99,7 @@ export function live(opts) {
 
   async function poll() {
     timer = null;
+    if (hidden()) return;
     const mine = epoch;
     let body;
     try {
@@ -113,7 +119,7 @@ export function live(opts) {
       schedule();
       return;
     }
-    if (stopped || mine !== epoch || status === 'live') return;
+    if (stopped || mine !== epoch || status === 'live' || hidden()) return;
     for (const e of body.events || []) deliver(e.type, e.data, body.cursor);
     if (body.cursor) cursor = body.cursor;
     setStatus('polling');
@@ -127,14 +133,30 @@ export function live(opts) {
     schedule();
   }
 
+  const hidden = () => !!doc && doc.visibilityState === 'hidden';
+
+  function onVisibility() {
+    if (stopped) return;
+    if (hidden()) {
+      cancelPoll();
+      if (es) es.close();
+      es = null;
+      epoch++; // a poll in flight is dropped
+      return;
+    }
+    if (!es) openStream();
+  }
+
   function halt() {
     stopped = true;
     cancelPoll();
     if (es) es.close();
     es = null;
+    if (doc) doc.removeEventListener('visibilitychange', onVisibility);
   }
 
-  openStream();
+  if (doc) doc.addEventListener('visibilitychange', onVisibility);
+  if (!hidden()) openStream();
 
   return {
     cursor: () => cursor,

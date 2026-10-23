@@ -219,3 +219,49 @@ test('live: a 401 that lands after a reopened stream connected is still stale', 
   assert(es.made.every(e => e.closed), 'stream closed');
   handle.stop();
 });
+
+// Browsers allow about six connections to one host; a stream per hidden tab
+// used them up and froze every tab. A hidden tab lets go and comes back.
+function fakeDocument(state = 'visible') {
+  const listeners = [];
+  return {
+    visibilityState: state,
+    addEventListener: (t, f) => t === 'visibilitychange' && listeners.push(f),
+    removeEventListener: (t, f) => { const i = listeners.indexOf(f); if (i >= 0) listeners.splice(i, 1); },
+    set(s) { this.visibilityState = s; for (const f of [...listeners]) f(); },
+    listeners,
+  };
+}
+
+test('live: a hidden tab closes its stream and holds no poll; visible again reopens from its cursor', async () => {
+  const doc = fakeDocument();
+  const { f, timers, es, events, handle } = setup({ document: doc });
+  const first = es.last();
+  first.emitOpen();
+  first.emitMessage('4', { type: 'a', data: 1 });
+  doc.set('hidden');
+  assert(first.closed, 'hidden: stream closed');
+  eq(timers.pending.size, 0, 'hidden: no poll scheduled');
+  first.emitError(); // a late error from the closed stream changes nothing
+  eq(timers.pending.size, 0);
+  eq(es.made.length, 1, 'hidden: nothing reopened');
+  doc.set('visible');
+  const second = es.last();
+  assert(second !== first, 'visible: a new stream');
+  eq(second.url, '/api/events?since=4', 'picks up after what it had');
+  second.emitOpen();
+  second.emitMessage('5', { type: 'b', data: 2 });
+  eq(events.map(e => e.cursor), ['4', '5']);
+  eq(f.calls.length, 0);
+  handle.stop();
+  eq(doc.listeners.length, 0, 'stop removes the listener');
+});
+
+test('live: a tab that starts hidden opens no stream until shown', () => {
+  const doc = fakeDocument('hidden');
+  const { es, handle } = setup({ document: doc });
+  eq(es.made.length, 0);
+  doc.set('visible');
+  eq(es.made.length, 1);
+  handle.stop();
+});
