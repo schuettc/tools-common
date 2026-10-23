@@ -492,6 +492,19 @@ test('dom: bar also-open refits when other bar content grows', () => {
   try {
     b.setElsewhere(plans(2));
     eq(shown(area).length, 2, 'both fit at first');
+    // Narrow the header to just above where the second chip folds, so any of
+    // the growths below leaves too little room for both, whatever the chip
+    // width is.
+    let w = 1400;
+    while (w > 400) {
+      fx.style.width = (w - 10) + 'px';
+      b.setElsewhere(plans(2));
+      if (shown(area).length < 2) break;
+      w -= 10;
+    }
+    fx.style.width = w + 'px';
+    b.setElsewhere(plans(2));
+    eq(shown(area).length, 2, `both fit at ${w}px`);
     const grow = [
       ['setStatus', () => b.setStatus('synced 4m ago · courts-macbook-pro-2 · a long status line that takes room')],
       ['setLive', () => b.setLive('stale', 'restarted · continued in a new tab · reopen from the terminal')],
