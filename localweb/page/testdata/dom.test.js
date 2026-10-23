@@ -417,6 +417,8 @@ test('dom: bar also-open button keeps one width, so the bar never moves', () => 
       return button(area).getBoundingClientRect().width;
     });
     eq(new Set(widths).size, 1, `widths ${widths}`);
+    const t = button(area).querySelector('.kit-also-text');
+    assert(t.scrollWidth <= t.clientWidth, `the widest count is not cut off: ${t.textContent}`);
     const pill = b.el.querySelector('.kit-live').getBoundingClientRect().left;
     b.setElsewhere(plans(2));
     eq(b.el.querySelector('.kit-live').getBoundingClientRect().left, pill, 'the live pill stays put');
