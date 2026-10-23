@@ -4,6 +4,23 @@ Root module releases are tagged `vX.Y.Z`; the separate `sqlitedb` module is
 tagged `sqlitedb/vX.Y.Z`. Releases before this file are described by their
 tags and PRs.
 
+## Unreleased
+
+### Added
+- `channelmcp.Pusher`, the interface a tool's wait loop sends events to;
+  `*Server` satisfies it. `channelmcp.Lines` is a second Pusher that writes
+  each event as one JSON line, `{"content":...,"meta":{...}}`, for
+  `<tool> watch`, refusing the same meta keys `Server.Notify` refuses.
+- `harness.Capture.IsClaude`: the resolved session is Claude Code's own
+  (`CLAUDE_CODE_SESSION_ID` won the rule, not a bridge child).
+- `claudeplugin`: renders a tool's Claude Code plugin from a `Spec`:
+  `plugin.json` (no `version`, so Claude Code versions it by commit),
+  `.mcp.json` running `<bin> channel`, and a mod (`hooks/hooks.json`,
+  `hooks/register.js`) that runs `<bin> watch` for the session, starts a turn
+  with each event, resubmits a dropped one from `turn.complete`, and restarts
+  `watch` when it ends. `AssertCurrent` fails a tool's test when its
+  committed plugin differs and names the regenerate command.
+
 ## 0.13.1
 
 ### Fixed

@@ -13,8 +13,9 @@ and `localweb/page` imports nothing from the module.
 | Import | What |
 |---|---|
 | `tools-common` (package `tools`) | CLI foundation (`App`, `Command`, help/man/`commands --json`, `ExitError`, version, self-update); `WriteFileAtomic`, `PIDAlive`, `ConfigDir`/`StateDir`/`CacheDir`/`DataDir`/`EnsureDir` |
-| `tools-common/channelmcp` | claude/channel stdio server (newline-delimited JSON-RPC 2.0) |
-| `tools-common/harness` | session identity: the family resolution rule over `CLAUDE_CODE_SESSION_ID`, `AGENT_SESSION_ID`, `AGENT_SESSION_CHILD` |
+| `tools-common/channelmcp` | claude/channel stdio server (newline-delimited JSON-RPC 2.0); `Pusher`, and `Lines`, which prints each event as a JSON line for `<tool> watch` |
+| `tools-common/harness` | session identity: the family resolution rule over `CLAUDE_CODE_SESSION_ID`, `AGENT_SESSION_ID`, `AGENT_SESSION_CHILD`; `Capture.IsClaude` |
+| `tools-common/claudeplugin` | renders a tool's Claude Code plugin (manifest, `.mcp.json`, the mod that runs `<tool> watch`) from one template; `AssertCurrent` keeps a repo's copy equal to it |
 | `tools-common/localweb` | loopback local-page server: per-launch token, rebinding/CSRF guards, remembered port, `OpenBrowser` |
 | `tools-common/localweb/page` | the galley-style page kit: tokens, bar, list panel, reading-column components, keyboard layer, API and live clients, served under `/_kit/` |
 
