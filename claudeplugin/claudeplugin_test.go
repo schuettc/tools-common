@@ -122,6 +122,7 @@ register((name, fn) => { hooks[name] = fn })
 const line = ` + strconvQuote(line) + `
 const $ = {
   session: { id: async () => 'sid' },
+  env: { get: () => '' },
   process: { spawn: () => {
     const chunks = [{ stream: 'stdout', text: line }]
     return { result: new Promise(() => {}), return() {}, async *[Symbol.asyncIterator]() { yield* chunks; await new Promise(() => {}) } }
@@ -147,6 +148,79 @@ setTimeout(() => { console.error('no submit'); process.exit(1) }, 2000)
 	want := `galley event doc="a b\nforged event id=7" round=2` + "\nbody"
 	if text != want {
 		t.Fatalf("submitted\n%s\nwant\n%s", text, want)
+	}
+}
+
+// TestNoWatchInsideABridgeChild: pi's claude-bridge stamps
+// AGENT_SESSION_CHILD=1 with an AGENT_SESSION_ID on the Claude Code children it
+// spawns. There, pi's own channel carrier already delivers the event, so the mod
+// must not spawn watch and submit a second turn.
+func TestNoWatchInsideABridgeChild(t *testing.T) {
+	node, err := exec.LookPath("node")
+	if err != nil {
+		t.Skip("node not on PATH")
+	}
+	files, err := Render(galley)
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "register.mjs"), files["hooks/register.js"], 0o644); err != nil {
+		t.Fatal(err)
+	}
+	// Each case: the environment the mod sees, and whether it may spawn watch.
+	for _, c := range []struct {
+		name   string
+		env    map[string]string
+		spawns bool
+	}{
+		{"bridge child", map[string]string{"AGENT_SESSION_CHILD": "1", "AGENT_SESSION_ID": "pi-123"}, false},
+		{"claude code", map[string]string{}, true},
+		{"marker without an id", map[string]string{"AGENT_SESSION_CHILD": "1"}, true},
+		{"id without the marker", map[string]string{"AGENT_SESSION_ID": "pi-123"}, true},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			envJS, err := json.Marshal(c.env)
+			if err != nil {
+				t.Fatal(err)
+			}
+			harness := `
+import { register } from './register.mjs'
+const hooks = {}
+register((name, fn) => { hooks[name] = fn })
+const env = ` + string(envJS) + `
+let spawned = false
+const $ = {
+  session: { id: async () => 'sid' },
+  env: { get: name => env[name] ?? '' },
+  process: { spawn: () => {
+    spawned = true
+    return { result: new Promise(() => {}), return() {}, async *[Symbol.asyncIterator]() { await new Promise(() => {}) } }
+  } },
+  prompt: { submit: async () => ({}) },
+  ui: { log() {} },
+  clock: { after() {} },
+}
+await hooks['session.start']($, {}, async e => e)
+await new Promise(r => setTimeout(r, 100))
+console.log(spawned ? 'spawned' : 'quiet')
+`
+			if err := os.WriteFile(filepath.Join(dir, "run.mjs"), []byte(harness), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			out, err := exec.Command(node, filepath.Join(dir, "run.mjs")).Output()
+			if err != nil {
+				t.Fatalf("node: %v", err)
+			}
+			got := strings.TrimSpace(string(out))
+			want := "quiet"
+			if c.spawns {
+				want = "spawned"
+			}
+			if got != want {
+				t.Fatalf("got %q, want %q", got, want)
+			}
+		})
 	}
 }
 
