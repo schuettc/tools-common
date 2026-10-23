@@ -23,9 +23,16 @@ let generation = 0
 let current = null
 let delay = FIRST_DELAY
 
+// A value that is empty or holds whitespace, a quote or = is written as a JSON
+// string, so it stays on the header line and reads as one value.
+function metaValue(v) {
+  const s = String(v)
+  return s === '' || /[\s"=]/.test(s) ? JSON.stringify(s) : s
+}
+
 function eventText(ev) {
   let head = NAME + ' event'
-  for (const [k, v] of Object.entries(ev.meta ?? {})) head += ' ' + k + '=' + v
+  for (const [k, v] of Object.entries(ev.meta ?? {})) head += ' ' + k + '=' + metaValue(v)
   return head + '\n' + (ev.content ?? '')
 }
 

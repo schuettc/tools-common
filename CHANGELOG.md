@@ -4,7 +4,7 @@ Root module releases are tagged `vX.Y.Z`; the separate `sqlitedb` module is
 tagged `sqlitedb/vX.Y.Z`. Releases before this file are described by their
 tags and PRs.
 
-## Unreleased
+## 0.15.0
 
 ### Added
 - `channelmcp.Pusher`, the interface a tool's wait loop sends events to;
@@ -17,7 +17,8 @@ tags and PRs.
   `plugin.json` (no `version`, so Claude Code versions it by commit),
   `.mcp.json` running `<bin> channel`, and a mod (`hooks/hooks.json`,
   `hooks/register.js`) that runs `<bin> watch` for the session, starts a turn
-  with each event, resubmits a dropped one from `turn.complete`, and restarts
+  with each event (a meta value with whitespace, a quote or `=` is quoted, so
+  it stays one value on the header line), resubmits a dropped one from `turn.complete`, and restarts
   `watch` when it ends. `AssertCurrent` fails a tool's test when its
   committed plugin differs and names the regenerate command.
 
