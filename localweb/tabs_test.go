@@ -58,16 +58,24 @@ func TestTabsPickMovesTheMostRecentFrontPageTab(t *testing.T) {
 	}
 }
 
-// A front-page tab holding its stream is in use now, so it beats one that only
-// checked in a minute ago.
-func TestTabsPickAStreamingFrontPageTabIsTheMostRecent(t *testing.T) {
-	tabs, c := newTabs()
-	tabs.Connected("visible", "")
-	c.advance(time.Minute)
-	tabs.Seen("hidden", "")
-	c.advance(time.Second)
-	if got := tabs.Pick("PLAN1"); got != (Choice{Kind: TabMove, Tab: "visible"}) {
-		t.Fatalf("Pick = %+v, want TabMove visible", got)
+// Front-page tabs rank by their last activity (the stream opening, or a
+// Seen), not by holding a stream: with two streaming, Seen on one (New plan
+// pressed there) makes it the one that moves, every time.
+func TestTabsPickRanksStreamingFrontPageTabsByLastActivity(t *testing.T) {
+	for i := 0; i < 50; i++ {
+		tabs, c := newTabs()
+		tabs.Connected("older", "")
+		c.advance(time.Second)
+		tabs.Connected("newer", "")
+		c.advance(time.Minute)
+		if got := tabs.Pick("PLAN1"); got != (Choice{Kind: TabMove, Tab: "newer"}) {
+			t.Fatalf("run %d, both streaming: Pick = %+v, want TabMove newer", i, got)
+		}
+		tabs.Seen("older", "")
+		c.advance(time.Second)
+		if got := tabs.Pick("PLAN1"); got != (Choice{Kind: TabMove, Tab: "older"}) {
+			t.Fatalf("run %d, after Seen on older: Pick = %+v, want TabMove older", i, got)
+		}
 	}
 }
 

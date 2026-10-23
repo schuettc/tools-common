@@ -108,9 +108,10 @@ func (t *Tabs) Moved(id, page string) {
 }
 
 // Pick says what to do to show page: TabHere when an open tab already shows it,
-// else TabMove the front-page tab seen most recently (a tab holding a stream is
-// seen now), else TabElsewhere when only tabs on other pages are open, else TabNone.
-// It forgets closed tabs.
+// else TabMove the front-page tab active most recently (its stream opening or
+// its last Seen; an open stream keeps a tab alive but does not rank it), else
+// TabElsewhere when only tabs on other pages are open, else TabNone. It
+// forgets closed tabs.
 func (t *Tabs) Pick(page string) Choice {
 	t.mu.Lock()
 	defer t.mu.Unlock()
@@ -119,11 +120,7 @@ func (t *Tabs) Pick(page string) Choice {
 	var frontSeen time.Time
 	open := false
 	for id, tb := range t.tabs {
-		seen := tb.seen
-		if tb.streams > 0 {
-			seen = now
-		}
-		if now.Sub(seen) > TabSilence {
+		if tb.streams == 0 && now.Sub(tb.seen) > TabSilence {
 			delete(t.tabs, id)
 			continue
 		}
@@ -131,8 +128,8 @@ func (t *Tabs) Pick(page string) Choice {
 		switch {
 		case tb.page == page:
 			return Choice{Kind: TabHere, Tab: id}
-		case tb.page == "" && (front == "" || seen.After(frontSeen)):
-			front, frontSeen = id, seen
+		case tb.page == "" && (front == "" || tb.seen.After(frontSeen)):
+			front, frontSeen = id, tb.seen
 		}
 	}
 	switch {
