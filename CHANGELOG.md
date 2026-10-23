@@ -4,6 +4,13 @@ Root module releases are tagged `vX.Y.Z`; the separate `sqlitedb` module is
 tagged `sqlitedb/vX.Y.Z`. Releases before this file are described by their
 tags and PRs.
 
+## 0.13.0
+
+### Added
+- `localweb.Config.Token`: a tool can hand in the token to use (64 hex
+  characters) instead of a new one per start, so its open tabs keep working
+  across a restart. Empty keeps today's behaviour.
+
 ## 0.12.0 (sqlitedb 0.2.0)
 
 ### Changed

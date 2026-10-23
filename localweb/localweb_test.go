@@ -226,3 +226,24 @@ func TestNilAssetsServe404(t *testing.T) {
 		t.Fatalf("nil Assets: got %d, want 404", resp.StatusCode)
 	}
 }
+
+// A tool that keeps its token across restarts hands it in; open tabs keep
+// working against the new server.
+func TestAGivenTokenIsUsedInsteadOfANewOne(t *testing.T) {
+	const kept = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	s, err := Start(ctx, Config{Tool: "lwtest", Assets: fstest.MapFS{}, API: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { _, _ = io.WriteString(w, "ok") }), Token: kept})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if s.Token != kept || !strings.HasSuffix(s.URL, "?t="+kept) {
+		t.Fatalf("token %q, url %q", s.Token, s.URL)
+	}
+	if r := do(t, s, "GET", "/api/x", func(q *http.Request) { q.Header.Set(TokenHeader, kept) }); r.Status != 200 {
+		t.Fatalf("kept token refused: %d", r.Status)
+	}
+	if _, err := Start(ctx, Config{Tool: "lwtest", Assets: fstest.MapFS{}, Token: "short"}); err == nil {
+		t.Fatal("a weak token was accepted")
+	}
+}
