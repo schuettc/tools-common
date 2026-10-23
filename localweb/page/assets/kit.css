@@ -182,7 +182,11 @@ code { font: .88em var(--kit-mono); }
 .kit-also-chip[data-tone="you"] { border-color: var(--kit-signal); }
 .kit-also-chip[data-tone="you"] i { background: var(--kit-signal); }
 .kit-also-chip[data-tone="working"] i { background: var(--kit-agent); }
-.kit-also-name { max-width: 240px; overflow: hidden; text-overflow: ellipsis; }
+/* Every chip is the same width, so moving between pages never shifts the bar.
+   The name keeps at least 14 characters; the detail is cut first. */
+.kit-also-chip:not(.kit-also-more) { width: 300px; }
+.kit-also-name { flex: 0 1 auto; min-width: min(14ch, 50%); overflow: hidden; text-overflow: ellipsis; }
+.kit-also-detail { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .kit-also-detail, .kit-also-more { color: var(--kit-muted); }
 .kit-also-menu { display: flex; flex-direction: column; align-items: stretch; gap: 4px; padding: 6px; max-width: min(440px, 92vw); }
 
