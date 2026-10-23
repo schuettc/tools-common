@@ -10,6 +10,7 @@ import (
 	"crypto/subtle"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"io/fs"
 	"net"
 	"net/http"
@@ -31,6 +32,9 @@ type Config struct {
 	Assets fs.FS        // served at / without a token
 	API    http.Handler // mounted at /api/, token required; nil → 404
 	Port   int          // >0: exactly this port; 0: remembered port, else free
+	// Token, when set, is used instead of a new one, so a tool that keeps it
+	// across restarts keeps its open tabs working. 64 hex characters.
+	Token string
 }
 
 // Server is a running local page server.
@@ -52,12 +56,19 @@ func Start(ctx context.Context, c Config) (*Server, error) {
 	if err != nil {
 		return nil, err
 	}
-	tok := make([]byte, 32)
-	if _, err := rand.Read(tok); err != nil {
+	token := c.Token
+	if token == "" {
+		tok := make([]byte, 32)
+		if _, err := rand.Read(tok); err != nil {
+			_ = ln.Close()
+			return nil, err
+		}
+		token = hex.EncodeToString(tok)
+	} else if b, err := hex.DecodeString(token); err != nil || len(b) != 32 {
 		_ = ln.Close()
-		return nil, err
+		return nil, fmt.Errorf("localweb: Config.Token must be 64 hex characters")
 	}
-	s := &Server{Token: hex.EncodeToString(tok), cfg: c, ln: ln, done: make(chan error, 1)}
+	s := &Server{Token: token, cfg: c, ln: ln, done: make(chan error, 1)}
 	s.URL = "http://" + ln.Addr().String() + "/?t=" + s.Token
 	s.srv = &http.Server{Handler: s, ReadHeaderTimeout: 10 * time.Second}
 	savePort(c.Tool, ln.Addr().(*net.TCPAddr).Port)
