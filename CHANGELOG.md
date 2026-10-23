@@ -4,6 +4,13 @@ Root module releases are tagged `vX.Y.Z`; the separate `sqlitedb` module is
 tagged `sqlitedb/vX.Y.Z`. Releases before this file are described by their
 tags and PRs.
 
+## 0.13.1
+
+### Fixed
+- `live`: a hidden tab closes its event stream and polls nothing; shown
+  again it reopens from its cursor. Browsers allow about six connections to
+  one host, so a stream per background tab froze every tab of a tool.
+
 ## 0.13.0
 
 ### Added
