@@ -169,22 +169,30 @@ code { font: .88em var(--kit-mono); }
 /* the bar's "also open" area: other work a click away, before the live pill.
    Chips keep their size; what doesn't fit folds into "+N more" (dom.js).
    The dot says who it waits on: you (signal), the agent (agent), nobody. */
-.kit-also { display: flex; align-items: center; gap: 6px; min-width: 0; overflow: hidden; }
-.kit-also.folded { min-width: min-content; } /* "+N more" is never cut off */
-.kit-also[hidden], .kit-also-label[hidden], .kit-also-chip[hidden] { display: none; }
-.kit-also-label { color: var(--kit-muted); white-space: nowrap; flex: none; }
-.kit-also-chip {
-  display: inline-flex; align-items: center; gap: 6px; flex: none; white-space: nowrap;
-  font: 12.5px var(--kit-mono); color: var(--kit-fg); background: transparent;
-  border: 1px solid var(--kit-line); border-radius: 6px; padding: 2px 9px; cursor: pointer;
+.kit-also { display: flex; align-items: center; flex: none; }
+.kit-also[hidden] { display: none; }
+/* One fixed width, so the bar never moves as the count changes. */
+.kit-also-btn {
+  display: inline-flex; align-items: center; gap: 7px; width: 27ch; white-space: nowrap; overflow: hidden;
+  font: 12.5px var(--kit-mono); color: var(--kit-muted); background: transparent;
+  border: 1px solid var(--kit-line); border-radius: 6px; padding: 4px 10px; cursor: pointer;
 }
-.kit-also-chip i { width: 8px; height: 8px; border-radius: 50%; background: var(--kit-muted); flex: none; }
-.kit-also-chip[data-tone="you"] { border-color: var(--kit-signal); }
-.kit-also-chip[data-tone="you"] i { background: var(--kit-signal); }
-.kit-also-chip[data-tone="working"] i { background: var(--kit-agent); }
-.kit-also-name { max-width: 240px; overflow: hidden; text-overflow: ellipsis; }
-.kit-also-detail, .kit-also-more { color: var(--kit-muted); }
-.kit-also-menu { display: flex; flex-direction: column; align-items: stretch; gap: 4px; padding: 6px; max-width: min(440px, 92vw); }
+.kit-also-btn[data-tone="you"] { color: var(--kit-fg); border-color: var(--kit-signal); }
+.kit-also-btn[aria-expanded="true"] { background: var(--kit-card); }
+.kit-also-text { overflow: hidden; text-overflow: ellipsis; }
+.kit-also-btn i, .kit-also-row i { width: 8px; height: 8px; border-radius: 50%; background: var(--kit-muted); flex: none; }
+.kit-also-btn[data-tone="you"] i, .kit-also-row[data-tone="you"] i { background: var(--kit-signal); }
+.kit-also-row[data-tone="working"] i { background: var(--kit-agent); }
+.kit-also-menu { display: flex; flex-direction: column; gap: 2px; padding: 6px; width: min(460px, 92vw); }
+.kit-also-row {
+  display: grid; grid-template-columns: 8px 1fr; column-gap: 9px; row-gap: 2px; align-items: center; text-align: left;
+  font: 13px var(--kit-sans); color: var(--kit-fg); background: transparent; border: 0; border-radius: 6px; padding: 7px 9px; cursor: pointer;
+}
+.kit-also-row:hover, .kit-also-row:focus-visible { background: var(--kit-card); }
+.kit-also-name { grid-column: 2; font-weight: 600; overflow-wrap: anywhere; }
+.kit-also-row[aria-current="page"] { background: var(--kit-card); cursor: default; }
+.kit-also-here { margin-left: 8px; font: 11px var(--kit-mono); font-weight: 400; color: var(--kit-muted); border: 1px solid var(--kit-line); border-radius: 6px; padding: 0 6px; }
+.kit-also-detail { grid-column: 2; font: 12px var(--kit-mono); color: var(--kit-muted); }
 
 /* the list panel: a quiet ground */
 .kit-list {
