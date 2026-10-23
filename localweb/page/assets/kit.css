@@ -190,6 +190,8 @@ code { font: .88em var(--kit-mono); }
 }
 .kit-also-row:hover, .kit-also-row:focus-visible { background: var(--kit-card); }
 .kit-also-name { grid-column: 2; font-weight: 600; overflow-wrap: anywhere; }
+.kit-also-row[aria-current="page"] { background: var(--kit-card); cursor: default; }
+.kit-also-here { margin-left: 8px; font: 11px var(--kit-mono); font-weight: 400; color: var(--kit-muted); border: 1px solid var(--kit-line); border-radius: 6px; padding: 0 6px; }
 .kit-also-detail { grid-column: 2; font: 12px var(--kit-mono); color: var(--kit-muted); }
 
 /* the list panel: a quiet ground */

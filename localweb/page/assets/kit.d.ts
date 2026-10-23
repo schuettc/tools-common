@@ -192,6 +192,8 @@ export interface ElsewhereItem {
   detail?: string;
   /** Who it waits on: you (signal dot and edge), working (the agent's dot), idle (muted, the default). */
   tone?: 'you' | 'working' | 'idle';
+  /** The page you are on: listed in its place and counted, marked "you are here"; its row only closes the list. */
+  current?: boolean;
   onClick(): void;
 }
 

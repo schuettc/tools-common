@@ -425,6 +425,25 @@ test('dom: bar also-open button keeps one width, so the bar never moves', () => 
   } finally { fx.style.width = ''; }
 });
 
+test('dom: bar also-open marks the page you are on, counts it, and its row only closes the list', () => {
+  const clicked = [];
+  const { fx, b, area } = alsoBar(1600);
+  try {
+    const items = plans(3, clicked);
+    items[1].current = true;
+    b.setElsewhere(items);
+    eq(norm(button(area).textContent), '1 needs you · 3 open', 'the page you are on counts');
+    const menu = openList(area);
+    const rows = [...menu.querySelectorAll('.kit-also-row')];
+    eq(rows.length, 3, 'it is listed in its place');
+    eq(rows.map(r => r.getAttribute('aria-current')), [null, 'page', null]);
+    assert(norm(rows[1].textContent).includes('you are here'), 'it says so');
+    rows[1].click();
+    eq(clicked, [], 'its click does not navigate');
+    assert(!document.querySelector('.kit-also-menu'), 'it closes the list');
+  } finally { fx.style.width = ''; }
+});
+
 test('dom: bar also-open list shows every item in full, and a row click runs it', () => {
   const clicked = [];
   const { fx, b, area } = alsoBar(1100);

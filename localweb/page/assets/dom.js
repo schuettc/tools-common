@@ -42,10 +42,14 @@ function alsoOpen() {
   let items = [];
   let menu = null;
 
+  // The page you are on is listed in its place, so the list reads the same
+  // on every page; its row says so and only closes the list.
   const row = it => h('button', {
     class: 'kit-also-row', type: 'button', role: 'menuitem', dataset: { tone: it.tone || 'idle' },
-    onclick: () => { closeMenu(); it.onClick(); },
-  }, h('i'), h('span', { class: 'kit-also-name' }, it.label), it.detail ? h('span', { class: 'kit-also-detail' }, it.detail) : null);
+    'aria-current': it.current ? 'page' : null,
+    onclick: () => { closeMenu(); if (!it.current) it.onClick(); },
+  }, h('i'), h('span', { class: 'kit-also-name' }, it.label, it.current ? h('span', { class: 'kit-also-here' }, 'you are here') : null),
+  it.detail ? h('span', { class: 'kit-also-detail' }, it.detail) : null);
 
   const onKey = e => { if (e.key === 'Escape' && !e.isComposing) closeMenu(); };
   const onDown = e => { if (!menu.contains(e.target) && !btn.contains(e.target)) closeMenu(); };
