@@ -354,3 +354,132 @@ test('dom: the app grid scrolls below its minimum width', () => {
   assert(app.scrollWidth > 600, `content keeps its width (${app.scrollWidth})`);
   assert(app.querySelector('.kit-read').getBoundingClientRect().width >= 320, 'reading column keeps a minimum');
 });
+
+// ---- the bar's "also open" area
+
+
+function alsoBar(width, sections = []) {
+  const fx = fixture();
+  fx.style.width = width + 'px';
+  const b = bar({ brand: { name: 'diazo' }, sections });
+  fx.append(b.el);
+  b.setLive('live');
+  return { fx, b, area: b.el.querySelector('.kit-also') };
+}
+
+const plans = (n, clicked = []) => Array.from({ length: n }, (_, i) => ({
+  label: `plan number ${i + 1} with a longish title`,
+  detail: i === 0 ? 'Decisions · needs you' : 'Plan · idle',
+  tone: i === 0 ? 'you' : i === 1 ? 'working' : 'idle',
+  onClick: () => clicked.push(i + 1),
+}));
+
+const shown = area => [...area.querySelectorAll('.kit-also-chip:not(.kit-also-more)')].filter(c => !c.hidden);
+
+test('dom: bar also-open area sits before the live pill, hidden until filled', () => {
+  const { fx, b, area } = alsoBar(1600);
+  try {
+    assert(area, 'the area exists');
+    assert(area.nextElementSibling === b.el.querySelector('.kit-live'), 'just before the live pill');
+    assert(area.hidden, 'hidden with nothing to show');
+    b.setElsewhere(plans(1));
+    assert(!area.hidden, 'shown once filled');
+    b.setElsewhere([]);
+    assert(area.hidden, 'an empty list hides it');
+    eq(area.querySelectorAll('.kit-also-chip:not(.kit-also-more)').length, 0);
+  } finally { fx.style.width = ''; }
+});
+
+test('dom: bar also-open chips render with tone and detail, and clicks run', () => {
+  const clicked = [];
+  const { fx, b, area } = alsoBar(1600);
+  try {
+    b.setElsewhere(plans(3, clicked));
+    eq(area.querySelector('.kit-also-label').textContent, 'also open');
+    const chips = shown(area);
+    eq(chips.map(c => c.dataset.tone), ['you', 'working', 'idle']);
+    eq(chips[0].querySelector('.kit-also-name').textContent, 'plan number 1 with a longish title');
+    eq(chips[0].querySelector('.kit-also-detail').textContent, '· Decisions · needs you');
+    assert(!area.querySelector('.kit-also-more') || area.querySelector('.kit-also-more').hidden, 'no fold when everything fits');
+    chips[1].click();
+    eq(clicked, [2]);
+    const token = name => { const p = h('span', { style: `color: var(${name})` }); fx.append(p); const c = cs(p).color; p.remove(); return c; };
+    eq(chips.map(c => cs(c.querySelector('i')).backgroundColor), [token('--kit-signal'), token('--kit-agent'), token('--kit-muted')], 'you is signal, working is agent, idle is muted');
+    b.setElsewhere([{ label: 'bare', onClick() {} }]);
+    const bare = shown(area);
+    eq(bare.length, 1, 'setElsewhere replaces the chips');
+    eq([bare[0].dataset.tone, bare[0].querySelector('.kit-also-detail')], ['idle', null], 'tone defaults to idle; no detail, no detail span');
+  } finally { fx.style.width = ''; }
+});
+
+test('dom: bar also-open chips that do not fit fold into +N more, which lists the rest', () => {
+  const clicked = [];
+  const { fx, b, area } = alsoBar(1100, [{ id: 'start', label: 'Start' }, { id: 'dec', label: 'Decisions' }]);
+  try {
+    b.setElsewhere(plans(5, clicked));
+    const chips = shown(area);
+    const more = area.querySelector('.kit-also-more');
+    assert(chips.length >= 1 && chips.length < 5, `some chips fold (shown ${chips.length})`);
+    assert(more && !more.hidden, 'the more chip shows');
+    eq(more.textContent, `+${5 - chips.length} more`);
+    assert(area.scrollWidth <= area.clientWidth, 'nothing spills out of the area');
+    const pill = b.el.querySelector('.kit-live');
+    assert(pill.getBoundingClientRect().right <= b.el.getBoundingClientRect().right, 'the live pill stays in the bar');
+    assert(pill.getBoundingClientRect().left >= area.getBoundingClientRect().right, 'the area does not cover the pill');
+
+    more.click();
+    const menu = document.querySelector('.kit-also-menu');
+    assert(menu && menu.classList.contains('kit-float'), 'a small floating list');
+    const rest = [...menu.querySelectorAll('.kit-also-chip')];
+    eq(rest.map(r => r.querySelector('.kit-also-name').textContent), plans(5).slice(chips.length).map(p => p.label), 'the rest, in order');
+    rest[0].click();
+    eq(clicked, [chips.length + 1]);
+    assert(!document.querySelector('.kit-also-menu'), 'a click in the list closes it');
+
+    more.click();
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    assert(!document.querySelector('.kit-also-menu'), 'Esc closes it');
+    more.click();
+    document.body.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
+    assert(!document.querySelector('.kit-also-menu'), 'a click elsewhere closes it');
+    more.click();
+    more.click();
+    assert(!document.querySelector('.kit-also-menu'), 'the more chip toggles it');
+    more.click();
+    b.setElsewhere([]);
+    assert(!document.querySelector('.kit-also-menu'), 'emptying the area closes it');
+  } finally { fx.style.width = ''; }
+});
+
+// Headless Chrome under --virtual-time-budget renders no frames, so a real
+// ResizeObserver reports only its first size; a stub hands the test its callback.
+test('dom: bar also-open refits when the bar is resized', () => {
+  const Real = globalThis.ResizeObserver;
+  const observers = [];
+  globalThis.ResizeObserver = class { constructor(cb) { this.cb = cb; observers.push(this); } observe(el) { this.el = el; } disconnect() {} };
+  let fx, b, area;
+  try {
+    ({ fx, b, area } = alsoBar(1000, [{ id: 'start', label: 'Start' }]));
+  } finally { globalThis.ResizeObserver = Real; }
+  try {
+    const ro = observers.find(o => o.el === b.el);
+    assert(ro, 'the bar observes its own size');
+    b.setElsewhere(plans(4));
+    assert(shown(area).length < 4, 'folds when narrow');
+    fx.style.width = '2400px';
+    ro.cb();
+    eq(shown(area).length, 4, 'all four when wide');
+    assert(area.querySelector('.kit-also-more').hidden, 'no more chip');
+    fx.style.width = '1000px';
+    ro.cb();
+    assert(shown(area).length < 4, 'folds again');
+    assert(area.scrollWidth <= area.clientWidth);
+    fx.style.width = '380px';
+    ro.cb();
+    eq(shown(area).length, 0, 'too narrow for any chip');
+    const more = area.querySelector('.kit-also-more');
+    eq(more.textContent, '+4 more');
+    assert(area.getBoundingClientRect().right >= more.getBoundingClientRect().right - 0.5, 'the more chip is never cut off');
+    assert(area.clientWidth >= more.offsetWidth, 'the area is as wide as the more chip');
+  } finally { fx.style.width = ''; }
+});

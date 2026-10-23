@@ -87,22 +87,32 @@ export interface LiveEvent<T = unknown> {
 }
 
 export interface LiveOptions {
-  /** SSE endpoint: flush headers on connect; every message is the default event, id = cursor, data = JSON {type, data}. */
+  /** SSE endpoint: GET ?tab=&page=&since=; flush headers on connect; every message is the default event, id = cursor, data = JSON {type, data}. */
   events: string;
-  /** Poll endpoint: GET ?since=<cursor> → {cursor, events: [{type, data}]}. */
+  /** Poll endpoint: GET ?tab=&page=&since=<cursor> → {cursor, events: [{type, data}]}. A hidden tab checks in through it once a minute. */
   poll: string;
+  /** Every event except show events, which go to onShow. */
   onEvent(e: LiveEvent): void;
   onStatus?(s: LiveStatus): void;
+  /** What this tab shows, in the tool's words, sent as page on every request; default "" (the front page). */
+  page?: string;
+  /** A {type: "show", data: {tab, page}} event naming this tab arrived: show page (e.g. navigate to it). */
+  onShow?(page: string): void;
   cursor?: string;
   /** Poll interval in ms while the stream is down; default 2000. */
   interval?: number;
+  /** Check-in interval in ms while the tab is hidden; default 60000. */
+  hiddenInterval?: number;
+  /** Makes the tab id; default crypto.randomUUID. */
+  randomUUID?: () => string;
   EventSource?: typeof EventSource;
   fetch?: typeof fetch;
   setTimeout?: (fn: () => void, ms: number) => unknown;
   clearTimeout?: (id: unknown) => void;
 }
 
-export function live(opts: LiveOptions): { stop(): void; cursor(): string };
+/** tab(): this page load's id, sent as tab on every request (send it when asking the server to move this tab). */
+export function live(opts: LiveOptions): { stop(): void; cursor(): string; tab(): string };
 
 // ---- selection.js
 
@@ -171,6 +181,18 @@ export interface BarHandle {
   setLive(s: LiveStatus, text?: string): void;
   /** The one filled button; null hides it. */
   setPrimary(p: Primary | null): void;
+  /** The "also open" area before the live pill, in this order; chips that don't fit fold into "+N more". An empty array hides it. */
+  setElsewhere(items: ElsewhereItem[]): void;
+}
+
+/** A chip in the bar's "also open" area: other work a click away. */
+export interface ElsewhereItem {
+  label: string;
+  /** Muted text after the label, e.g. "Decisions · needs you". */
+  detail?: string;
+  /** Who it waits on: you (signal dot and edge), working (the agent's dot), idle (muted, the default). */
+  tone?: 'you' | 'working' | 'idle';
+  onClick(): void;
 }
 
 export function bar(o: {
