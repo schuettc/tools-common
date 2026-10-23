@@ -181,14 +181,14 @@ export interface BarHandle {
   setLive(s: LiveStatus, text?: string): void;
   /** The one filled button; null hides it. */
   setPrimary(p: Primary | null): void;
-  /** The "also open" area before the live pill, in this order; chips that don't fit fold into "+N more". An empty array hides it. */
+  /** The "also open" button before the live pill, and its list in this order. An empty array hides it. */
   setElsewhere(items: ElsewhereItem[]): void;
 }
 
-/** A chip in the bar's "also open" area: other work a click away. */
+/** An item in the bar's "also open" list: other work a click away. The bar shows one fixed-width button that counts the items (and those that need you) and opens the list. */
 export interface ElsewhereItem {
   label: string;
-  /** Muted text after the label, e.g. "Decisions · needs you". */
+  /** Muted line under the label in the list, e.g. "needs you · Decisions". */
   detail?: string;
   /** Who it waits on: you (signal dot and edge), working (the agent's dot), idle (muted, the default). */
   tone?: 'you' | 'working' | 'idle';

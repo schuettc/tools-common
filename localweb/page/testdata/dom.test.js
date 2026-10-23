@@ -374,7 +374,9 @@ const plans = (n, clicked = []) => Array.from({ length: n }, (_, i) => ({
   onClick: () => clicked.push(i + 1),
 }));
 
-const shown = area => [...area.querySelectorAll('.kit-also-chip:not(.kit-also-more)')].filter(c => !c.hidden);
+const norm = t => t.replace(/\s+/g, ' ').trim();
+const button = area => area.querySelector('.kit-also-btn');
+const openList = area => { button(area).click(); return document.querySelector('.kit-also-menu'); };
 
 test('dom: bar also-open area sits before the live pill, hidden until filled', () => {
   const { fx, b, area } = alsoBar(1600);
@@ -386,147 +388,73 @@ test('dom: bar also-open area sits before the live pill, hidden until filled', (
     assert(!area.hidden, 'shown once filled');
     b.setElsewhere([]);
     assert(area.hidden, 'an empty list hides it');
-    eq(area.querySelectorAll('.kit-also-chip:not(.kit-also-more)').length, 0);
   } finally { fx.style.width = ''; }
 });
 
-test('dom: bar also-open chips render with tone and detail, and clicks run', () => {
-  const clicked = [];
+test('dom: bar also-open is one button that counts the work and who it waits on', () => {
   const { fx, b, area } = alsoBar(1600);
   try {
-    b.setElsewhere(plans(3, clicked));
-    eq(area.querySelector('.kit-also-label').textContent, 'also open');
-    const chips = shown(area);
-    eq(chips.map(c => c.dataset.tone), ['you', 'working', 'idle']);
-    eq(chips[0].querySelector('.kit-also-name').textContent, 'plan number 1 with a longish title');
-    eq(chips[0].querySelector('.kit-also-detail').textContent, '· Decisions · needs you');
-    assert(!area.querySelector('.kit-also-more') || area.querySelector('.kit-also-more').hidden, 'no fold when everything fits');
-    chips[1].click();
-    eq(clicked, [2]);
-    const token = name => { const p = h('span', { style: `color: var(${name})` }); fx.append(p); const c = cs(p).color; p.remove(); return c; };
-    eq(chips.map(c => cs(c.querySelector('i')).backgroundColor), [token('--kit-signal'), token('--kit-agent'), token('--kit-muted')], 'you is signal, working is agent, idle is muted');
+    b.setElsewhere(plans(3));
+    const btn = button(area);
+    assert(btn, 'one button');
+    eq(norm(btn.textContent), '1 needs you · 3 open');
+    eq(btn.dataset.tone, 'you', 'its dot is the signal when any needs you');
+    b.setElsewhere(plans(12).map((p, i) => ({ ...p, tone: i < 2 ? 'you' : 'idle' })));
+    eq(norm(btn.textContent), '2 need you · 12 open');
+    b.setElsewhere(plans(4).map(p => ({ ...p, tone: 'idle' })));
+    eq(norm(btn.textContent), '4 open');
+    eq(btn.dataset.tone, 'idle');
     b.setElsewhere([{ label: 'bare', onClick() {} }]);
-    const bare = shown(area);
-    eq(bare.length, 1, 'setElsewhere replaces the chips');
-    eq([bare[0].dataset.tone, bare[0].querySelector('.kit-also-detail')], ['idle', null], 'tone defaults to idle; no detail, no detail span');
+    eq(norm(btn.textContent), '1 open', 'tone defaults to idle');
   } finally { fx.style.width = ''; }
 });
 
-test('dom: bar also-open chips that do not fit fold into +N more, which lists the rest', () => {
+test('dom: bar also-open button keeps one width, so the bar never moves', () => {
+  const { fx, b, area } = alsoBar(1600);
+  try {
+    const widths = [1, 3, 12, 120].map(n => {
+      b.setElsewhere(plans(n).map((p, i) => ({ ...p, tone: i < n / 2 ? 'you' : 'idle' })));
+      return button(area).getBoundingClientRect().width;
+    });
+    eq(new Set(widths).size, 1, `widths ${widths}`);
+    const pill = b.el.querySelector('.kit-live').getBoundingClientRect().left;
+    b.setElsewhere(plans(2));
+    eq(b.el.querySelector('.kit-live').getBoundingClientRect().left, pill, 'the live pill stays put');
+  } finally { fx.style.width = ''; }
+});
+
+test('dom: bar also-open list shows every item in full, and a row click runs it', () => {
   const clicked = [];
-  const { fx, b, area } = alsoBar(1100, [{ id: 'start', label: 'Start' }, { id: 'dec', label: 'Decisions' }]);
+  const { fx, b, area } = alsoBar(1100);
   try {
     b.setElsewhere(plans(5, clicked));
-    const chips = shown(area);
-    const more = area.querySelector('.kit-also-more');
-    assert(chips.length >= 1 && chips.length < 5, `some chips fold (shown ${chips.length})`);
-    assert(more && !more.hidden, 'the more chip shows');
-    eq(more.textContent, `+${5 - chips.length} more`);
-    assert(area.scrollWidth <= area.clientWidth, 'nothing spills out of the area');
-    const pill = b.el.querySelector('.kit-live');
-    assert(pill.getBoundingClientRect().right <= b.el.getBoundingClientRect().right, 'the live pill stays in the bar');
-    assert(pill.getBoundingClientRect().left >= area.getBoundingClientRect().right, 'the area does not cover the pill');
+    const menu = openList(area);
+    assert(menu && menu.classList.contains('kit-float'), 'a floating list');
+    eq(button(area).getAttribute('aria-expanded'), 'true');
+    const rows = [...menu.querySelectorAll('.kit-also-row')];
+    eq(rows.map(r => r.querySelector('.kit-also-name').textContent), plans(5).map(p => p.label), 'every item, in order');
+    eq(rows[0].querySelector('.kit-also-detail').textContent, 'Decisions · needs you');
+    eq(rows.map(r => r.dataset.tone), ['you', 'working', 'idle', 'idle', 'idle']);
+    const token = name => { const p = h('span', { style: `color: var(${name})` }); fx.append(p); const c = cs(p).color; p.remove(); return c; };
+    eq(rows.slice(0, 3).map(r => cs(r.querySelector('i')).backgroundColor), [token('--kit-signal'), token('--kit-agent'), token('--kit-muted')], 'you is signal, working is agent, idle is muted');
+    const name = rows[0].querySelector('.kit-also-name');
+    assert(name.scrollWidth <= name.clientWidth + 0.5, 'a name is not cut off');
+    rows[2].click();
+    eq(clicked, [3]);
+    assert(!document.querySelector('.kit-also-menu'), 'a row click closes it');
+    eq(button(area).getAttribute('aria-expanded'), 'false');
 
-    more.click();
-    const menu = document.querySelector('.kit-also-menu');
-    assert(menu && menu.classList.contains('kit-float'), 'a small floating list');
-    const rest = [...menu.querySelectorAll('.kit-also-chip')];
-    eq(rest.map(r => r.querySelector('.kit-also-name').textContent), plans(5).slice(chips.length).map(p => p.label), 'the rest, in order');
-    rest[0].click();
-    eq(clicked, [chips.length + 1]);
-    assert(!document.querySelector('.kit-also-menu'), 'a click in the list closes it');
-
-    more.click();
+    openList(area);
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
     assert(!document.querySelector('.kit-also-menu'), 'Esc closes it');
-    more.click();
+    openList(area);
     document.body.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
     assert(!document.querySelector('.kit-also-menu'), 'a click elsewhere closes it');
-    more.click();
-    more.click();
-    assert(!document.querySelector('.kit-also-menu'), 'the more chip toggles it');
-    more.click();
+    openList(area);
+    button(area).click();
+    assert(!document.querySelector('.kit-also-menu'), 'the button toggles it');
+    openList(area);
     b.setElsewhere([]);
     assert(!document.querySelector('.kit-also-menu'), 'emptying the area closes it');
-  } finally { fx.style.width = ''; }
-});
-
-// Headless Chrome under --virtual-time-budget renders no frames, so a real
-// ResizeObserver reports only its first size; a stub hands the test its callback.
-test('dom: bar also-open refits when the bar is resized', () => {
-  const Real = globalThis.ResizeObserver;
-  const observers = [];
-  globalThis.ResizeObserver = class { constructor(cb) { this.cb = cb; observers.push(this); } observe(el) { this.el = el; } disconnect() {} };
-  let fx, b, area;
-  try {
-    ({ fx, b, area } = alsoBar(1000, [{ id: 'start', label: 'Start' }]));
-  } finally { globalThis.ResizeObserver = Real; }
-  try {
-    const ro = observers.find(o => o.el === b.el);
-    assert(ro, 'the bar observes its own size');
-    b.setElsewhere(plans(4));
-    assert(shown(area).length < 4, 'folds when narrow');
-    fx.style.width = '2400px';
-    ro.cb();
-    eq(shown(area).length, 4, 'all four when wide');
-    assert(area.querySelector('.kit-also-more').hidden, 'no more chip');
-    fx.style.width = '1000px';
-    ro.cb();
-    assert(shown(area).length < 4, 'folds again');
-    assert(area.scrollWidth <= area.clientWidth);
-    fx.style.width = '380px';
-    ro.cb();
-    eq(shown(area).length, 0, 'too narrow for any chip');
-    const more = area.querySelector('.kit-also-more');
-    eq(more.textContent, '+4 more');
-    assert(area.getBoundingClientRect().right >= more.getBoundingClientRect().right - 0.5, 'the more chip is never cut off');
-    assert(area.clientWidth >= more.offsetWidth, 'the area is as wide as the more chip');
-  } finally { fx.style.width = ''; }
-});
-
-// A fixed-width header doesn't resize when its own content grows, so the
-// setters that change bar content refit the area themselves.
-test('dom: bar also-open refits when other bar content grows', () => {
-  const { fx, b, area } = alsoBar(1400, [{ id: 'start', label: 'Start', count: 1 }]);
-  const clipped = () => shown(area).filter(c => c.getBoundingClientRect().right > area.getBoundingClientRect().right + 0.5);
-  try {
-    b.setElsewhere(plans(2));
-    eq(shown(area).length, 2, 'both fit at first');
-    // Narrow the header to just above where the second chip folds, so any of
-    // the growths below leaves too little room for both, whatever the chip
-    // width is.
-    let w = 1400;
-    while (w > 400) {
-      fx.style.width = (w - 10) + 'px';
-      b.setElsewhere(plans(2));
-      if (shown(area).length < 2) break;
-      w -= 10;
-    }
-    fx.style.width = w + 'px';
-    b.setElsewhere(plans(2));
-    eq(shown(area).length, 2, `both fit at ${w}px`);
-    const grow = [
-      ['setStatus', () => b.setStatus('synced 4m ago · courts-macbook-pro-2 · a long status line that takes room')],
-      ['setLive', () => b.setLive('stale', 'restarted · continued in a new tab · reopen from the terminal')],
-      ['setPrimary', () => b.setPrimary({ label: 'A very long primary button label', run() {} })],
-      ['setCount', () => b.setCount('start', '1,234,567 of 9,876,543 · 1,234,567 of 9,876,543 · 1,234,567')],
-    ];
-    for (const [name, run] of grow) {
-      b.setStatus('');
-      b.setLive('live');
-      b.setPrimary(null);
-      b.setCount('start', 1);
-      b.setElsewhere(plans(2));
-      eq(shown(area).length, 2, `${name}: both fit before`);
-      run();
-      const more = area.querySelector('.kit-also-more');
-      assert(shown(area).length < 2 && !more.hidden, `${name}: the overflow folds into +N more (shown ${shown(area).length})`);
-      eq(more.textContent, `+${2 - shown(area).length} more`, name);
-      eq(clipped().length, 0, `${name}: no chip clipped`);
-      assert(area.scrollWidth <= area.clientWidth, `${name}: nothing spills`);
-    }
-    b.setCount('start', 1);
-    b.setStatus('');
-    eq(shown(area).length, 2, 'shrinking the content gives the room back');
   } finally { fx.style.width = ''; }
 });

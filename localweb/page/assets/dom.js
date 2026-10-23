@@ -31,84 +31,59 @@ const count = n => (n === undefined || n === null || n === '' ? null : h('span',
 const LIVE_TEXT = { live: 'live', polling: 'polling', down: 'offline', stale: 'stale' };
 
 // alsoOpen is the bar's "also open" area: other work a click away (diazo's
-// other plans). Chips that don't fit fold into "+N more", which opens a short
-// floating list of the rest. The bar refits it whenever the bar resizes.
+// other plans). It is one button of fixed width, so the bar never moves as
+// the work changes: it counts the work and how much waits on Court, and opens
+// a floating list with every item in full.
 function alsoOpen() {
-  const label = h('span', { class: 'kit-also-label' }, 'also open');
-  const more = h('button', { class: 'kit-also-chip kit-also-more', type: 'button', hidden: true, 'aria-haspopup': 'true', 'aria-expanded': 'false' });
-  const el = h('span', { class: 'kit-also', hidden: true }, label, more);
+  const dot = h('i');
+  const text = h('span', { class: 'kit-also-text' });
+  const btn = h('button', { class: 'kit-also-btn', type: 'button', 'aria-haspopup': 'true', 'aria-expanded': 'false' }, dot, text);
+  const el = h('span', { class: 'kit-also', hidden: true }, btn);
   let items = [];
-  let chips = [];
-  let fits = 0; // how many chips show; the rest are in the list
   let menu = null;
 
-  const chip = it => h('button', {
-    class: 'kit-also-chip', type: 'button', dataset: { tone: it.tone || 'idle' },
-    title: it.detail ? `${it.label} · ${it.detail}` : it.label,
+  const row = it => h('button', {
+    class: 'kit-also-row', type: 'button', role: 'menuitem', dataset: { tone: it.tone || 'idle' },
     onclick: () => { closeMenu(); it.onClick(); },
-  }, h('i'), h('span', { class: 'kit-also-name' }, it.label), it.detail ? h('span', { class: 'kit-also-detail' }, '· ' + it.detail) : null);
+  }, h('i'), h('span', { class: 'kit-also-name' }, it.label), it.detail ? h('span', { class: 'kit-also-detail' }, it.detail) : null);
 
   const onKey = e => { if (e.key === 'Escape' && !e.isComposing) closeMenu(); };
-  const onDown = e => { if (!menu.contains(e.target) && !more.contains(e.target)) closeMenu(); };
+  const onDown = e => { if (!menu.contains(e.target) && !btn.contains(e.target)) closeMenu(); };
   function closeMenu() {
     if (!menu) return;
     menu.remove();
     menu = null;
-    more.setAttribute('aria-expanded', 'false');
+    btn.setAttribute('aria-expanded', 'false');
     document.removeEventListener('keydown', onKey, true);
     document.removeEventListener('pointerdown', onDown, true);
   }
   function openMenu() {
-    menu = h('div', { class: 'kit-float kit-also-menu', role: 'menu' }, items.slice(fits).map(chip));
+    menu = h('div', { class: 'kit-float kit-also-menu', role: 'menu' }, items.map(row));
     document.body.append(menu);
-    const r = more.getBoundingClientRect();
+    const r = btn.getBoundingClientRect();
     menu.style.top = `${r.bottom + 4}px`;
     menu.style.right = `${Math.max(8, document.documentElement.clientWidth - r.right)}px`;
-    more.setAttribute('aria-expanded', 'true');
+    btn.setAttribute('aria-expanded', 'true');
     document.addEventListener('keydown', onKey, true);
     document.addEventListener('pointerdown', onDown, true);
   }
-  more.addEventListener('click', () => (menu ? closeMenu() : openMenu()));
-
-  // fit shows the label and every chip, then drops the label and folds chips
-  // from the end until the area no longer spills over. Folded, the area keeps
-  // at least the more chip's width, so "+N more" is never cut off.
-  function fit() {
-    const was = fits;
-    el.classList.remove('folded');
-    label.hidden = false;
-    more.hidden = true;
-    for (const c of chips) c.hidden = false;
-    fits = chips.length;
-    const over = () => el.scrollWidth > el.clientWidth;
-    if (el.isConnected && chips.length && over()) {
-      label.hidden = true;
-      while (fits > 0 && over()) {
-        chips[--fits].hidden = true;
-        more.hidden = false;
-        more.textContent = `+${chips.length - fits} more`;
-      }
-      el.classList.toggle('folded', !more.hidden);
-    }
-    if (fits !== was) closeMenu();
-  }
+  btn.addEventListener('click', () => (menu ? closeMenu() : openMenu()));
 
   return {
     el,
-    fit,
     set(next) {
       closeMenu();
       items = next.slice();
-      chips = items.map(chip);
-      el.replaceChildren(label, ...chips, more);
+      const you = items.filter(it => it.tone === 'you').length;
+      btn.dataset.tone = you ? 'you' : 'idle';
+      text.textContent = (you ? `${you} ${you === 1 ? 'needs' : 'need'} you · ` : '') + `${items.length} open`;
       el.hidden = !items.length;
-      fit();
     },
   };
 }
 
 // bar is the top bar: brand, section controls with counts, status text, the
-// "also open" area, the live pill, theme, and the one filled primary button.
+// "also open" button, the live pill, theme, and the one filled primary button.
 export function bar(o) {
   const ctls = new Map();
   for (const s of o.sections || []) {
@@ -140,34 +115,27 @@ export function bar(o) {
       el.querySelector('.kit-n')?.remove();
       const c = count(n);
       if (c) el.append(c);
-      also.fit();
     },
     setStatus(text, opts = {}) {
       status.textContent = text;
       if (opts.tone && opts.tone !== 'muted') status.dataset.tone = opts.tone;
       else status.removeAttribute('data-tone');
-      also.fit();
     },
     setLive(s, text) {
       pill.hidden = false;
       pill.dataset.state = s;
       const fallback = s === 'stale' && o.staleText ? o.staleText : LIVE_TEXT[s] || s;
       pill.replaceChildren(h('i'), text ?? fallback);
-      also.fit();
     },
     setPrimary(p) {
       run = p ? p.run : null;
       primary.hidden = !p;
       primary.textContent = p ? p.label : '';
-      also.fit();
     },
     setElsewhere(items) {
       also.set(items || []);
     },
   };
-  // The area refits when the bar resizes, and when a setter above changes the
-  // bar's other content (a fixed-width bar does not resize for that).
-  if (typeof ResizeObserver !== 'undefined') new ResizeObserver(() => also.fit()).observe(handle.el);
   handle.setSection(o.active);
   handle.setPrimary(o.primary || null);
   return handle;

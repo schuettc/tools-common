@@ -145,12 +145,11 @@ const theme = initTheme('kitdemo', b.themeControl);
 const forced = new URLSearchParams(location.search).get('theme');
 if (forced) theme.set(forced); // screenshots: ?theme=light|dark
 b.setLive('live');
-// The "also open" area: other work a click away; narrow the window to see
-// the chips fold into "+N more".
+// The "also open" button: other work a click away, listed when pressed.
 b.setElsewhere([
-  { label: 'muster: unanswered requests', detail: 'Decisions · needs you', tone: 'you', onClick() {} },
-  { label: 'Claude Code mods for channels', detail: 'agent writing the spec', tone: 'working', onClick() {} },
-  { label: 'casebook triage', detail: 'Plan · idle', onClick() {} },
+  { label: 'muster: unanswered requests', detail: 'needs you · Decisions', tone: 'you', onClick() {} },
+  { label: 'Claude Code mods for channels', detail: 'working · Spec', tone: 'working', onClick() {} },
+  { label: 'casebook triage', detail: 'idle · Plan', onClick() {} },
 ]);
 if (view === 'label') {
   app.append(b.el, h('div', { class: 'kit-main' }, ...labelView(b)));
