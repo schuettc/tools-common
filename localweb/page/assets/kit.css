@@ -166,6 +166,25 @@ code { font: .88em var(--kit-mono); }
   border: 0; border-radius: 6px; padding: 7px 26px; cursor: pointer;
 }
 .kit-primary[hidden] { display: none; }
+/* the bar's "also open" area: other work a click away, before the live pill.
+   Chips keep their size; what doesn't fit folds into "+N more" (dom.js).
+   The dot says who it waits on: you (signal), the agent (agent), nobody. */
+.kit-also { display: flex; align-items: center; gap: 6px; min-width: 0; overflow: hidden; }
+.kit-also.folded { min-width: min-content; } /* "+N more" is never cut off */
+.kit-also[hidden], .kit-also-label[hidden], .kit-also-chip[hidden] { display: none; }
+.kit-also-label { color: var(--kit-muted); white-space: nowrap; flex: none; }
+.kit-also-chip {
+  display: inline-flex; align-items: center; gap: 6px; flex: none; white-space: nowrap;
+  font: 12.5px var(--kit-mono); color: var(--kit-fg); background: transparent;
+  border: 1px solid var(--kit-line); border-radius: 6px; padding: 2px 9px; cursor: pointer;
+}
+.kit-also-chip i { width: 8px; height: 8px; border-radius: 50%; background: var(--kit-muted); flex: none; }
+.kit-also-chip[data-tone="you"] { border-color: var(--kit-signal); }
+.kit-also-chip[data-tone="you"] i { background: var(--kit-signal); }
+.kit-also-chip[data-tone="working"] i { background: var(--kit-agent); }
+.kit-also-name { max-width: 240px; overflow: hidden; text-overflow: ellipsis; }
+.kit-also-detail, .kit-also-more { color: var(--kit-muted); }
+.kit-also-menu { display: flex; flex-direction: column; align-items: stretch; gap: 4px; padding: 6px; max-width: min(440px, 92vw); }
 
 /* the list panel: a quiet ground */
 .kit-list {

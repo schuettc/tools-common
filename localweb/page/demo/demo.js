@@ -145,6 +145,13 @@ const theme = initTheme('kitdemo', b.themeControl);
 const forced = new URLSearchParams(location.search).get('theme');
 if (forced) theme.set(forced); // screenshots: ?theme=light|dark
 b.setLive('live');
+// The "also open" area: other work a click away; narrow the window to see
+// the chips fold into "+N more".
+b.setElsewhere([
+  { label: 'muster: unanswered requests', detail: 'Decisions · needs you', tone: 'you', onClick() {} },
+  { label: 'Claude Code mods for channels', detail: 'agent writing the spec', tone: 'working', onClick() {} },
+  { label: 'casebook triage', detail: 'Plan · idle', onClick() {} },
+]);
 if (view === 'label') {
   app.append(b.el, h('div', { class: 'kit-main' }, ...labelView(b)));
 } else {
