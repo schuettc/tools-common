@@ -251,3 +251,28 @@ func TestHookPayloadAppliesTheRule(t *testing.T) {
 		t.Fatalf("bad payload falls back to env: got %+v", c)
 	}
 }
+
+func TestIsClaude(t *testing.T) {
+	cases := []struct {
+		name                 string
+		claude, agent, child string
+		want                 bool
+	}{
+		{"neither", "", "", "", false},
+		{"only claude", "c1", "", "", true},
+		{"only agent (pi)", "", "a1", "", false},
+		{"both, no marker: claude launched from inside pi", "c1", "a1", "", true},
+		{"both + marker: bridge child belongs to pi", "c1", "a1", "1", false},
+		{"bridge child stamped with the same id", "s1", "s1", "1", false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Setenv("CLAUDE_CODE_SESSION_ID", tc.claude)
+			t.Setenv("AGENT_SESSION_ID", tc.agent)
+			t.Setenv("AGENT_SESSION_CHILD", tc.child)
+			if got := FromEnv().IsClaude(); got != tc.want {
+				t.Fatalf("IsClaude() = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}

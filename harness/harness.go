@@ -101,6 +101,14 @@ func FromHookPayload(payload []byte) Capture {
 	return c
 }
 
+// IsClaude reports whether the resolved session is Claude Code's own:
+// CLAUDE_CODE_SESSION_ID (or a hook payload's session_id) won the resolution
+// rule. A bridge child that declares itself part of a pi session is not, even
+// when both ids match.
+func (c Capture) IsClaude() bool {
+	return c.SessionID != "" && c.SessionID == c.ClaudeID && !c.Child
+}
+
 // Alias derives the fallback agent alias from the working directory — its
 // basename, mirroring how the operator's per-project tmux sessions are named
 // after their directory. "" when there is no usable directory ($MUSTER_ALIAS
