@@ -4,6 +4,16 @@ Root module releases are tagged `vX.Y.Z`; the separate `sqlitedb` module is
 tagged `sqlitedb/vX.Y.Z`. Releases before this file are described by their
 tags and PRs.
 
+## 0.17.0
+
+### Fixed
+- A tool's Claude Code mod stays quiet inside pi's claude-bridge, where the
+  bridge stamps `AGENT_SESSION_CHILD=1` with an `AGENT_SESSION_ID` on the
+  Claude Code children it spawns. The event belongs to the hosting pi session,
+  which its own channel carrier delivers, so the mod no longer spawns
+  `<tool> watch` there and submits a second turn. Each tool regenerates its
+  plugin to pick this up.
+
 ## 0.15.0
 
 ### Added
