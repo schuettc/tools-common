@@ -95,7 +95,13 @@ func (s *Server) Addr() string { return s.ln.Addr().String() }
 // Wait blocks until the server stops; nil after a clean shutdown.
 func (s *Server) Wait() error { return <-s.done }
 
-func (s *Server) cookieName() string { return s.cfg.Tool + "_token" }
+// cookieName carries the port: browsers keep cookies per host, not per
+// port, so two serves of one tool on 127.0.0.1 would otherwise overwrite
+// each other's sign-in.
+func (s *Server) cookieName() string {
+	_, port, _ := net.SplitHostPort(s.Addr())
+	return s.cfg.Tool + "_token_" + port
+}
 
 // ServeHTTP applies the host guard, the first-load token exchange, API auth,
 // and otherwise serves Assets.

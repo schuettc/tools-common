@@ -6,6 +6,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/http/cookiejar"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -89,7 +90,7 @@ func TestTokenQueryRedirectsAndSetsCookie(t *testing.T) {
 	}
 	var ck *http.Cookie
 	for _, c := range r.Cookies {
-		if c.Name == "lwtest_token" {
+		if c.Name == "lwtest_token_"+port(t, s) {
 			ck = c
 		}
 	}
@@ -101,9 +102,44 @@ func TestTokenQueryRedirectsAndSetsCookie(t *testing.T) {
 	}
 }
 
+func port(t *testing.T, s *Server) string {
+	t.Helper()
+	_, p, err := net.SplitHostPort(s.Addr())
+	if err != nil {
+		t.Fatal(err)
+	}
+	return p
+}
+
+// Browsers keep cookies per host, not per port: two serves of one tool on
+// 127.0.0.1 share a cookie jar, and each must keep its own sign-in.
+func TestTwoServesOnOneHostKeepTheirOwnSignIn(t *testing.T) {
+	a, _ := start(t, 0)
+	b, _ := start(t, 0)
+	jar, _ := cookiejar.New(nil)
+	c := &http.Client{Jar: jar}
+	get := func(s *Server, path string) int {
+		t.Helper()
+		resp, err := c.Get("http://" + s.Addr() + path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_ = resp.Body.Close()
+		return resp.StatusCode
+	}
+	get(a, "/?t="+a.Token)
+	get(b, "/?t="+b.Token)
+	if st := get(a, "/api/x"); st != http.StatusOK {
+		t.Errorf("first serve after the second signed in: %d", st)
+	}
+	if st := get(b, "/api/x"); st != http.StatusOK {
+		t.Errorf("second serve: %d", st)
+	}
+}
+
 func TestCookieAuthNeedsSameOriginForWrites(t *testing.T) {
 	s, _ := start(t, 0)
-	withCookie := func(q *http.Request) { q.AddCookie(&http.Cookie{Name: "lwtest_token", Value: s.Token}) }
+	withCookie := func(q *http.Request) { q.AddCookie(&http.Cookie{Name: "lwtest_token_" + port(t, s), Value: s.Token}) }
 	if r := do(t, s, "GET", "/api/x", withCookie); r.Status != 200 {
 		t.Fatalf("cookie GET: %d", r.Status)
 	}
