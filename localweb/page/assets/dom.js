@@ -1,4 +1,5 @@
 import { createSelection } from './selection.js';
+import { MESSAGE_STATES } from './msgstate.js';
 
 // DOM builders for the kit's components. Each returns plain elements styled by
 // kit.css; the CSS classes are the contract and also work from static HTML.
@@ -381,4 +382,15 @@ export function noteField(o) {
   });
   input.addEventListener('blur', commit);
   return input;
+}
+
+const stateLabel = new Map(MESSAGE_STATES.map(s => [s.state, s.label]));
+
+// messagePill is where one message Court sent stands: the state's pill, its
+// label from tools-common/msgstate's list (msgstate.js), and the line under it
+// (who has it, or what the agent is doing). An unknown state shows as itself.
+export function messagePill(state, line) {
+  return h('span', { class: 'kit-msg' },
+    h('span', { class: 'kit-pill', dataset: { state } }, stateLabel.get(state) ?? state),
+    line ? h('span', { class: 'kit-msg-line' }, line) : null);
 }

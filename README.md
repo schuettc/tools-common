@@ -152,6 +152,12 @@ srv, err := localweb.Start(ctx, localweb.Config{
 - **Components** (`dom.js`): `bar`, `list`, `facts`, `card`, `buttons`,
   `codeBlock`, `fold`, `noteField`, and `h`. The `.kit-*` classes are the
   contract and work from static HTML too.
+- **Message pill** (`dom.js`, labels in `msgstate.js`): `messagePill(state,
+  line)` is where a message Court sent stands: a `.kit-pill[data-state]` in the
+  state's colour, its label, and the line under it. `msgstate.js`
+  (`MESSAGE_STATES`) is generated from the `msgstate` package by
+  `go test ./localweb/page -run TestMessageStatesFile -update`, and that test
+  fails when the two drift.
 - **Keyboard** (`keys.js`): family defaults plus `register`. A clash throws at
   registration. While a text field has focus, only `Esc` and `inField` keys fire.
 - **API** (`api.js`): `createApi()` sends JSON with the page's cookie. Pass

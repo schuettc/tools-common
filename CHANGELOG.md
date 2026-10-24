@@ -11,6 +11,11 @@ tags and PRs.
   answered, declined, failed, no_reply), each state's label, `Final(s)` and
   `Allowed(from, to)` for the moves the lifecycle spec draws. `State` has a
   `Values()` method, so a tool's wire generator emits it as a union.
+- Page kit `messagePill(state, line)`: a message's state pill
+  (`.kit-pill[data-state]`, one variant per state in the kit's colours) with
+  its label and the line under it. The labels come from `msgstate.js`
+  (`MESSAGE_STATES`), generated from `msgstate`; a test fails when they drift.
+  The demo page shows every state.
 
 ## 0.22.0
 

@@ -1,4 +1,4 @@
-import { h, bar, list, facts, card, buttons, codeBlock, fold, noteField, createKeys, initTheme } from '/_kit/kit.js';
+import { h, bar, list, facts, card, buttons, codeBlock, fold, noteField, messagePill, MESSAGE_STATES, createKeys, initTheme } from '/_kit/kit.js';
 
 const MARK = `<svg viewBox="0 0 64 64"><rect width="64" height="64" rx="14" fill="#14161d"/><path d="M13 22H28M13 32H26M13 42H28" stroke="#9aa0ab" stroke-width="3.6" stroke-linecap="round"/><path d="M13 22H28" stroke="#d98f66" stroke-width="3.6" stroke-linecap="round"/><path d="M33 17V47" stroke="#d98f66" stroke-width="2.4"/><rect x="38" y="18" width="14" height="28" rx="3" fill="none" stroke="#d98f66" stroke-width="2.4"/></svg>`;
 const mark = () => {
@@ -50,6 +50,17 @@ function attention(b) {
   return [l.el, read];
 }
 
+// One line per message state, as a tool would write it under the pill.
+const MESSAGE_LINES = {
+  sent: 'mid-turn: read when this turn ends',
+  with_agent: 'in pi · 2s ago',
+  working: 'rewriting the understanding',
+  answered: 'posted the corrected understanding',
+  declined: 'already covered by DCSN2',
+  failed: 'the folder is locked by another session',
+  no_reply: 'the turn ended without a reply',
+};
+
 function item(it) {
   return h('div', { class: 'kit-doc' },
     h('div', { class: 'kit-kick' }, `${it.kind} · schuettc/${it.key} · incoming`),
@@ -59,6 +70,8 @@ function item(it) {
     card({ edge: 'agent', head: 'pi proposes · keep', body: h('span', null, 'Still valid after #151; the race is in ', h('code', null, 'nudge.go:88'), '.'), actions: [{ label: 'accept', fill: true }, { label: 'change…' }, { label: 'reject' }] }),
     h('div', { class: 'kit-label' }, 'decide'),
     buttons([{ label: 'keep' }, { label: 'wait…' }, { label: 'watch…' }, { label: 'close', danger: true }, { label: 'ignore' }]),
+    h('div', { class: 'kit-label' }, 'messages'),
+    h('div', { style: 'display:flex; flex-wrap:wrap; gap:14px 22px' }, MESSAGE_STATES.map(({ state }) => messagePill(state, MESSAGE_LINES[state]))),
     h('div', { class: 'kit-label' }, 'evidence'),
     h('p', null, 'Linked branch ', h('code', null, 'fix/codex-enter'), ' exists locally, 0 unpushed.'),
     h('div', { class: 'kit-label' }, 'history'),
