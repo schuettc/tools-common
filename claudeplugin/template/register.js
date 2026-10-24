@@ -8,7 +8,7 @@
 // and reports back by running the binary, passing a line's "report" token
 // unchanged:
 //   BIN report landed <token>   the line's prompt started a turn
-//   BIN report turn-ended       a turn completed
+//   BIN report turn-ended       a turn completed after one of its lines landed
 
 const NAME = {{.NameJS}}
 const BIN = {{.BinJS}}
@@ -29,6 +29,9 @@ let pending = []
 let generation = 0
 let current = null
 let delay = FIRST_DELAY
+// landed is true once one of this mod's lines started a turn, until that turn
+// completes: only then does turn.complete run the binary.
+let landed = false
 
 // report runs `BIN report ...args` in this session. A failure goes to the
 // debug log (a binary older than its plugin has no report command, and would
@@ -58,7 +61,10 @@ async function submitPrompt($, ev) {
   }
   if (RETRY.some(s => reason.includes(s))) pending.push(ev)
   else if (reason) $.ui.log(NAME + ' event not delivered: ' + reason)
-  else if (typeof ev.report === 'string' && ev.report) void report($, ['landed', ev.report])
+  else if (typeof ev.report === 'string' && ev.report) {
+    landed = true
+    void report($, ['landed', ev.report])
+  }
 }
 
 async function watch($, gen) {
@@ -133,7 +139,10 @@ export function register(on) {
   })
 
   on('turn.complete', async ($, e, next) => {
-    void report($, ['turn-ended'])
+    if (landed) {
+      landed = false
+      void report($, ['turn-ended'])
+    }
     if (pending.length) {
       const events = pending
       // Emptied first, so a second run of this hook doesn't submit them twice.

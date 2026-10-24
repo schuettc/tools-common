@@ -361,15 +361,30 @@ func TestModReportsNoLandedForADroppedPromptOrNoToken(t *testing.T) {
 	}
 }
 
-// TestModReportsTurnEndedOnTurnComplete: every turn.complete runs `BIN
-// report turn-ended` in this session; the server works out what it ends.
+// TestModReportsTurnEndedOnTurnComplete: a turn.complete after one of this
+// mod's events landed runs `BIN report turn-ended` in this session; the server
+// works out what it ends.
 func TestModReportsTurnEndedOnTurnComplete(t *testing.T) {
 	files, err := Render(galley)
 	if err != nil {
 		t.Fatal(err)
 	}
+	r := runModWith(t, files["hooks/register.js"], `{"text":"hi","report":"t7"}`+"\n", modOpts{TurnComplete: true})
+	if len(r.Reports) != 2 || strings.Join(r.Reports[1].Argv, " ") != galley.Bin+" report turn-ended" || r.Reports[1].Env["CLAUDE_CODE_SESSION_ID"] != "sid" {
+		t.Fatalf("reports %+v", r.Reports)
+	}
+}
+
+// TestModReportsNoTurnEndedWhenNothingLanded: a turn in which none of this
+// mod's events landed runs nothing, so seven family plugins don't start seven
+// binaries at the end of every turn.
+func TestModReportsNoTurnEndedWhenNothingLanded(t *testing.T) {
+	files, err := Render(galley)
+	if err != nil {
+		t.Fatal(err)
+	}
 	r := runModWith(t, files["hooks/register.js"], `{"text":"hi"}`+"\n", modOpts{TurnComplete: true})
-	if len(r.Reports) != 1 || strings.Join(r.Reports[0].Argv, " ") != galley.Bin+" report turn-ended" || r.Reports[0].Env["CLAUDE_CODE_SESSION_ID"] != "sid" {
+	if len(r.Reports) != 0 {
 		t.Fatalf("reports %+v", r.Reports)
 	}
 }
