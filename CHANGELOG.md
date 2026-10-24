@@ -4,6 +4,21 @@ Root module releases are tagged `vX.Y.Z`; the separate `sqlitedb` module is
 tagged `sqlitedb/vX.Y.Z`. Releases before this file are described by their
 tags and PRs.
 
+## 0.19.0
+
+### Added
+- `localweb.CanShare()` (macOS only) and `localweb.PutFile(path)`, which puts
+  the file itself on the macOS clipboard so a paste attaches it; the path is
+  an argument to the script, never part of its text. Moved from galley.
+- Page kit `share.js`: `shareMenu(button, items, onPick)` builds a Share ▾
+  button's menu from `{label, act}` items, right-aligned under the button,
+  closing on a pick, an outside click, Esc or a resize; with the labels
+  (`SHARE_*`), `sharedLine(path)` and `SHARE_REPLY_MS`. It imports nothing
+  else from the kit, so a page can bundle it alone. Moved from galley.
+- Page kit `share.css`: styles the menu through `--share-*` properties
+  (ground, ink, line, hover, lift, font) that default to the kit's tokens;
+  `kit.css` imports it.
+
 ## 0.18.0
 
 ### Added
