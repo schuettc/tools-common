@@ -1,6 +1,7 @@
 package localweb
 
 import (
+	"path/filepath"
 	"testing"
 	"time"
 )
@@ -146,5 +147,75 @@ func TestTabsTwoStreamsOnOneTabBothMustClose(t *testing.T) {
 	c.advance(3*time.Minute + time.Second)
 	if got := tabs.Pick("PLAN1"); got.Kind != TabNone {
 		t.Fatalf("both closed and silent: Pick = %+v, want None", got)
+	}
+}
+
+// A kept list survives a restart: a new Tabs keeping the same file knows the
+// tabs the old one knew, so the first Pick after a restart doesn't open a tab.
+func TestTabsKeepSurvivesARestart(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "tabs.json")
+	c := &clock{t: time.Date(2026, 10, 23, 12, 0, 0, 0, time.UTC)}
+	old := NewTabs(c.now)
+	if err := old.Keep(path); err != nil {
+		t.Fatal(err)
+	}
+	old.Seen("hidden", "PLAN1")
+	c.advance(time.Minute)
+	again := NewTabs(c.now)
+	if err := again.Keep(path); err != nil {
+		t.Fatal(err)
+	}
+	if got := again.Pick("PLAN1"); got != (Choice{Kind: TabHere, Tab: "hidden"}) {
+		t.Fatalf("Pick after restart = %+v, want TabHere hidden", got)
+	}
+}
+
+// A tab holding its stream when serve stops counts as seen at the stop, however
+// long ago its stream opened.
+func TestTabsKeepSaveAtStopKeepsAStreamingTab(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "tabs.json")
+	c := &clock{t: time.Date(2026, 10, 23, 12, 0, 0, 0, time.UTC)}
+	old := NewTabs(c.now)
+	if err := old.Keep(path); err != nil {
+		t.Fatal(err)
+	}
+	old.Connected("visible", "")
+	c.advance(20 * time.Minute)
+	if err := old.Save(); err != nil {
+		t.Fatal(err)
+	}
+	c.advance(time.Second)
+	again := NewTabs(c.now)
+	if err := again.Keep(path); err != nil {
+		t.Fatal(err)
+	}
+	if got := again.Pick("PLAN1"); got != (Choice{Kind: TabMove, Tab: "visible"}) {
+		t.Fatalf("Pick after restart = %+v, want TabMove visible", got)
+	}
+}
+
+// A list saved longer ago than TabSilence is forgotten, and so is one never
+// written.
+func TestTabsKeepForgetsAnOldOrMissingList(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "tabs.json")
+	c := &clock{t: time.Date(2026, 10, 23, 12, 0, 0, 0, time.UTC)}
+	fresh := NewTabs(c.now)
+	if err := fresh.Keep(path); err != nil {
+		t.Fatalf("Keep on a missing file: %v", err)
+	}
+	if got := fresh.Pick("PLAN1"); got.Kind != TabNone {
+		t.Fatalf("Pick = %+v, want None", got)
+	}
+	fresh.Connected("visible", "")
+	if err := fresh.Save(); err != nil {
+		t.Fatal(err)
+	}
+	c.advance(TabSilence + time.Second)
+	again := NewTabs(c.now)
+	if err := again.Keep(path); err != nil {
+		t.Fatal(err)
+	}
+	if got := again.Pick("PLAN1"); got.Kind != TabNone {
+		t.Fatalf("Pick on an old list = %+v, want None", got)
 	}
 }
