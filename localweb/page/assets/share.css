@@ -9,7 +9,10 @@
      --share-line    its hairline            (--kit-line)
      --share-hover   a row's hover outline   (--kit-signal)
      --share-lift    its elevation           (--kit-lift)
-     --share-font    its rows' font family   (--kit-mono) */
+     --share-font    its rows' font family   (--kit-mono)
+
+   A row takes the page's font size and line height otherwise, as galley's
+   rows did, and only its size is set: 12px. */
 
 .kit-share-menu {
   position: absolute;
@@ -23,12 +26,14 @@
   background: var(--share-ground, var(--kit-card, #ffffff));
   color: var(--share-ink, var(--kit-fg, #1a1d27));
   box-shadow: var(--share-lift, var(--kit-lift, 0 6px 22px rgba(0, 0, 0, .16)));
+  font-family: var(--share-font, var(--kit-mono, ui-monospace, Menlo, monospace));
 }
 .kit-share-menu[hidden] { display: none; }
 /* A row rests borderless and takes the hairline back on hover; it reserves
    the 1px either way, so hovering one cannot move the others. */
 .kit-share-menu button {
-  font: 12px var(--share-font, var(--kit-mono, ui-monospace, Menlo, monospace));
+  font: inherit;
+  font-size: 12px;
   padding: 5px 14px;
   border: 1px solid transparent;
   border-radius: 6px;

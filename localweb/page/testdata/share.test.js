@@ -71,3 +71,15 @@ test('share: sharedLine names the file copied', () => {
   eq(sharedLine('/Users/x/docs/plan.html'), 'plan.html copied · paste to attach');
   eq(SHARE_REPLY_MS, 5000);
 });
+
+test("share: a row keeps the page's line height, so a page's menu is as tall as before", () => {
+  document.body.style.lineHeight = '1.6';
+  const { button, menu } = setup();
+  try {
+    button.click();
+    const row = menu.el.querySelector('[role="menuitem"]');
+    const cs = getComputedStyle(row);
+    eq(cs.fontSize, '12px');
+    assert(Math.abs(parseFloat(cs.lineHeight) - 19.2) < 0.01, `line height ${cs.lineHeight}`);
+  } finally { menu.destroy(); document.body.style.lineHeight = ''; }
+});
