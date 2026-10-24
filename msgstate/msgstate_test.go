@@ -77,3 +77,24 @@ func TestAllowedPinsTheSpecDiagram(t *testing.T) {
 		t.Error("an unknown state must not be allowed either way")
 	}
 }
+
+// TestAcknowledgeTreatsAnAnswerAsProofItLanded: the agent can answer a message
+// before the harness's landed report reaches the tool (pi lists a held message
+// in its status; Claude Code's report is its own process). An acknowledgement
+// proves the message reached the agent, so from sent it passes through
+// with_agent; everything else follows Allowed.
+func TestAcknowledgeTreatsAnAnswerAsProofItLanded(t *testing.T) {
+	for _, to := range []State{Working, Answered, Declined, Failed} {
+		if !Acknowledge(Sent, to) {
+			t.Errorf("Acknowledge(sent, %s) refused", to)
+		}
+		if !Acknowledge(WithAgent, to) || !Acknowledge(NoReply, to) && to != Working {
+			t.Errorf("Acknowledge refused a move Allowed draws, to %s", to)
+		}
+	}
+	for _, c := range [][2]State{{Sent, WithAgent}, {Sent, NoReply}, {Answered, Working}, {Working, WithAgent}, {NoReply, Working}} {
+		if Acknowledge(c[0], c[1]) {
+			t.Errorf("Acknowledge(%s, %s) allowed", c[0], c[1])
+		}
+	}
+}

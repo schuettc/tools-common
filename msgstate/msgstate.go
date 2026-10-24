@@ -75,3 +75,16 @@ var next = map[State][]State{
 func Allowed(from, to State) bool {
 	return slices.Contains(next[from], to)
 }
+
+// Acknowledge reports whether the agent's acknowledgement may move a message
+// in from to to (working, answered, declined or failed). It is Allowed, plus
+// one rule: an acknowledgement proves the message reached the agent, so a
+// message still sent (its landed report not in yet) moves as if through
+// with_agent. Tools call it for the agent's replies and Allowed for the
+// harness's reports.
+func Acknowledge(from, to State) bool {
+	if from == Sent {
+		return Allowed(WithAgent, to) && to != NoReply
+	}
+	return Allowed(from, to)
+}

@@ -11,6 +11,8 @@ tags and PRs.
   answered, declined, failed, no_reply), each state's label, `Final(s)` and
   `Allowed(from, to)` for the moves the lifecycle spec draws. `State` has a
   `Values()` method, so a tool's wire generator emits it as a union.
+  `Acknowledge(from, to)` is for the agent's replies: it lets a message still
+  `sent` (its landed report not in yet) be settled or marked working.
 - Page kit `messagePill(state, line)`: a message's state pill
   (`.kit-pill[data-state]`, one variant per state in the kit's colours) with
   its label and the line under it. The labels come from `msgstate.js`
@@ -29,9 +31,10 @@ tags and PRs.
   callback, prints nothing, and does nothing in a bridge child.
 - The Claude Code mod reports back: when a line's prompt starts a turn
   (`prompt.submit` resolves without a drop) it runs `<bin> report landed
-  <token>` with the line's `report` token, and on every `turn.complete` it
-  runs `<bin> report turn-ended`, both in the session. A failed report goes to
-  the debug log and is not retried. A tool's plugin must be regenerated, and
+  <token>` with the line's `report` token, and on a `turn.complete` after one
+  of its lines landed it runs `<bin> report turn-ended`, both in the session,
+  one report at a time so they reach the server in order. A failed report goes
+  to the debug log and is not retried. A tool's plugin must be regenerated, and
   its binary must mount `ReportCommand` in the same release.
 
 ## 0.22.0
