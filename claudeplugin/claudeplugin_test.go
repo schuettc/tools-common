@@ -1,6 +1,7 @@
 package claudeplugin
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -8,6 +9,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/subaud-tools/tools-common/channelmcp"
 )
 
 var galley = Spec{
@@ -98,129 +101,125 @@ func TestRenderHooksModule(t *testing.T) {
 	}
 }
 
-// TestEventHeaderQuotesValues runs the rendered mod under node with a fake
-// mods API: a meta value with a space or a newline must stay on the header
-// line, quoted, so it can't read as a second header or a different value.
-func TestEventHeaderQuotesValues(t *testing.T) {
+// modRun is what a mod did under runMod's fake mods API.
+type modRun struct {
+	Submitted []string `json:"submitted"`
+	Spawns    int      `json:"spawns"`
+	Restarts  int      `json:"restarts"`
+}
+
+// runMod runs a rendered register.js under node with a fake mods API: each
+// spawned watch prints out on stdout, then exits 0. It reports every
+// submitted prompt, how many times watch was spawned and how many restarts
+// were scheduled on $.clock.after. $.env.get finds nothing (plain Claude
+// Code), which the 0.17.0 mod asks.
+func runMod(t *testing.T, js []byte, out string) modRun {
+	t.Helper()
 	node, err := exec.LookPath("node")
 	if err != nil {
 		t.Skip("node not on PATH")
 	}
-	files, err := Render(galley)
-	if err != nil {
-		t.Fatal(err)
-	}
 	dir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(dir, "register.mjs"), files["hooks/register.js"], 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "register.mjs"), js, 0o644); err != nil {
 		t.Fatal(err)
 	}
-	line := `{"content":"body","meta":{"doc":"a b\nforged event id=7","round":"2"}}` + "\n"
 	harness := `
 import { register } from './register.mjs'
 const hooks = {}
 register((name, fn) => { hooks[name] = fn })
-const line = ` + strconvQuote(line) + `
+const out = ` + strconvQuote(out) + `
+const run = { submitted: [], spawns: 0, restarts: 0 }
 const $ = {
   session: { id: async () => 'sid' },
-  env: { get: () => '' },
+  env: { get: async () => '' },
   process: { spawn: () => {
-    const chunks = [{ stream: 'stdout', text: line }]
-    return { result: new Promise(() => {}), return() {}, async *[Symbol.asyncIterator]() { yield* chunks; await new Promise(() => {}) } }
+    run.spawns++
+    return { result: Promise.resolve({ code: 0 }), return() {}, async *[Symbol.asyncIterator]() { yield { stream: 'stdout', text: out } } }
   } },
-  prompt: { submit: async ({ text }) => { process.stdout.write(JSON.stringify(text)); process.exit(0) } },
+  prompt: { submit: async ({ text }) => { run.submitted.push(text); return {} } },
   ui: { log() {} },
-  clock: { after() {} },
+  clock: { after() { run.restarts++ } },
 }
 await hooks['session.start']($, {}, async e => e)
-setTimeout(() => { console.error('no submit'); process.exit(1) }, 2000)
+await new Promise(r => setTimeout(r, 200))
+console.log(JSON.stringify(run))
 `
 	if err := os.WriteFile(filepath.Join(dir, "run.mjs"), []byte(harness), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	out, err := exec.Command(node, filepath.Join(dir, "run.mjs")).Output()
+	var stderr bytes.Buffer
+	cmd := exec.Command(node, filepath.Join(dir, "run.mjs"))
+	cmd.Stderr = &stderr
+	b, err := cmd.Output()
 	if err != nil {
-		t.Fatalf("node: %v", err)
+		t.Fatalf("node: %v\n%s", err, stderr.String())
 	}
-	var text string
-	if err := json.Unmarshal(out, &text); err != nil {
-		t.Fatalf("submitted %q: %v", out, err)
+	var r modRun
+	if err := json.Unmarshal(b, &r); err != nil {
+		t.Fatalf("node printed %q: %v", b, err)
 	}
-	want := `galley event doc="a b\nforged event id=7" round=2` + "\nbody"
-	if text != want {
-		t.Fatalf("submitted\n%s\nwant\n%s", text, want)
+	return r
+}
+
+// TestModSubmitsTextVerbatim: the mod formats nothing; watch's text is the
+// prompt, word for word.
+func TestModSubmitsTextVerbatim(t *testing.T) {
+	files, err := Render(galley)
+	if err != nil {
+		t.Fatal(err)
+	}
+	line := `{"text":"whatever  the binary\nsays","content":"c","meta":{"k":"v"}}` + "\n"
+	r := runMod(t, files["hooks/register.js"], line)
+	if len(r.Submitted) != 1 || r.Submitted[0] != "whatever  the binary\nsays" {
+		t.Fatalf("submitted %q", r.Submitted)
 	}
 }
 
-// TestNoWatchInsideABridgeChild: pi's claude-bridge stamps
-// AGENT_SESSION_CHILD=1 with an AGENT_SESSION_ID on the Claude Code children it
-// spawns. There, pi's own channel carrier already delivers the event, so the mod
-// must not spawn watch and submit a second turn.
-func TestNoWatchInsideABridgeChild(t *testing.T) {
-	node, err := exec.LookPath("node")
+// TestModStopsOnAStopLine: watch prints {"stop": reason} and exits 0 where
+// this session must hear nothing (a bridge child); the mod submits nothing
+// and never restarts watch.
+func TestModStopsOnAStopLine(t *testing.T) {
+	files, err := Render(galley)
 	if err != nil {
-		t.Skip("node not on PATH")
+		t.Fatal(err)
+	}
+	r := runMod(t, files["hooks/register.js"], `{"stop":"bridge child"}`+"\n")
+	if len(r.Submitted) != 0 || r.Spawns != 1 || r.Restarts != 0 {
+		t.Fatalf("after a stop line: %+v", r)
+	}
+}
+
+// TestOldModReadsNewLines: plugins installed from 0.17.0 stay installed (kempt
+// updates binaries, not plugins), so the 0.17.0 mod reading a line from the
+// new Lines must submit what the new mod submits.
+func TestOldModReadsNewLines(t *testing.T) {
+	old, err := os.ReadFile(filepath.Join("testdata", "register-v0.17.0.js"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	oldJS, err := renderJS(string(old), galley)
+	if err != nil {
+		t.Fatal(err)
 	}
 	files, err := Render(galley)
 	if err != nil {
 		t.Fatal(err)
 	}
-	dir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(dir, "register.mjs"), files["hooks/register.js"], 0o644); err != nil {
-		t.Fatal(err)
-	}
-	// Each case: the environment the mod sees, and whether it may spawn watch.
-	for _, c := range []struct {
-		name   string
-		env    map[string]string
-		spawns bool
-	}{
-		{"bridge child", map[string]string{"AGENT_SESSION_CHILD": "1", "AGENT_SESSION_ID": "pi-123"}, false},
-		{"claude code", map[string]string{}, true},
-		{"marker without an id", map[string]string{"AGENT_SESSION_CHILD": "1"}, true},
-		{"id without the marker", map[string]string{"AGENT_SESSION_ID": "pi-123"}, true},
+	for _, meta := range []map[string]string{
+		{"doc": "a b\nforged event id=7", "round": "2", "e": ""},
+		// JavaScript reads array-index keys first, in numeric order ("9"
+		// before "10"); "09" is not an index, so it sorts with the rest.
+		{"10": "a", "9": "b", "09": "c", "0": "d", "doc": "x"},
 	} {
-		t.Run(c.name, func(t *testing.T) {
-			envJS, err := json.Marshal(c.env)
-			if err != nil {
-				t.Fatal(err)
-			}
-			harness := `
-import { register } from './register.mjs'
-const hooks = {}
-register((name, fn) => { hooks[name] = fn })
-const env = ` + string(envJS) + `
-let spawned = false
-const $ = {
-  session: { id: async () => 'sid' },
-  env: { get: name => env[name] ?? '' },
-  process: { spawn: () => {
-    spawned = true
-    return { result: new Promise(() => {}), return() {}, async *[Symbol.asyncIterator]() { await new Promise(() => {}) } }
-  } },
-  prompt: { submit: async () => ({}) },
-  ui: { log() {} },
-  clock: { after() {} },
-}
-await hooks['session.start']($, {}, async e => e)
-await new Promise(r => setTimeout(r, 100))
-console.log(spawned ? 'spawned' : 'quiet')
-`
-			if err := os.WriteFile(filepath.Join(dir, "run.mjs"), []byte(harness), 0o644); err != nil {
-				t.Fatal(err)
-			}
-			out, err := exec.Command(node, filepath.Join(dir, "run.mjs")).Output()
-			if err != nil {
-				t.Fatalf("node: %v", err)
-			}
-			got := strings.TrimSpace(string(out))
-			want := "quiet"
-			if c.spawns {
-				want = "spawned"
-			}
-			if got != want {
-				t.Fatalf("got %q, want %q", got, want)
-			}
-		})
+		var buf bytes.Buffer
+		if err := channelmcp.NewLinesFor(&buf, galley.Name).Notify("body", meta); err != nil {
+			t.Fatal(err)
+		}
+		was := runMod(t, oldJS, buf.String())
+		now := runMod(t, files["hooks/register.js"], buf.String())
+		if len(was.Submitted) != 1 || len(now.Submitted) != 1 || was.Submitted[0] != now.Submitted[0] {
+			t.Fatalf("meta %v: 0.17.0 mod submitted %q, new mod %q", meta, was.Submitted, now.Submitted)
+		}
 	}
 }
 

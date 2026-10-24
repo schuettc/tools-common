@@ -4,6 +4,27 @@ Root module releases are tagged `vX.Y.Z`; the separate `sqlitedb` module is
 tagged `sqlitedb/vX.Y.Z`. Releases before this file are described by their
 tags and PRs.
 
+## 0.18.0
+
+### Added
+- `channelmcp.StartWatch(w, tool)`: the one start every tool's `<tool> watch`
+  makes. In a bridge child (the harness Child rule: `AGENT_SESSION_CHILD=1`
+  with a non-empty `AGENT_SESSION_ID`) it prints `{"stop": reason}` and
+  reports don't run (the caller exits 0); otherwise it returns the `Lines`
+  writer for the tool.
+- `channelmcp.NewLinesFor(w, tool)`: each line also carries `text`, the whole
+  prompt (`<tool> event`, a ` key=value` per meta pair, a newline, the
+  content), exactly what the 0.17.0 mod builds. `content` and `meta` stay, so
+  plugins installed from 0.17.0 keep working against a new binary. The line
+  format is additive. `NewLines` (no tool name) writes no `text`.
+
+### Changed
+- The Claude Code mod is a thin shim, since kempt updates a tool's binary but
+  not its installed plugin: it submits each line's `text` word for word, and
+  on a `stop` line logs the reason and never restarts `watch`. It no longer
+  formats events or reads the environment; the binary decides both. Each
+  tool regenerates its plugin and calls `StartWatch` from its `watch`.
+
 ## 0.17.0
 
 ### Fixed

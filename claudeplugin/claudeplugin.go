@@ -92,9 +92,17 @@ func Render(s Spec) (Files, error) {
 	if files["hooks/hooks.json"], err = indent(hooks); err != nil {
 		return nil, err
 	}
+	if files["hooks/register.js"], err = renderJS(registerJS, s); err != nil {
+		return nil, err
+	}
+	return files, nil
+}
+
+// renderJS fills a register.js template with s's name and binary.
+func renderJS(src string, s Spec) ([]byte, error) {
 	nameJS, _ := json.Marshal(s.Name)
 	binJS, _ := json.Marshal(s.Bin)
-	t, err := template.New("register.js").Parse(registerJS)
+	t, err := template.New("register.js").Parse(src)
 	if err != nil {
 		return nil, err
 	}
@@ -102,8 +110,7 @@ func Render(s Spec) (Files, error) {
 	if err := t.Execute(&b, map[string]string{"NameJS": string(nameJS), "BinJS": string(binJS)}); err != nil {
 		return nil, err
 	}
-	files["hooks/register.js"] = b.Bytes()
-	return files, nil
+	return b.Bytes(), nil
 }
 
 func indent(v any) ([]byte, error) {
