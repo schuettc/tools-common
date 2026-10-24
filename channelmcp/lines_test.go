@@ -115,3 +115,52 @@ func TestEventHeaderQuotesValues(t *testing.T) {
 		})
 	}
 }
+
+// TestStartWatchStopsInABridgeChild: pi's claude-bridge stamps
+// AGENT_SESSION_CHILD=1 with an AGENT_SESSION_ID on the Claude Code children it
+// spawns. There, pi's own channel carrier already delivers the event, so watch
+// prints a stop line (the mod then never restarts it) and does not run.
+func TestStartWatchStopsInABridgeChild(t *testing.T) {
+	for _, c := range []struct {
+		name  string
+		child string
+		id    string
+		runs  bool
+	}{
+		{"bridge child", "1", "pi-123", false},
+		{"claude code", "", "", true},
+		{"marker without an id", "1", "", true},
+		{"id without the marker", "", "pi-123", true},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			t.Setenv("AGENT_SESSION_CHILD", c.child)
+			t.Setenv("AGENT_SESSION_ID", c.id)
+			var buf bytes.Buffer
+			l, run, err := StartWatch(&buf, "galley")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if run != c.runs {
+				t.Fatalf("run = %v, want %v", run, c.runs)
+			}
+			if !c.runs {
+				var stop struct {
+					Stop string `json:"stop"`
+				}
+				if err := json.Unmarshal(buf.Bytes(), &stop); err != nil || stop.Stop == "" || !strings.HasSuffix(buf.String(), "}\n") {
+					t.Fatalf("want one stop line with a reason, got %q (%v)", buf.String(), err)
+				}
+				return
+			}
+			if buf.Len() != 0 {
+				t.Fatalf("a running watch prints nothing at start, got %q", buf.String())
+			}
+			if err := l.Notify("body", nil); err != nil {
+				t.Fatal(err)
+			}
+			if !strings.Contains(buf.String(), `"text":"galley event\nbody"`) {
+				t.Fatalf("the writer must carry the tool's name: %s", buf.String())
+			}
+		})
+	}
+}

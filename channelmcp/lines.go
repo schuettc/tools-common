@@ -7,6 +7,8 @@ import (
 	"sort"
 	"strings"
 	"sync"
+
+	"github.com/subaud-tools/tools-common/harness"
 )
 
 // Pusher is where a tool's wait loop sends each event: a *Server for
@@ -153,4 +155,24 @@ func checkMeta(meta map[string]string) error {
 		}
 	}
 	return nil
+}
+
+// StartWatch is the start every tool's `<tool> watch` makes. In a bridge child
+// (harness.Capture.Child: pi's claude-bridge runs this Claude Code session as
+// part of a pi session, whose own channel carrier delivers the events) it
+// prints {"stop": reason} and returns run false: the caller exits 0, and the
+// mod logs the reason and never restarts watch for this session. Otherwise it
+// returns the Lines writer for tool's events.
+func StartWatch(w io.Writer, tool string) (l *Lines, run bool, err error) {
+	if harness.FromEnv().Child {
+		b, err := json.Marshal(struct {
+			Stop string `json:"stop"`
+		}{"bridge child: the hosting pi session's channel delivers " + tool + " events"})
+		if err != nil {
+			return nil, false, err
+		}
+		_, err = w.Write(append(b, '\n'))
+		return nil, false, err
+	}
+	return NewLinesFor(w, tool), true, nil
 }
