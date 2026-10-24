@@ -39,6 +39,9 @@
    signal ring; a mouse click draws none. Theme follows the system unless
    html[data-theme] overrides it (theme.js remembers the choice). */
 
+/* The Share menu's own sheet: it also stands alone for a page without this one. */
+@import url("share.css");
+
 :root {
   color-scheme: light dark;
   --kit-bg: light-dark(#f4f5f8, #14161d);

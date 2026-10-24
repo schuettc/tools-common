@@ -16,7 +16,7 @@ and `localweb/page` imports nothing from the module.
 | `tools-common/channelmcp` | claude/channel stdio server (newline-delimited JSON-RPC 2.0); `Pusher`, and `Lines`, which prints each event as a JSON line for `<tool> watch` |
 | `tools-common/harness` | session identity: the family resolution rule over `CLAUDE_CODE_SESSION_ID`, `AGENT_SESSION_ID`, `AGENT_SESSION_CHILD`; `Capture.IsClaude` |
 | `tools-common/claudeplugin` | renders a tool's Claude Code plugin (manifest, `.mcp.json`, the mod that runs `<tool> watch`) from one template; `AssertCurrent` keeps a repo's copy equal to it |
-| `tools-common/localweb` | loopback local-page server: per-launch token, rebinding/CSRF guards, remembered port, `OpenBrowser` |
+| `tools-common/localweb` | loopback local-page server: per-launch token, rebinding/CSRF guards, remembered port, `OpenBrowser`, `CanShare`/`PutFile` (a file on the macOS clipboard) |
 | `tools-common/localweb/page` | the galley-style page kit: tokens, bar, list panel, reading-column components, keyboard layer, API and live clients, served under `/_kit/` |
 
 **Separate module:** `github.com/subaud-tools/tools-common/sqlitedb` has its own
@@ -184,6 +184,14 @@ srv, err := localweb.Start(ctx, localweb.Config{
   `{el, close()}`: a small modal over a backdrop. Esc or a backdrop click closes
   it, focus stays inside and returns on close, and page keys wait while one is
   open (`sheetOpen()`). The `?` overlay is a sheet.
+- **Share menu** (`share.js`, styled by `share.css`): `shareMenu(button, items,
+  onPick)` builds a Share ▾ button's menu from `{label, act}` items, opens it
+  right-aligned under the button, and closes it on a pick (calling
+  `onPick(act, item)`), an outside click, Esc or a resize. The tool picks the
+  items and does each one; the labels (`SHARE_*`), `sharedLine(path)` and
+  `SHARE_REPLY_MS` are the kit's. It imports nothing else from the kit: a page
+  without `kit.css` links `share.css` and sets `--share-ground`, `-ink`,
+  `-line`, `-hover`, `-lift` and `-font`.
 - **Live** (`live.js`): SSE with a 2 s poll fallback. The wire, which the tool's
   Go handlers implement:
   - `GET <events>?since=<cursor>`: `text/event-stream`, with headers flushed
