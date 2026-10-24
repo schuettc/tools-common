@@ -37,6 +37,9 @@ type Handler struct {
 	Instructions string
 	Tools        []Tool
 	Call         func(name string, args json.RawMessage) (string, error)
+	// OnReport receives each report a harness sends back (see ReportEvent),
+	// in the order sent, on Run's loop: keep it short. Nil ignores reports.
+	OnReport func(event ReportEvent, token string)
 }
 
 type rpcMsg struct {
@@ -135,6 +138,9 @@ func (s *Server) Run(r io.Reader, w io.Writer) error {
 			continue // unparseable input is the client's bug; do not die for it
 		}
 		if len(msg.ID) == 0 {
+			if msg.Method == reportMethod {
+				s.report(msg.Params)
+			}
 			continue // a notification is never answered
 		}
 		if err := s.answer(msg); err != nil {

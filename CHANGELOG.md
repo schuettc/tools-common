@@ -16,6 +16,13 @@ tags and PRs.
   its label and the line under it. The labels come from `msgstate.js`
   (`MESSAGE_STATES`), generated from `msgstate`; a test fails when they drift.
   The demo page shows every state.
+- `channelmcp.Handler.OnReport(event, token)`: the server accepts the client
+  notification `notifications/channels/report` with
+  `{"event": "held"|"landed"|"turn_ended", "report": "<token>"}` (held and
+  landed need the token) and hands it to OnReport, in order. A malformed
+  report is ignored and logged; with no OnReport, reports are ignored. The
+  token rides on an event as the meta key `report` (`channelmcp.MetaReport`),
+  and each `<tool> watch` line also prints it as a top-level `report` field.
 
 ## 0.22.0
 

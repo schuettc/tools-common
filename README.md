@@ -13,7 +13,7 @@ and `localweb/page` imports nothing from the module.
 | Import | What |
 |---|---|
 | `tools-common` (package `tools`) | CLI foundation (`App`, `Command`, help/man/`commands --json`, `ExitError`, version, self-update); `WriteFileAtomic`, `PIDAlive`, `ConfigDir`/`StateDir`/`CacheDir`/`DataDir`/`EnsureDir` |
-| `tools-common/channelmcp` | claude/channel stdio server (newline-delimited JSON-RPC 2.0); `Pusher`, and `Lines`, which prints each event as a JSON line for `<tool> watch` |
+| `tools-common/channelmcp` | claude/channel stdio server (newline-delimited JSON-RPC 2.0); `Pusher`, and `Lines`, which prints each event as a JSON line for `<tool> watch`; `Handler.OnReport` receives a harness's held/landed/turn_ended reports (`notifications/channels/report`) for the token in an event's `report` meta key |
 | `tools-common/harness` | session identity: the family resolution rule over `CLAUDE_CODE_SESSION_ID`, `AGENT_SESSION_ID`, `AGENT_SESSION_CHILD`; `Capture.IsClaude` |
 | `tools-common/msgstate` | the page-message lifecycle: `State` (seven states, `Values()` for a wire generator's union), `Label`, `Final`, `Allowed(from, to)` |
 | `tools-common/claudeplugin` | renders a tool's Claude Code plugin (manifest, `.mcp.json`, the mod that runs `<tool> watch`) from one template; `AssertCurrent` keeps a repo's copy equal to it |
