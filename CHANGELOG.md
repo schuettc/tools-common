@@ -4,6 +4,14 @@ Root module releases are tagged `vX.Y.Z`; the separate `sqlitedb` module is
 tagged `sqlitedb/vX.Y.Z`. Releases before this file are described by their
 tags and PRs.
 
+## 0.22.0
+
+### Fixed
+- localweb: the sign-in cookie is named per port (`<tool>_token_<port>`), so
+  two serves of one tool on one machine (a branch build beside the live one)
+  no longer sign each other's page out. A browser's old `<tool>_token` cookie
+  is ignored.
+
 ## 0.20.0
 
 ### Added
