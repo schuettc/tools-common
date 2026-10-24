@@ -4,6 +4,14 @@ Root module releases are tagged `vX.Y.Z`; the separate `sqlitedb` module is
 tagged `sqlitedb/vX.Y.Z`. Releases before this file are described by their
 tags and PRs.
 
+## Unreleased
+
+### Added
+- `msgstate`: the one lifecycle of a page message (sent, with_agent, working,
+  answered, declined, failed, no_reply), each state's label, `Final(s)` and
+  `Allowed(from, to)` for the moves the lifecycle spec draws. `State` has a
+  `Values()` method, so a tool's wire generator emits it as a union.
+
 ## 0.22.0
 
 ### Fixed
