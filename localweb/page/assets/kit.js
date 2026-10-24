@@ -9,3 +9,4 @@ export * from './dom.js';
 export * from './selection.js';
 export * from './sheet.js';
 export * from './share.js';
+export * from './msgstate.js';

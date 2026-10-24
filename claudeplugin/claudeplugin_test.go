@@ -7,6 +7,8 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -106,6 +108,27 @@ type modRun struct {
 	Submitted []string `json:"submitted"`
 	Spawns    int      `json:"spawns"`
 	Restarts  int      `json:"restarts"`
+	// Reports is each `BIN report ...` the mod ran, with its env.
+	Reports []struct {
+		Argv []string          `json:"argv"`
+		Env  map[string]string `json:"env"`
+	} `json:"reports"`
+	Logs []string `json:"logs"`
+	// Order is "start <event>" and "end <event>" for each report, as they
+	// happened.
+	Order []string `json:"order"`
+}
+
+// modOpts shapes runMod's fake Claude Code.
+type modOpts struct {
+	// Submit is the JavaScript value $.prompt.submit resolves with; "" is {}.
+	Submit string
+	// TurnComplete runs the turn.complete hook once the events are submitted.
+	TurnComplete bool
+	// ReportCode is the exit code of every `BIN report` the mod runs.
+	ReportCode int
+	// ReportMs is how long each `BIN report` takes to exit.
+	ReportMs int
 }
 
 // runMod runs a rendered register.js under node with a fake mods API: each
@@ -115,6 +138,11 @@ type modRun struct {
 // Code), which the 0.17.0 mod asks.
 func runMod(t *testing.T, js []byte, out string) modRun {
 	t.Helper()
+	return runModWith(t, js, out, modOpts{})
+}
+
+func runModWith(t *testing.T, js []byte, out string, o modOpts) modRun {
+	t.Helper()
 	node, err := exec.LookPath("node")
 	if err != nil {
 		t.Skip("node not on PATH")
@@ -123,25 +151,39 @@ func runMod(t *testing.T, js []byte, out string) modRun {
 	if err := os.WriteFile(filepath.Join(dir, "register.mjs"), js, 0o644); err != nil {
 		t.Fatal(err)
 	}
+	submit := o.Submit
+	if submit == "" {
+		submit = "{}"
+	}
 	harness := `
 import { register } from './register.mjs'
 const hooks = {}
 register((name, fn) => { hooks[name] = fn })
 const out = ` + strconvQuote(out) + `
-const run = { submitted: [], spawns: 0, restarts: 0 }
+const run = { submitted: [], spawns: 0, restarts: 0, reports: [], logs: [], order: [] }
 const $ = {
   session: { id: async () => 'sid' },
   env: { get: async () => '' },
-  process: { spawn: () => {
+  process: { spawn: ({ argv, env }) => {
+    if (argv[1] === 'report') {
+      run.reports.push({ argv, env })
+      run.order.push('start ' + argv[2])
+      const result = new Promise(r => setTimeout(() => { run.order.push('end ' + argv[2]); r({ code: ` + strconv.Itoa(o.ReportCode) + ` }) }, ` + strconv.Itoa(o.ReportMs) + `))
+      return { result, return() {}, async *[Symbol.asyncIterator]() { await result } }
+    }
     run.spawns++
     return { result: Promise.resolve({ code: 0 }), return() {}, async *[Symbol.asyncIterator]() { yield { stream: 'stdout', text: out } } }
   } },
-  prompt: { submit: async ({ text }) => { run.submitted.push(text); return {} } },
-  ui: { log() {} },
+  prompt: { submit: async ({ text }) => { run.submitted.push(text); return ` + submit + ` } },
+  ui: { log(text) { run.logs.push(text) } },
   clock: { after() { run.restarts++ } },
 }
 await hooks['session.start']($, {}, async e => e)
 await new Promise(r => setTimeout(r, 200))
+if (` + strconv.FormatBool(o.TurnComplete) + `) {
+  await hooks['turn.complete']($, {}, async e => e)
+  await new Promise(r => setTimeout(r, 200))
+}
 console.log(JSON.stringify(run))
 `
 	if err := os.WriteFile(filepath.Join(dir, "run.mjs"), []byte(harness), 0o644); err != nil {
@@ -293,5 +335,94 @@ func TestAssertCurrentRegeneratesWhenAsked(t *testing.T) {
 	AssertCurrent(r, dir, galley)
 	if len(r.errs) != 0 {
 		t.Fatalf("after update, still drift: %v", r.errs)
+	}
+}
+
+// TestModReportsLandedWhenItsPromptStarts: submit resolving without a drop is
+// the moment the event's turn starts; the mod hands the line's report token
+// back unchanged with `BIN report landed`, in this session.
+func TestModReportsLandedWhenItsPromptStarts(t *testing.T) {
+	files, err := Render(galley)
+	if err != nil {
+		t.Fatal(err)
+	}
+	r := runModWith(t, files["hooks/register.js"], `{"text":"hi","report":"t7"}`+"\n", modOpts{})
+	if len(r.Reports) != 1 || strings.Join(r.Reports[0].Argv, " ") != galley.Bin+" report landed t7" || r.Reports[0].Env["CLAUDE_CODE_SESSION_ID"] != "sid" {
+		t.Fatalf("reports %+v", r.Reports)
+	}
+}
+
+// TestModReportsNoLandedForADroppedPromptOrNoToken: a dropped prompt never
+// landed, and a line with no token (a tool not on the lifecycle) reports
+// nothing.
+func TestModReportsNoLandedForADroppedPromptOrNoToken(t *testing.T) {
+	files, err := Render(galley)
+	if err != nil {
+		t.Fatal(err)
+	}
+	dropped := runModWith(t, files["hooks/register.js"], `{"text":"hi","report":"t7"}`+"\n",
+		modOpts{Submit: `{ drop: 'the prompt was removed from the queue before it ran' }`})
+	plain := runModWith(t, files["hooks/register.js"], `{"text":"hi"}`+"\n", modOpts{})
+	if len(dropped.Reports) != 0 || len(plain.Reports) != 0 {
+		t.Fatalf("dropped %+v, no token %+v", dropped.Reports, plain.Reports)
+	}
+}
+
+// TestModReportsTurnEndedOnTurnComplete: a turn.complete after one of this
+// mod's events landed runs `BIN report turn-ended` in this session; the server
+// works out what it ends.
+func TestModReportsTurnEndedOnTurnComplete(t *testing.T) {
+	files, err := Render(galley)
+	if err != nil {
+		t.Fatal(err)
+	}
+	r := runModWith(t, files["hooks/register.js"], `{"text":"hi","report":"t7"}`+"\n", modOpts{TurnComplete: true})
+	if len(r.Reports) != 2 || strings.Join(r.Reports[1].Argv, " ") != galley.Bin+" report turn-ended" || r.Reports[1].Env["CLAUDE_CODE_SESSION_ID"] != "sid" {
+		t.Fatalf("reports %+v", r.Reports)
+	}
+}
+
+// TestModReportsOneAtATime: each report is its own process making its own
+// call to the tool's server, so the mod runs them one after another; a
+// turn-ended that overtook its turn's landed would end the wrong messages.
+func TestModReportsOneAtATime(t *testing.T) {
+	files, err := Render(galley)
+	if err != nil {
+		t.Fatal(err)
+	}
+	r := runModWith(t, files["hooks/register.js"], `{"text":"hi","report":"t7"}`+"\n", modOpts{TurnComplete: true, ReportMs: 300})
+	want := []string{"start landed", "end landed", "start turn-ended"}
+	if len(r.Order) < 3 || !slices.Equal(r.Order[:3], want) {
+		t.Fatalf("order %q, want it to start with %q", r.Order, want)
+	}
+}
+
+// TestModReportsNoTurnEndedWhenNothingLanded: a turn in which none of this
+// mod's events landed runs nothing, so seven family plugins don't start seven
+// binaries at the end of every turn.
+func TestModReportsNoTurnEndedWhenNothingLanded(t *testing.T) {
+	files, err := Render(galley)
+	if err != nil {
+		t.Fatal(err)
+	}
+	r := runModWith(t, files["hooks/register.js"], `{"text":"hi"}`+"\n", modOpts{TurnComplete: true})
+	if len(r.Reports) != 0 {
+		t.Fatalf("reports %+v", r.Reports)
+	}
+}
+
+// TestModLogsAFailedReportOnce: a report that fails is logged and not run
+// again; the pill stays at its last state.
+func TestModLogsAFailedReportOnce(t *testing.T) {
+	files, err := Render(galley)
+	if err != nil {
+		t.Fatal(err)
+	}
+	r := runModWith(t, files["hooks/register.js"], `{"text":"hi","report":"t7"}`+"\n", modOpts{ReportCode: 1})
+	if len(r.Reports) != 1 {
+		t.Fatalf("a failed report ran %d times", len(r.Reports))
+	}
+	if !slices.ContainsFunc(r.Logs, func(l string) bool { return strings.Contains(l, "report landed") && strings.Contains(l, "code 1") }) {
+		t.Fatalf("no log of the failed report: %q", r.Logs)
 	}
 }

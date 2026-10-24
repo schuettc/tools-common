@@ -1,5 +1,5 @@
 import { test, eq, assert, fixture, blurEl } from './harness.js';
-import { h, bar, list, facts, card, buttons, codeBlock, fold, noteField } from '/_kit/dom.js';
+import { h, bar, list, facts, card, buttons, codeBlock, fold, noteField, messagePill } from '/_kit/dom.js';
 import { createKeys } from '/_kit/keys.js';
 import { initTheme } from '/_kit/theme.js';
 
@@ -489,4 +489,18 @@ test('dom: bar also-open list shows every item in full, and a row click runs it'
     b.setElsewhere([]);
     assert(!document.querySelector('.kit-also-menu'), 'emptying the area closes it');
   } finally { fx.style.width = ''; }
+});
+
+test('dom: messagePill shows each state\'s label with the line under it', () => {
+  const labels = {
+    sent: 'sent', with_agent: 'with the agent', working: 'working', answered: 'answered',
+    declined: 'declined', failed: 'failed', no_reply: 'no reply',
+  };
+  for (const [state, label] of Object.entries(labels)) {
+    const el = messagePill(state, `line for ${state}`);
+    const pill = el.querySelector('.kit-pill');
+    eq([pill.dataset.state, pill.textContent], [state, label], state);
+    eq(el.querySelector('.kit-msg-line').textContent, `line for ${state}`, state);
+  }
+  eq(messagePill('answered').querySelector('.kit-msg-line'), null, 'no line, no line element');
 });

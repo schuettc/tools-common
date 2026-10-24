@@ -13,9 +13,10 @@ and `localweb/page` imports nothing from the module.
 | Import | What |
 |---|---|
 | `tools-common` (package `tools`) | CLI foundation (`App`, `Command`, help/man/`commands --json`, `ExitError`, version, self-update); `WriteFileAtomic`, `PIDAlive`, `ConfigDir`/`StateDir`/`CacheDir`/`DataDir`/`EnsureDir` |
-| `tools-common/channelmcp` | claude/channel stdio server (newline-delimited JSON-RPC 2.0); `Pusher`, and `Lines`, which prints each event as a JSON line for `<tool> watch` |
+| `tools-common/channelmcp` | claude/channel stdio server (newline-delimited JSON-RPC 2.0); `Pusher`, and `Lines`, which prints each event as a JSON line for `<tool> watch`; `Handler.OnReport` receives a harness's held/landed/turn_ended reports (`notifications/channels/report`) for the token in an event's `report` meta key, and `ReportCommand(deliver)` is the `<tool> report landed <token>` / `report turn-ended` command the plugin runs, delivering to the tool's server through the tool's own callback |
 | `tools-common/harness` | session identity: the family resolution rule over `CLAUDE_CODE_SESSION_ID`, `AGENT_SESSION_ID`, `AGENT_SESSION_CHILD`; `Capture.IsClaude` |
-| `tools-common/claudeplugin` | renders a tool's Claude Code plugin (manifest, `.mcp.json`, the mod that runs `<tool> watch`) from one template; `AssertCurrent` keeps a repo's copy equal to it |
+| `tools-common/msgstate` | the page-message lifecycle: `State` (seven states, `Values()` for a wire generator's union), `Label`, `Final`, `Allowed(from, to)` |
+| `tools-common/claudeplugin` | renders a tool's Claude Code plugin (manifest, `.mcp.json`, the mod that runs `<tool> watch` and reports back with `<tool> report`) from one template; `AssertCurrent` keeps a repo's copy equal to it |
 | `tools-common/localweb` | loopback local-page server: per-launch token, rebinding/CSRF guards, remembered port, `OpenBrowser`, `CanShare`/`PutFile` (a file on the macOS clipboard) |
 | `tools-common/localweb/page` | the galley-style page kit: tokens, bar, list panel, reading-column components, keyboard layer, API and live clients, served under `/_kit/` |
 
@@ -151,6 +152,12 @@ srv, err := localweb.Start(ctx, localweb.Config{
 - **Components** (`dom.js`): `bar`, `list`, `facts`, `card`, `buttons`,
   `codeBlock`, `fold`, `noteField`, and `h`. The `.kit-*` classes are the
   contract and work from static HTML too.
+- **Message pill** (`dom.js`, labels in `msgstate.js`): `messagePill(state,
+  line)` is where a message Court sent stands: a `.kit-pill[data-state]` in the
+  state's colour, its label, and the line under it. `msgstate.js`
+  (`MESSAGE_STATES`) is generated from the `msgstate` package by
+  `go test ./localweb/page -run TestMessageStatesFile -update`, and that test
+  fails when the two drift.
 - **Keyboard** (`keys.js`): family defaults plus `register`. A clash throws at
   registration. While a text field has focus, only `Esc` and `inField` keys fire.
 - **API** (`api.js`): `createApi()` sends JSON with the page's cookie. Pass

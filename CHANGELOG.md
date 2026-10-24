@@ -4,6 +4,39 @@ Root module releases are tagged `vX.Y.Z`; the separate `sqlitedb` module is
 tagged `sqlitedb/vX.Y.Z`. Releases before this file are described by their
 tags and PRs.
 
+## 0.23.0
+
+### Added
+- `msgstate`: the one lifecycle of a page message (sent, with_agent, working,
+  answered, declined, failed, no_reply), each state's label, `Final(s)` and
+  `Allowed(from, to)` for the moves the lifecycle spec draws. `State` has a
+  `Values()` method, so a tool's wire generator emits it as a union.
+  `Acknowledge(from, to)` is for the agent's replies: it lets a message still
+  `sent` (its landed report not in yet) be settled or marked working.
+- Page kit `messagePill(state, line)`: a message's state pill
+  (`.kit-pill[data-state]`, one variant per state in the kit's colours) with
+  its label and the line under it. The labels come from `msgstate.js`
+  (`MESSAGE_STATES`), generated from `msgstate`; a test fails when they drift.
+  The demo page shows every state.
+- `channelmcp.Handler.OnReport(event, token)`: the server accepts the client
+  notification `notifications/channels/report` with
+  `{"event": "held"|"landed"|"turn_ended", "report": "<token>"}` (held and
+  landed need the token) and hands it to OnReport, in order. A malformed
+  report is ignored and logged; with no OnReport, reports are ignored. The
+  token rides on an event as the meta key `report` (`channelmcp.MetaReport`),
+  and each `<tool> watch` line also prints it as a top-level `report` field.
+- `channelmcp.ReportCommand(deliver)`: `<tool> report landed <token>` and
+  `<tool> report turn-ended`, mounted with `app.Register`. It reads the
+  session as watch does, hands the report to the tool's own `deliver`
+  callback, prints nothing, and does nothing in a bridge child.
+- The Claude Code mod reports back: when a line's prompt starts a turn
+  (`prompt.submit` resolves without a drop) it runs `<bin> report landed
+  <token>` with the line's `report` token, and on a `turn.complete` after one
+  of its lines landed it runs `<bin> report turn-ended`, both in the session,
+  one report at a time so they reach the server in order. A failed report goes
+  to the debug log and is not retried. A tool's plugin must be regenerated, and
+  its binary must mount `ReportCommand` in the same release.
+
 ## 0.22.0
 
 ### Fixed

@@ -297,6 +297,17 @@ export function fold(label: string, content: Node | string, o?: { open?: boolean
 /** ↵ or blur commits a changed value; Esc reverts and leaves. Page keys don't fire while it has focus. */
 export function noteField(o: { value?: string; placeholder?: string; onCommit(v: string): void }): HTMLInputElement;
 
+/** A message's state: tools-common/msgstate's State. */
+export type MessageState = 'sent' | 'with_agent' | 'working' | 'answered' | 'declined' | 'failed' | 'no_reply';
+
+/** A message's state pill (its label from msgstate.js) with the line under it; no line, no line element. */
+export function messagePill(state: MessageState, line?: string): HTMLSpanElement;
+
+// ---- msgstate.js (generated from tools-common/msgstate)
+
+/** Every state in order, with the words its pill shows. */
+export const MESSAGE_STATES: ReadonlyArray<{ state: MessageState; label: string }>;
+
 // ---- share.js (styled by share.css; kit.css imports it, a page without kit.css links it and sets --share-*)
 
 export const SHARE_LABEL: 'Share ▾';

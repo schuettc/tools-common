@@ -25,9 +25,11 @@ var (
 )
 
 // Lines writes each event as one JSON line to w,
-// {"text":...,"content":...,"meta":{...}}: text is the whole prompt a Claude
-// Code mod submits (see eventText); content and meta stay for mods rendered
-// before 0.18.0, which build the same text themselves. The line format is
+// {"text":...,"content":...,"meta":{...},"report":...}: text is the whole
+// prompt a Claude Code mod submits (see eventText); content and meta stay for
+// mods rendered before 0.18.0, which build the same text themselves; report is
+// meta's MetaReport token, absent without one, which the mod passes back to
+// `<tool> report landed`. The line format is
 // additive: fields are added, never renamed or removed. Notify is safe from
 // several goroutines: each line is written whole, under one mutex, so lines
 // never interleave.
@@ -62,7 +64,8 @@ func (l *Lines) Notify(content string, meta map[string]string) error {
 		Text    string            `json:"text,omitempty"`
 		Content string            `json:"content"`
 		Meta    map[string]string `json:"meta"`
-	}{text, content, meta})
+		Report  string            `json:"report,omitempty"`
+	}{text, content, meta, meta[MetaReport]})
 	if err != nil {
 		return err
 	}
