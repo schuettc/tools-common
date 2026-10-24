@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"sort"
+	"strings"
 	"sync"
 )
 
@@ -19,16 +21,26 @@ var (
 	_ Pusher = (*Lines)(nil)
 )
 
-// Lines writes each event as one JSON line, {"content":...,"meta":{...}}, to
-// w. Notify is safe from several goroutines: each line is written whole,
-// under one mutex, so lines never interleave.
+// Lines writes each event as one JSON line to w,
+// {"text":...,"content":...,"meta":{...}}: text is the whole prompt a Claude
+// Code mod submits (see eventText); content and meta stay for mods rendered
+// before 0.18.0, which build the same text themselves. The line format is
+// additive: fields are added, never renamed or removed. Notify is safe from
+// several goroutines: each line is written whole, under one mutex, so lines
+// never interleave.
 type Lines struct {
-	mu sync.Mutex
-	w  io.Writer
+	mu   sync.Mutex
+	w    io.Writer
+	tool string
 }
 
-// NewLines returns a Pusher that prints to w.
+// NewLines returns a Pusher that prints to w with no text field (it has no
+// tool name for the header). A tool's watch uses StartWatch instead.
 func NewLines(w io.Writer) *Lines { return &Lines{w: w} }
+
+// NewLinesFor returns a Pusher that prints to w with tool's name in each
+// event's text.
+func NewLinesFor(w io.Writer, tool string) *Lines { return &Lines{w: w, tool: tool} }
 
 // Notify refuses the same meta keys Server.Notify refuses, so an event that
 // works on one output works on the other. A nil meta prints as {}.
@@ -39,10 +51,15 @@ func (l *Lines) Notify(content string, meta map[string]string) error {
 	if meta == nil {
 		meta = map[string]string{}
 	}
+	var text string
+	if l.tool != "" {
+		text = eventText(l.tool, content, meta)
+	}
 	b, err := json.Marshal(struct {
+		Text    string            `json:"text,omitempty"`
 		Content string            `json:"content"`
 		Meta    map[string]string `json:"meta"`
-	}{content, meta})
+	}{text, content, meta})
 	if err != nil {
 		return err
 	}
@@ -51,6 +68,76 @@ func (l *Lines) Notify(content string, meta map[string]string) error {
 	defer l.mu.Unlock()
 	_, err = l.w.Write(b)
 	return err
+}
+
+// eventText is the prompt for one event: "<tool> event", a " key=value" per
+// meta pair in sorted key order, a newline, then content. It is exactly what
+// the 0.17.0 mod builds from content and meta, so old and new mods submit the
+// same words.
+func eventText(tool, content string, meta map[string]string) string {
+	keys := make([]string, 0, len(meta))
+	for k := range meta {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	var b strings.Builder
+	b.WriteString(tool + " event")
+	for _, k := range keys {
+		b.WriteString(" " + k + "=" + metaValue(meta[k]))
+	}
+	b.WriteString("\n" + content)
+	return b.String()
+}
+
+// metaValue writes a value that is empty or holds whitespace, a quote or = as
+// a JSON string, so it stays on the header line and reads as one value.
+func metaValue(v string) string {
+	if v != "" && !strings.ContainsFunc(v, func(r rune) bool { return r == '"' || r == '=' || jsSpace(r) }) {
+		return v
+	}
+	return jsQuote(v)
+}
+
+// jsSpace is JavaScript's \s: the 0.17.0 mod tested values with /[\s"=]/.
+func jsSpace(r rune) bool {
+	switch r {
+	case '\t', '\n', '\v', '\f', '\r', ' ', 0xa0, 0x1680, 0x2028, 0x2029, 0x202f, 0x205f, 0x3000, 0xfeff:
+		return true
+	}
+	return r >= 0x2000 && r <= 0x200a
+}
+
+// jsQuote is JavaScript's JSON.stringify for a string, which escapes less
+// than json.Marshal does (no \u003c, no \u2028).
+func jsQuote(s string) string {
+	var b strings.Builder
+	b.WriteByte('"')
+	for _, r := range s {
+		switch r {
+		case '"':
+			b.WriteString(`\"`)
+		case '\\':
+			b.WriteString(`\\`)
+		case '\b':
+			b.WriteString(`\b`)
+		case '\f':
+			b.WriteString(`\f`)
+		case '\n':
+			b.WriteString(`\n`)
+		case '\r':
+			b.WriteString(`\r`)
+		case '\t':
+			b.WriteString(`\t`)
+		default:
+			if r < 0x20 {
+				fmt.Fprintf(&b, `\u%04x`, r)
+			} else {
+				b.WriteRune(r)
+			}
+		}
+	}
+	b.WriteByte('"')
+	return b.String()
 }
 
 // checkMeta refuses a meta key that is not an identifier (letters, digits,
