@@ -4,7 +4,7 @@ Root module releases are tagged `vX.Y.Z`; the separate `sqlitedb` module is
 tagged `sqlitedb/vX.Y.Z`. Releases before this file are described by their
 tags and PRs.
 
-## Unreleased
+## 0.23.0
 
 ### Added
 - `msgstate`: the one lifecycle of a page message (sent, with_agent, working,
