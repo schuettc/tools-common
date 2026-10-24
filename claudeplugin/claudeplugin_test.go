@@ -114,6 +114,9 @@ type modRun struct {
 		Env  map[string]string `json:"env"`
 	} `json:"reports"`
 	Logs []string `json:"logs"`
+	// Order is "start <event>" and "end <event>" for each report, as they
+	// happened.
+	Order []string `json:"order"`
 }
 
 // modOpts shapes runMod's fake Claude Code.
@@ -124,6 +127,8 @@ type modOpts struct {
 	TurnComplete bool
 	// ReportCode is the exit code of every `BIN report` the mod runs.
 	ReportCode int
+	// ReportMs is how long each `BIN report` takes to exit.
+	ReportMs int
 }
 
 // runMod runs a rendered register.js under node with a fake mods API: each
@@ -155,14 +160,16 @@ import { register } from './register.mjs'
 const hooks = {}
 register((name, fn) => { hooks[name] = fn })
 const out = ` + strconvQuote(out) + `
-const run = { submitted: [], spawns: 0, restarts: 0, reports: [], logs: [] }
+const run = { submitted: [], spawns: 0, restarts: 0, reports: [], logs: [], order: [] }
 const $ = {
   session: { id: async () => 'sid' },
   env: { get: async () => '' },
   process: { spawn: ({ argv, env }) => {
     if (argv[1] === 'report') {
       run.reports.push({ argv, env })
-      return { result: Promise.resolve({ code: ` + strconv.Itoa(o.ReportCode) + ` }), return() {}, async *[Symbol.asyncIterator]() {} }
+      run.order.push('start ' + argv[2])
+      const result = new Promise(r => setTimeout(() => { run.order.push('end ' + argv[2]); r({ code: ` + strconv.Itoa(o.ReportCode) + ` }) }, ` + strconv.Itoa(o.ReportMs) + `))
+      return { result, return() {}, async *[Symbol.asyncIterator]() { await result } }
     }
     run.spawns++
     return { result: Promise.resolve({ code: 0 }), return() {}, async *[Symbol.asyncIterator]() { yield { stream: 'stdout', text: out } } }
@@ -372,6 +379,21 @@ func TestModReportsTurnEndedOnTurnComplete(t *testing.T) {
 	r := runModWith(t, files["hooks/register.js"], `{"text":"hi","report":"t7"}`+"\n", modOpts{TurnComplete: true})
 	if len(r.Reports) != 2 || strings.Join(r.Reports[1].Argv, " ") != galley.Bin+" report turn-ended" || r.Reports[1].Env["CLAUDE_CODE_SESSION_ID"] != "sid" {
 		t.Fatalf("reports %+v", r.Reports)
+	}
+}
+
+// TestModReportsOneAtATime: each report is its own process making its own
+// call to the tool's server, so the mod runs them one after another; a
+// turn-ended that overtook its turn's landed would end the wrong messages.
+func TestModReportsOneAtATime(t *testing.T) {
+	files, err := Render(galley)
+	if err != nil {
+		t.Fatal(err)
+	}
+	r := runModWith(t, files["hooks/register.js"], `{"text":"hi","report":"t7"}`+"\n", modOpts{TurnComplete: true, ReportMs: 300})
+	want := []string{"start landed", "end landed", "start turn-ended"}
+	if len(r.Order) < 3 || !slices.Equal(r.Order[:3], want) {
+		t.Fatalf("order %q, want it to start with %q", r.Order, want)
 	}
 }
 

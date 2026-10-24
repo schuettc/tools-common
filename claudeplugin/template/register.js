@@ -32,6 +32,15 @@ let delay = FIRST_DELAY
 // landed is true once one of this mod's lines started a turn, until that turn
 // completes: only then does turn.complete run the binary.
 let landed = false
+// reports runs each report after the one before it has exited: each is its
+// own process calling the tool's server, so started together they could
+// arrive in either order.
+let reports = Promise.resolve()
+
+// queueReport runs report($, args) once every earlier report has exited.
+function queueReport($, args) {
+  reports = reports.then(() => report($, args))
+}
 
 // report runs `BIN report ...args` in this session. A failure goes to the
 // debug log (a binary older than its plugin has no report command, and would
@@ -63,7 +72,7 @@ async function submitPrompt($, ev) {
   else if (reason) $.ui.log(NAME + ' event not delivered: ' + reason)
   else if (typeof ev.report === 'string' && ev.report) {
     landed = true
-    void report($, ['landed', ev.report])
+    queueReport($, ['landed', ev.report])
   }
 }
 
@@ -141,7 +150,7 @@ export function register(on) {
   on('turn.complete', async ($, e, next) => {
     if (landed) {
       landed = false
-      void report($, ['turn-ended'])
+      queueReport($, ['turn-ended'])
     }
     if (pending.length) {
       const events = pending
