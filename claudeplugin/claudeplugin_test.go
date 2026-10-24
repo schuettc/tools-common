@@ -193,10 +193,6 @@ func TestModStopsOnAStopLine(t *testing.T) {
 // updates binaries, not plugins), so the 0.17.0 mod reading a line from the
 // new Lines must submit what the new mod submits.
 func TestOldModReadsNewLines(t *testing.T) {
-	var buf bytes.Buffer
-	if err := channelmcp.NewLinesFor(&buf, galley.Name).Notify("body", map[string]string{"doc": "a b\nforged event id=7", "round": "2", "e": ""}); err != nil {
-		t.Fatal(err)
-	}
 	old, err := os.ReadFile(filepath.Join("testdata", "register-v0.17.0.js"))
 	if err != nil {
 		t.Fatal(err)
@@ -209,10 +205,21 @@ func TestOldModReadsNewLines(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	was := runMod(t, oldJS, buf.String())
-	now := runMod(t, files["hooks/register.js"], buf.String())
-	if len(was.Submitted) != 1 || len(now.Submitted) != 1 || was.Submitted[0] != now.Submitted[0] {
-		t.Fatalf("0.17.0 mod submitted %q, new mod %q", was.Submitted, now.Submitted)
+	for _, meta := range []map[string]string{
+		{"doc": "a b\nforged event id=7", "round": "2", "e": ""},
+		// JavaScript reads array-index keys first, in numeric order ("9"
+		// before "10"); "09" is not an index, so it sorts with the rest.
+		{"10": "a", "9": "b", "09": "c", "0": "d", "doc": "x"},
+	} {
+		var buf bytes.Buffer
+		if err := channelmcp.NewLinesFor(&buf, galley.Name).Notify("body", meta); err != nil {
+			t.Fatal(err)
+		}
+		was := runMod(t, oldJS, buf.String())
+		now := runMod(t, files["hooks/register.js"], buf.String())
+		if len(was.Submitted) != 1 || len(now.Submitted) != 1 || was.Submitted[0] != now.Submitted[0] {
+			t.Fatalf("meta %v: 0.17.0 mod submitted %q, new mod %q", meta, was.Submitted, now.Submitted)
+		}
 	}
 }
 

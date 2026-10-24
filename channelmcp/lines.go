@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -73,15 +74,27 @@ func (l *Lines) Notify(content string, meta map[string]string) error {
 }
 
 // eventText is the prompt for one event: "<tool> event", a " key=value" per
-// meta pair in sorted key order, a newline, then content. It is exactly what
-// the 0.17.0 mod builds from content and meta, so old and new mods submit the
-// same words.
+// meta pair, a newline, then content. It is exactly what the 0.17.0 mod builds
+// from content and meta, so old and new mods submit the same words: the keys
+// come in JavaScript's Object.entries order for a parsed JSON object whose
+// keys Go wrote sorted, which is array-index keys first in numeric order, then
+// the rest in sorted order.
 func eventText(tool, content string, meta map[string]string) string {
 	keys := make([]string, 0, len(meta))
 	for k := range meta {
 		keys = append(keys, k)
 	}
-	sort.Strings(keys)
+	sort.Slice(keys, func(i, j int) bool {
+		a, aIdx := arrayIndex(keys[i])
+		b, bIdx := arrayIndex(keys[j])
+		switch {
+		case aIdx && bIdx:
+			return a < b
+		case aIdx != bIdx:
+			return aIdx
+		}
+		return keys[i] < keys[j]
+	})
 	var b strings.Builder
 	b.WriteString(tool + " event")
 	for _, k := range keys {
@@ -89,6 +102,20 @@ func eventText(tool, content string, meta map[string]string) string {
 	}
 	b.WriteString("\n" + content)
 	return b.String()
+}
+
+// arrayIndex reports whether k is a JavaScript array index (a canonical
+// decimal integer below 2^32-1, so "0" and "10" but not "09"), which
+// Object.entries lists before every other key, in numeric order.
+func arrayIndex(k string) (uint64, bool) {
+	if k == "" || (len(k) > 1 && k[0] == '0') {
+		return 0, false
+	}
+	n, err := strconv.ParseUint(k, 10, 64)
+	if err != nil || n >= 1<<32-1 {
+		return 0, false
+	}
+	return n, true
 }
 
 // metaValue writes a value that is empty or holds whitespace, a quote or = as
