@@ -57,6 +57,17 @@ test('dom: bar', () => {
   assert(b.themeControl && b.themeControl.textContent === 'theme', 'theme control');
 });
 
+test('dom: bar brand links home only with an href', () => {
+  const plain = bar({ brand: { name: 'cull' } }).el.querySelector('.kit-brand');
+  eq([plain.tagName, plain.hasAttribute('href')], ['SPAN', false]);
+  const b = bar({ brand: { name: 'diazo', href: '/?t=x' } });
+  fixture().append(b.el);
+  const a = b.el.querySelector('.kit-brand');
+  eq([a.tagName, a.getAttribute('href'), a.textContent], ['A', '/?t=x', 'diazo']);
+  eq(cs(a).textDecorationLine, 'none');
+  eq(cs(a).color, cs(b.el).color);
+});
+
 function makeList(extra = {}) {
   const opened = [], sels = [];
   const items = ['a', 'b', 'c', 'd', 'e'].map(k => ({ k }));

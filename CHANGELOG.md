@@ -4,6 +4,13 @@ Root module releases are tagged `vX.Y.Z`; the separate `sqlitedb` module is
 tagged `sqlitedb/vX.Y.Z`. Releases before this file are described by their
 tags and PRs.
 
+## 0.20.0
+
+### Added
+- Page kit `bar()`: an optional `brand.href`. With it the brand is a link
+  there (a tool's home page), drawn in the bar's own colour and underlined
+  only on hover or focus; without it the brand is plain text, as before.
+
 ## 0.19.0
 
 ### Added
