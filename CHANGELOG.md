@@ -23,6 +23,16 @@ tags and PRs.
   report is ignored and logged; with no OnReport, reports are ignored. The
   token rides on an event as the meta key `report` (`channelmcp.MetaReport`),
   and each `<tool> watch` line also prints it as a top-level `report` field.
+- `channelmcp.ReportCommand(deliver)`: `<tool> report landed <token>` and
+  `<tool> report turn-ended`, mounted with `app.Register`. It reads the
+  session as watch does, hands the report to the tool's own `deliver`
+  callback, prints nothing, and does nothing in a bridge child.
+- The Claude Code mod reports back: when a line's prompt starts a turn
+  (`prompt.submit` resolves without a drop) it runs `<bin> report landed
+  <token>` with the line's `report` token, and on every `turn.complete` it
+  runs `<bin> report turn-ended`, both in the session. A failed report goes to
+  the debug log and is not retried. A tool's plugin must be regenerated, and
+  its binary must mount `ReportCommand` in the same release.
 
 ## 0.22.0
 

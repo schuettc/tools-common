@@ -2,7 +2,12 @@ package channelmcp
 
 import (
 	"encoding/json"
+	"errors"
+	"io"
 	"log"
+
+	tools "github.com/subaud-tools/tools-common"
+	"github.com/subaud-tools/tools-common/harness"
 )
 
 // ReportEvent is what a harness reports back about an event the tool handed
@@ -52,4 +57,49 @@ func (s *Server) report(params json.RawMessage) {
 		return
 	}
 	s.h.OnReport(p.Event, p.Token)
+}
+
+// ReportFunc delivers one report to the tool's own server, the same way the
+// tool's channel hands its server what OnReport receives. session is the
+// harness session the report is about.
+type ReportFunc func(session string, event ReportEvent, token string) error
+
+// ReportCommand is `<tool> report landed <token>` and `<tool> report
+// turn-ended`, which the tool's Claude Code mod runs when an event's prompt
+// starts a turn and when a turn completes. It reads the session the way watch
+// does (harness.FromEnv) and hands the report to deliver; it prints nothing.
+// In a bridge child it delivers nothing, since the hosting pi session's
+// channel reports for it. A tool mounts it in one line:
+//
+//	app.Register(channelmcp.ReportCommand(deliver))
+func ReportCommand(deliver ReportFunc) tools.Command {
+	return tools.Command{
+		Name:     "report",
+		Summary:  "tell the server an event landed in the agent's turn, or the turn ended (run by the Claude Code plugin)",
+		Synopsis: "report landed <token> | report turn-ended",
+		Run: func(args []string, _, _ io.Writer) error {
+			event, token, err := parseReport(args)
+			if err != nil {
+				return err
+			}
+			c := harness.FromEnv()
+			if c.Child {
+				return nil
+			}
+			if c.SessionID == "" {
+				return errors.New("no session id (not under Claude Code or pi): there is no session to report for")
+			}
+			return deliver(c.SessionID, event, token)
+		},
+	}
+}
+
+func parseReport(args []string) (ReportEvent, string, error) {
+	switch {
+	case len(args) == 2 && args[0] == "landed" && args[1] != "":
+		return ReportLanded, args[1], nil
+	case len(args) == 1 && args[0] == "turn-ended":
+		return ReportTurnEnded, "", nil
+	}
+	return "", "", tools.UsageError{Msg: "usage: report landed <token> | report turn-ended"}
 }
