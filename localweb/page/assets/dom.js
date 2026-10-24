@@ -103,7 +103,7 @@ export function bar(o) {
 
   const handle = {
     el: h('header', { class: 'kit-bar' },
-      h('span', { class: 'kit-brand' }, o.brand.mark || null, o.brand.name),
+      h(o.brand.href ? 'a' : 'span', { class: 'kit-brand', href: o.brand.href || null }, o.brand.mark || null, o.brand.name),
       ...ctls.values(), status, h('span', { class: 'kit-sp' }), also.el, pill, themeControl, primary),
     themeControl,
     setSection(id) {

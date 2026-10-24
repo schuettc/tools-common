@@ -198,7 +198,8 @@ export interface ElsewhereItem {
 }
 
 export function bar(o: {
-  brand: { name: string; mark?: Node };
+  /** With href, the brand links there (the tool's home page); without it, plain text. */
+  brand: { name: string; mark?: Node; href?: string };
   sections?: Section[];
   active?: string;
   onSection?(id: string): void;
