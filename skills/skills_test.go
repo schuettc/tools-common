@@ -305,3 +305,24 @@ func TestRefreshSkipsSymlinksAndNoHarness(t *testing.T) {
 		t.Errorf("written through a symlink: %v %v", got, err)
 	}
 }
+
+// A skill's name is one directory under the skills directory: a name with a
+// path in it is refused, so no directory in between can be a symlink.
+func TestNameIsOneComponent(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("CLAUDE_CONFIG_DIR", "")
+	t.Setenv("CODEX_HOME", "")
+	t.Setenv("PI_CODING_AGENT_DIR", "")
+	if err := os.MkdirAll(filepath.Join(home, ".claude", "skills"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"group/tool", "..", ".", ""} {
+		if err := skills.Install(name, []byte("---\nname: "+name+"\n---\n"), nil, bytes.NewBuffer(nil), bytes.NewBuffer(nil)); err == nil {
+			t.Errorf("Install(%q): want an error", name)
+		}
+		if _, err := skills.Refresh(name, []byte("x")); err == nil {
+			t.Errorf("Refresh(%q): want an error", name)
+		}
+	}
+}

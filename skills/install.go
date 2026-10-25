@@ -64,6 +64,9 @@ func (h harness) installed() bool {
 // failure to errw, and fails with exit code 2 when there is no harness and
 // 1 when any harness was not installed.
 func Install(name string, body []byte, agents []string, out, errw io.Writer) error {
+	if err := oneComponent(name); err != nil {
+		return err
+	}
 	var targets []harness
 	for _, n := range agents {
 		i := -1
@@ -284,4 +287,13 @@ func skillName(b []byte) string {
 		}
 	}
 	return ""
+}
+
+// oneComponent refuses a skill name that is not one plain directory name, so
+// no directory between the skills directory and the skill can be a symlink.
+func oneComponent(name string) error {
+	if name == "" || name == "." || name == ".." || strings.ContainsAny(name, `/\\`) {
+		return fmt.Errorf("skill name %q: must be one directory name", name)
+	}
+	return nil
 }

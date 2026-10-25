@@ -15,6 +15,9 @@ import (
 // name:, or a symlink beneath the skills directory). A harness it cannot
 // read or write is reported in the error, and the rest are still refreshed.
 func Refresh(name string, body []byte) ([]string, error) {
+	if err := oneComponent(name); err != nil {
+		return nil, err
+	}
 	var (
 		rewrote []string
 		errs    []error
