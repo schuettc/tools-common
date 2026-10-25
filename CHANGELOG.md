@@ -4,6 +4,26 @@ Root module releases are tagged `vX.Y.Z`; the separate `sqlitedb` module is
 tagged `sqlitedb/vX.Y.Z`. Releases before this file are described by their
 tags and PRs.
 
+## Unreleased
+
+### Added
+- `skills`: a tool's embedded agent skill, installed and kept current.
+  `Install(name, body, agents, out, errw)` writes `body` as
+  `<skills dir>/<name>/SKILL.md` for each agent named (claude-code, codex,
+  pi), or for each harness whose home exists (`CLAUDE_CONFIG_DIR`,
+  `CODEX_HOME`, `PI_CODING_AGENT_DIR` when absolute, else `~/.claude`,
+  `~/.codex`, `~/.pi/agent`): exit 2 with no harness, 1 when any harness
+  failed. Moved from tackle's `skills/install.go` (diazo's is a copy), with
+  its rules: the skills directory may be a symlink, nothing beneath it may
+  be, an existing SKILL.md is replaced only when its `name:` is the tool's,
+  and each write is a fresh file renamed into place with the old mode.
+- `skills.Refresh(name, body)`: for each harness whose home exists,
+  rewrites the installed copy of the tool's own skill when it differs from
+  `body`, and returns the paths it rewrote. It never creates a missing skill
+  and skips a foreign one (another `name:`, or a symlink beneath the skills
+  directory); a matching copy is not touched. A tool calls it when its
+  channel starts.
+
 ## 0.23.0
 
 ### Added
