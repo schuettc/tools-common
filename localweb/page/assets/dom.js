@@ -1,5 +1,6 @@
 import { createSelection } from './selection.js';
 import { MESSAGE_STATES } from './msgstate.js';
+import { submitOnEnter } from './enter.js';
 
 // DOM builders for the kit's components. Each returns plain elements styled by
 // kit.css; the CSS classes are the contract and also work from static HTML.
@@ -371,11 +372,9 @@ export function noteField(o) {
     committed = input.value;
     o.onCommit(committed);
   };
+  submitOnEnter(input, commit);
   input.addEventListener('keydown', e => {
-    if (e.key === 'Enter' && !e.isComposing) {
-      e.preventDefault();
-      commit();
-    } else if (e.key === 'Escape') {
+    if (e.key === 'Escape') {
       input.value = committed;
       input.blur();
     }

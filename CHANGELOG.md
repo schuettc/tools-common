@@ -4,6 +4,20 @@ Root module releases are tagged `vX.Y.Z`; the separate `sqlitedb` module is
 tagged `sqlitedb/vX.Y.Z`. Releases before this file are described by their
 tags and PRs.
 
+## 0.25.0
+
+### Added
+- `localweb/page`: `submitOnEnter(field, submit)` in the kit's new `enter.js`
+  (re-exported by `kit.js`, typed in `kit.d.ts`): a plain Enter calls
+  `submit` and prevents its new line; Shift-Enter, a held (repeating) Enter
+  and an IME's Enter (`isComposing` or keyCode 229) keep the key's usual
+  meaning. It imports nothing, so a page can copy it alone. galley's contract,
+  moved into the kit so every family page that takes a message uses one rule.
+
+### Changed
+- `noteField` commits on Enter through `submitOnEnter`: a held Enter,
+  Shift-Enter and keyCode 229 no longer commit.
+
 ## 0.24.0
 
 ### Added
