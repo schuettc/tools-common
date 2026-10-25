@@ -308,6 +308,18 @@ export function messagePill(state: MessageState, line?: string): HTMLSpanElement
 /** Every state in order, with the words its pill shows. */
 export const MESSAGE_STATES: ReadonlyArray<{ state: MessageState; label: string }>;
 
+// ---- enter.js
+
+/**
+ * A plain Enter calls submit and prevents its new line; Shift-Enter, a repeat
+ * and an IME's Enter (isComposing or keyCode 229) keep the key's usual meaning.
+ * Returns the field.
+ */
+export function submitOnEnter<T extends { addEventListener(type: 'keydown', listener: (e: KeyboardEvent) => void): void }>(
+  field: T,
+  submit: () => void,
+): T;
+
 // ---- share.js (styled by share.css; kit.css imports it, a page without kit.css links it and sets --share-*)
 
 export const SHARE_LABEL: 'Share ▾';
