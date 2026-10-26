@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -81,10 +82,10 @@ func client(t *testing.T, answers ...string) (*Client, *fakeAPI, *[]time.Duratio
 	}, f, &waits
 }
 
-func TestLoginWritesTheTokenOnceAllowed(t *testing.T) {
+func TestLoginWaitWritesTheTokenOnceAllowed(t *testing.T) {
 	c, f, _ := client(t, "pending", "allowed")
 	var out bytes.Buffer
-	if err := c.Login(context.Background(), "courts-mbp", "darwin", &out); err != nil {
+	if err := c.LoginWait(context.Background(), "courts-mbp", "darwin", &out); err != nil {
 		t.Fatal(err)
 	}
 	if !strings.Contains(out.String(), "Go to https://subaud.tools/account/machine and type ZJQG-NLSQ\n") ||
@@ -102,7 +103,7 @@ func TestLoginWritesTheTokenOnceAllowed(t *testing.T) {
 
 func TestTheTokenFileIsPrivate(t *testing.T) {
 	c, _, _ := client(t, "allowed")
-	if err := c.Login(context.Background(), "courts-mbp", "darwin", &bytes.Buffer{}); err != nil {
+	if err := c.LoginWait(context.Background(), "courts-mbp", "darwin", &bytes.Buffer{}); err != nil {
 		t.Fatal(err)
 	}
 	info, err := os.Stat(c.Path)
@@ -116,7 +117,7 @@ func TestTheTokenFileIsPrivate(t *testing.T) {
 
 func TestADeniedLoginWritesNothing(t *testing.T) {
 	c, _, _ := client(t, "pending", "denied")
-	err := c.Login(context.Background(), "courts-mbp", "darwin", &bytes.Buffer{})
+	err := c.LoginWait(context.Background(), "courts-mbp", "darwin", &bytes.Buffer{})
 	if err == nil || !strings.Contains(err.Error(), "denied") {
 		t.Fatalf("err = %v", err)
 	}
@@ -127,7 +128,7 @@ func TestADeniedLoginWritesNothing(t *testing.T) {
 
 func TestAnExpiredLoginWritesNothing(t *testing.T) {
 	c, _, _ := client(t, "pending", "expired")
-	err := c.Login(context.Background(), "courts-mbp", "darwin", &bytes.Buffer{})
+	err := c.LoginWait(context.Background(), "courts-mbp", "darwin", &bytes.Buffer{})
 	if err == nil || !strings.Contains(err.Error(), "expired") {
 		t.Fatalf("err = %v", err)
 	}
@@ -138,7 +139,7 @@ func TestAnExpiredLoginWritesNothing(t *testing.T) {
 
 func TestSlowDownLengthensTheWait(t *testing.T) {
 	c, _, waits := client(t, "pending", "slow_down", "pending", "allowed")
-	if err := c.Login(context.Background(), "courts-mbp", "darwin", &bytes.Buffer{}); err != nil {
+	if err := c.LoginWait(context.Background(), "courts-mbp", "darwin", &bytes.Buffer{}); err != nil {
 		t.Fatal(err)
 	}
 	want := []time.Duration{5 * time.Second, 5 * time.Second, 10 * time.Second, 10 * time.Second}
@@ -154,7 +155,7 @@ func TestSlowDownLengthensTheWait(t *testing.T) {
 
 func TestLogoutRemovesTheMachineAndTheFile(t *testing.T) {
 	c, f, _ := client(t, "allowed")
-	if err := c.Login(context.Background(), "courts-mbp", "darwin", &bytes.Buffer{}); err != nil {
+	if err := c.LoginWait(context.Background(), "courts-mbp", "darwin", &bytes.Buffer{}); err != nil {
 		t.Fatal(err)
 	}
 	if err := c.Logout(context.Background(), &bytes.Buffer{}); err != nil {
@@ -183,5 +184,245 @@ func TestTheEnvironmentTokenWinsOverTheFile(t *testing.T) {
 	t.Setenv(TokenEnv, "sbt_FROMENV")
 	if got, err := Token(); err != nil || got != "sbt_FROMENV" {
 		t.Fatalf("Token() = %q, %v", got, err)
+	}
+}
+
+// pendingPath is where the client keeps a sign-in in progress.
+func pendingPath(c *Client) string { return filepath.Join(filepath.Dir(c.Path), "pending") }
+
+func TestLoginStartsASignInAndExits(t *testing.T) {
+	c, f, waits := client(t)
+	var out bytes.Buffer
+	if err := c.Login(context.Background(), "courts-mbp", "darwin", &out); err != nil {
+		t.Fatal(err)
+	}
+	want := "Go to https://subaud.tools/account/machine and type ZJQG-NLSQ\n" +
+		"Waiting for approval: run login again once you've allowed this machine.\n"
+	if out.String() != want {
+		t.Fatalf("out = %q, want %q", out.String(), want)
+	}
+	if f.started["name"] != "courts-mbp" || len(*waits) != 0 {
+		t.Fatalf("started %v, waits %v", f.started, *waits)
+	}
+	info, err := os.Stat(pendingPath(c))
+	if err != nil || info.Mode().Perm() != 0o600 {
+		t.Fatalf("pending file: %v, %v", info, err)
+	}
+	if _, err := os.Stat(c.Path); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("token file: %v", err)
+	}
+}
+
+func TestLoginAgainSignsInOnceAllowed(t *testing.T) {
+	c, _, _ := client(t, "allowed")
+	if err := c.Login(context.Background(), "courts-mbp", "darwin", &bytes.Buffer{}); err != nil {
+		t.Fatal(err)
+	}
+	var out bytes.Buffer
+	if err := c.Login(context.Background(), "courts-mbp", "darwin", &out); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out.String(), "Signed in to court@example.test") || strings.Contains(out.String(), "DEVICECODE") {
+		t.Fatalf("out = %q", out.String())
+	}
+	if b, err := os.ReadFile(c.Path); err != nil || strings.TrimSpace(string(b)) != testToken {
+		t.Fatalf("token file = %q, %v", b, err)
+	}
+	if _, err := os.Stat(pendingPath(c)); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("pending file: %v", err)
+	}
+}
+
+func TestLoginAgainWhilePendingSaysSo(t *testing.T) {
+	for _, status := range []string{"pending", "slow_down"} {
+		c, _, _ := client(t, status)
+		if err := c.Login(context.Background(), "courts-mbp", "darwin", &bytes.Buffer{}); err != nil {
+			t.Fatal(err)
+		}
+		var out bytes.Buffer
+		if err := c.Login(context.Background(), "courts-mbp", "darwin", &out); err != nil {
+			t.Fatalf("%s: %v", status, err)
+		}
+		if !strings.Contains(out.String(), "Still waiting for approval") || !strings.Contains(out.String(), "ZJQG-NLSQ") {
+			t.Fatalf("%s: out = %q", status, out.String())
+		}
+		if _, err := os.Stat(pendingPath(c)); err != nil {
+			t.Fatalf("%s: pending file: %v", status, err)
+		}
+	}
+}
+
+func TestLoginAgainAfterADenialOrExpiryStartsOver(t *testing.T) {
+	for _, status := range []string{"denied", "expired"} {
+		c, _, _ := client(t, status)
+		if err := c.Login(context.Background(), "courts-mbp", "darwin", &bytes.Buffer{}); err != nil {
+			t.Fatal(err)
+		}
+		err := c.Login(context.Background(), "courts-mbp", "darwin", &bytes.Buffer{})
+		if err == nil || !strings.Contains(err.Error(), status) || !strings.Contains(err.Error(), "run login again") {
+			t.Fatalf("%s: err = %v", status, err)
+		}
+		if _, err := os.Stat(pendingPath(c)); !errors.Is(err, os.ErrNotExist) {
+			t.Fatalf("%s: pending file: %v", status, err)
+		}
+		if _, err := os.Stat(c.Path); !errors.Is(err, os.ErrNotExist) {
+			t.Fatalf("%s: token file: %v", status, err)
+		}
+	}
+}
+
+func TestAPendingSignInPastItsExpiryIsNotPolled(t *testing.T) {
+	c, _, _ := client(t) // a poll would fail the test: no answers
+	if err := os.MkdirAll(filepath.Dir(c.Path), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	old := `{"device_code":"DEVICECODE","user_code":"ZJQG-NLSQ","url":"https://subaud.tools/account/machine","interval":5,"expires":1577836800}`
+	if err := os.WriteFile(pendingPath(c), []byte(old), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	err := c.Login(context.Background(), "courts-mbp", "darwin", &bytes.Buffer{})
+	if err == nil || !strings.Contains(err.Error(), "run login again") {
+		t.Fatalf("err = %v", err)
+	}
+	if _, err := os.Stat(pendingPath(c)); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("pending file: %v", err)
+	}
+}
+
+func TestLoginWaitFinishesASignInAlreadyStarted(t *testing.T) {
+	c, f, _ := client(t, "allowed")
+	if err := c.Login(context.Background(), "courts-mbp", "darwin", &bytes.Buffer{}); err != nil {
+		t.Fatal(err)
+	}
+	f.started = nil
+	var out bytes.Buffer
+	if err := c.LoginWait(context.Background(), "courts-mbp", "darwin", &out); err != nil {
+		t.Fatal(err)
+	}
+	if f.started != nil || !strings.Contains(out.String(), "type ZJQG-NLSQ") {
+		t.Fatalf("started again %v, out %q", f.started, out.String())
+	}
+	if _, err := os.Stat(c.Path); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(pendingPath(c)); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("pending file: %v", err)
+	}
+}
+
+// linksAPI answers POST /links with status: 200 a URL for the path, else
+// the access service's error body for it.
+func linksAPI(t *testing.T, status int) (*Client, *[]map[string]string) {
+	t.Helper()
+	t.Setenv(TokenEnv, "")
+	var asked []map[string]string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/links" {
+			t.Errorf("%s %s", r.Method, r.URL.Path)
+		}
+		var in map[string]string
+		_ = json.NewDecoder(r.Body).Decode(&in)
+		in["bearer"] = strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
+		asked = append(asked, in)
+		w.WriteHeader(status)
+		switch status {
+		case http.StatusOK:
+			_ = json.NewEncoder(w).Encode(map[string]string{"url": "https://hail.tools/dl/" + in["path"] + "?Signature=S"})
+		case http.StatusUnauthorized:
+			_, _ = w.Write([]byte(`{"error": "sign_in", "account": "https://subaud.tools/account/"}`))
+		case http.StatusForbidden:
+			_, _ = w.Write([]byte(`{"error": "not_owned", "account": "https://subaud.tools/account/"}`))
+		}
+	}))
+	t.Cleanup(srv.Close)
+	c := &Client{API: srv.URL, HTTP: srv.Client(), Path: filepath.Join(t.TempDir(), "subaud", "token")}
+	return c, &asked
+}
+
+func signIn(t *testing.T, c *Client) {
+	t.Helper()
+	if err := writePrivate(c.Path, []byte(testToken+"\n")); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestLinkAsksWithTheMachinesToken(t *testing.T) {
+	c, asked := linksAPI(t, http.StatusOK)
+	signIn(t, c)
+	url, err := c.Link(context.Background(), "hail", "hail/latest")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if url != "https://hail.tools/dl/hail/latest?Signature=S" {
+		t.Fatalf("url = %q", url)
+	}
+	if len(*asked) != 1 || (*asked)[0]["product"] != "hail" || (*asked)[0]["path"] != "hail/latest" || (*asked)[0]["bearer"] != testToken {
+		t.Fatalf("asked = %v", *asked)
+	}
+}
+
+func TestLinkWithNoTokenNamesLoginAndAsksNothing(t *testing.T) {
+	c, asked := linksAPI(t, http.StatusOK)
+	_, err := c.Link(context.Background(), "hail", "hail/latest")
+	if !errors.Is(err, ErrNotSignedIn) || !strings.Contains(err.Error(), "login") || len(*asked) != 0 {
+		t.Fatalf("err = %v, asked %v", err, *asked)
+	}
+}
+
+func TestARefusedTokenNamesLogin(t *testing.T) {
+	c, _ := linksAPI(t, http.StatusUnauthorized)
+	signIn(t, c)
+	_, err := c.Link(context.Background(), "hail", "hail/latest")
+	if !errors.Is(err, ErrSignInRefused) || !strings.Contains(err.Error(), "login") {
+		t.Fatalf("err = %v", err)
+	}
+}
+
+func TestAProductNotOwnedNamesTheAccountPage(t *testing.T) {
+	c, _ := linksAPI(t, http.StatusForbidden)
+	signIn(t, c)
+	_, err := c.Link(context.Background(), "diazo", "diazo/latest")
+	var notOwned *NotOwnedError
+	if !errors.As(err, &notOwned) || notOwned.Account != "https://subaud.tools/account/" ||
+		!strings.Contains(err.Error(), "diazo") || !strings.Contains(err.Error(), "https://subaud.tools/account/") {
+		t.Fatalf("err = %v", err)
+	}
+}
+
+// Logout also drops a sign-in still waiting, so an approval given before the
+// logout can't sign the machine back in on the next login.
+func TestLogoutDropsAPendingSignIn(t *testing.T) {
+	c, _, _ := client(t, "pending")
+	if err := c.Login(context.Background(), "courts-mbp", "darwin", &bytes.Buffer{}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(c.pendingPath()); err != nil {
+		t.Fatalf("no pending file after the first run: %v", err)
+	}
+	if err := c.Logout(context.Background(), &bytes.Buffer{}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(c.pendingPath()); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("pending file after logout: %v", err)
+	}
+}
+
+// install.sh writes the waiting sign-in as {"device_code","expires": unix
+// seconds}; the next login must finish it.
+func TestLoginFinishesASignInInstallShStarted(t *testing.T) {
+	c, _, _ := client(t, "allowed")
+	if err := os.MkdirAll(filepath.Dir(c.pendingPath()), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	body := fmt.Sprintf(`{"device_code":"DEVICECODE","expires":%d}`, time.Now().Add(5*time.Minute).Unix())
+	if err := os.WriteFile(c.pendingPath(), []byte(body), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	var out bytes.Buffer
+	if err := c.Login(context.Background(), "courts-mbp", "darwin", &out); err != nil {
+		t.Fatalf("%v: %s", err, out.String())
+	}
+	if _, err := os.Stat(c.Path); err != nil {
+		t.Fatalf("no token after finishing install.sh's sign-in: %v (%s)", err, out.String())
 	}
 }

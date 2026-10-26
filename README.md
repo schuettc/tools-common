@@ -65,13 +65,20 @@ func main() {
 - `version` — prints `"<Name> <Version>"` (e.g. `kempt 0.1.0 (abc, 2026-08-30)`).
 - `help` — prints usage, or `help <command>` for one command.
 - `update` — self-updates via the `/dl` contract below.
-- `login` — signs this machine in to the subaud.tools account: prints a URL and a code to type there, then stores the machine's token (shared by every tool) once it is allowed.
+- `login` — signs this machine in to the subaud.tools account in two short runs, so nothing waits on a person: the first prints a URL and a code to type there, saves the sign-in at `ConfigDir("subaud")/pending` (mode 600) and exits 0; run again once the machine is allowed, it stores the machine's token (shared by every tool). A run while it is still pending says so and exits 0; a denied or expired code is dropped, and the next run starts over. `login --wait` does both in one run, for a person at a terminal.
 - `logout` — removes this machine from the account and deletes its token.
 - `man` — prints a roff man page.
 - `commands` — lists commands; `commands --json` is the machine-readable index.
 
 A tool can override any built-in by registering a command with the same `Name`
 (e.g. wrap `update` with domain-specific convergence).
+
+`Config.Gated` marks a tool whose `/dl` is closed to anyone: `update` then
+fetches `latest`, the tarball and its `.sha256` through five-minute signed
+links (`auth.Link`, `POST /links` with the machine's token) instead of from
+`https://<domain>/dl`. With no token, or one the service refuses, it says to
+run `<tool> login`; for a tool the account doesn't own it names the account
+page. An ungated tool never asks for links.
 
 `Config.About` is an optional overview: `help` prints it above the command
 list and `man` uses it as the DESCRIPTION.
@@ -107,6 +114,9 @@ different command; re-registering a `Name` replaces its aliases.
 5. Extract the `<tool>` binary from the tar.gz.
 6. Atomically replace the running binary (stage `.<tool>.new.<pid>` →
    `os.Rename`), so a running process keeps its inode.
+
+A gated tool (`Config.Gated`) asks for each of the three files as a signed
+link instead of a fixed URL.
 
 ## Version format
 

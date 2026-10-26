@@ -4,6 +4,31 @@ Root module releases are tagged `vX.Y.Z`; the separate `sqlitedb` module is
 tagged `sqlitedb/vX.Y.Z`. Releases before this file are described by their
 tags and PRs.
 
+## 0.28.0
+
+### Added
+- `Config.Gated`: a tool whose `/dl` is closed to anyone. Its `update`
+  fetches `latest`, the tarball and the `.sha256` through signed links from
+  the access service; with no token, or one the service refuses, it says to
+  run `<tool> login`, and for a tool the account doesn't own it names the
+  account page. Ungated tools are unchanged and never ask for links.
+- `auth.Link(ctx, product, path)`: a five-minute signed download URL from
+  `POST /links`, asked with the machine's token. No token is
+  `auth.ErrNotSignedIn` (nothing is asked), a refused one
+  `auth.ErrSignInRefused`, a product not owned `*auth.NotOwnedError` with the
+  account page.
+- `login --wait`: signs in in one run, waiting while the machine is allowed
+  (what `login` did in 0.26.0).
+
+### Changed
+- `login` signs in over two short runs, so nothing waits on a person. The
+  first prints the URL and code, saves the sign-in at
+  `ConfigDir("subaud")/pending` (mode 600) and exits 0; the next asks once
+  and, once the machine is allowed, saves the token. A run while it is still
+  pending says so and exits 0; a denied or expired code is dropped, and the
+  next run starts over. `auth.Client.Login` is now the two-run sign-in;
+  `auth.Client.LoginWait` is the one-run sign-in.
+
 ## 0.27.0
 
 ### Added

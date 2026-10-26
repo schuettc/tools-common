@@ -267,6 +267,12 @@ func TestLoginAndLogoutAreBuiltIn(t *testing.T) {
 	if started["name"] != "ci-box" || started["os"] != runtime.GOOS || !strings.Contains(out.String(), "type ZJQG-NLSQ") {
 		t.Fatalf("started %v, out %q", started, out.String())
 	}
+	if _, err := os.Stat(path); !os.IsNotExist(err) {
+		t.Fatalf("token file after the first run: %v", err)
+	}
+	if code := a.Dispatch([]string{"login"}, &out, &errw); code != 0 {
+		t.Fatalf("login again: exit %d: %s", code, errw.String())
+	}
 	if _, err := os.Stat(path); err != nil {
 		t.Fatal(err)
 	}
@@ -275,5 +281,35 @@ func TestLoginAndLogoutAreBuiltIn(t *testing.T) {
 	}
 	if _, err := os.Stat(path); !os.IsNotExist(err) {
 		t.Fatalf("token file after logout: %v", err)
+	}
+}
+
+// login --wait signs in in one run, polling until the machine is allowed.
+func TestLoginWaitSignsInInOneRun(t *testing.T) {
+	polls := 0
+	mux := http.NewServeMux()
+	mux.HandleFunc("POST /machine/start", func(w http.ResponseWriter, r *http.Request) {
+		_, _ = io.WriteString(w, `{"device_code":"D","user_code":"ZJQG-NLSQ","url":"https://subaud.tools/account/machine","interval":5,"expires_in":600}`)
+	})
+	mux.HandleFunc("POST /machine/poll", func(w http.ResponseWriter, r *http.Request) {
+		polls++
+		if polls < 2 {
+			_, _ = io.WriteString(w, `{"status":"pending"}`)
+			return
+		}
+		_, _ = io.WriteString(w, `{"status":"allowed","token":"sbt_T","account":"court@example.test"}`)
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	a := newTestApp()
+	path := filepath.Join(t.TempDir(), "token")
+	a.auth = &auth.Client{API: srv.URL, Path: path, Sleep: func(time.Duration) {}}
+	var out, errw bytes.Buffer
+	if code := a.Dispatch([]string{"login", "--wait"}, &out, &errw); code != 0 || polls != 2 {
+		t.Fatalf("login --wait: exit %d, polls %d: %s", code, polls, errw.String())
+	}
+	if _, err := os.Stat(path); err != nil {
+		t.Fatal(err)
 	}
 }
