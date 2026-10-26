@@ -4,8 +4,10 @@ import (
 	"archive/tar"
 	"bytes"
 	"compress/gzip"
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -13,6 +15,8 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+
+	"github.com/subaud-tools/tools-common/auth"
 )
 
 // SelfUpdate implements the /dl family download contract:
@@ -25,6 +29,10 @@ import (
 //  4. Fail-closed sha256 verify against the sidecar's first field.
 //  5. Extract the <Name> file from the tar.gz.
 //  6. Atomically replace the running binary (stage .<Name>.new.<pid> → rename).
+//
+// A gated tool fetches each of the three files through a signed link the
+// access service gives this machine's token (auth.Link), instead of from
+// <dlHost>/dl.
 func (a *App) SelfUpdate(out, errw io.Writer) (updated bool, newVersion string, err error) {
 	latest, err := a.fetchLatest()
 	if err != nil {
@@ -36,13 +44,13 @@ func (a *App) SelfUpdate(out, errw io.Writer) (updated bool, newVersion string, 
 	}
 
 	asset := fmt.Sprintf("%s_%s_%s.tar.gz", a.name, runtime.GOOS, runtime.GOARCH)
-	base := fmt.Sprintf("%s/dl/%s/%s", a.dlHost, a.name, latest)
+	base := a.name + "/" + latest
 
-	assetBytes, err := a.download(base + "/" + asset)
+	assetBytes, err := a.fetch(base + "/" + asset)
 	if err != nil {
 		return false, "", err
 	}
-	sumBytes, err := a.download(base + "/" + asset + ".sha256")
+	sumBytes, err := a.fetch(base + "/" + asset + ".sha256")
 	if err != nil {
 		return false, "", err
 	}
@@ -72,11 +80,29 @@ func (a *App) SelfUpdate(out, errw io.Writer) (updated bool, newVersion string, 
 }
 
 func (a *App) fetchLatest() (string, error) {
-	body, err := a.download(fmt.Sprintf("%s/dl/%s/latest", a.dlHost, a.name))
+	body, err := a.fetch(a.name + "/latest")
 	if err != nil {
 		return "", err
 	}
 	return strings.TrimPrefix(strings.TrimSpace(string(body)), "v"), nil
+}
+
+// fetch downloads path under /dl: through a signed link for a gated tool,
+// else from <dlHost>/dl/<path>.
+func (a *App) fetch(path string) ([]byte, error) {
+	if !a.gated {
+		return a.download(a.dlHost + "/dl/" + path)
+	}
+	link, err := a.auth.Link(context.Background(), a.name, path)
+	switch {
+	case errors.Is(err, auth.ErrNotSignedIn):
+		return nil, fmt.Errorf("this machine is not signed in to subaud.tools: run `%s login`", a.name)
+	case errors.Is(err, auth.ErrSignInRefused):
+		return nil, fmt.Errorf("subaud.tools refused this machine's sign-in: run `%s login` to sign in again", a.name)
+	case err != nil:
+		return nil, err
+	}
+	return a.download(link)
 }
 
 func (a *App) download(url string) ([]byte, error) {
@@ -86,7 +112,8 @@ func (a *App) download(url string) ([]byte, error) {
 	}
 	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("GET %s: %s", url, resp.Status)
+		// A signed link's query is its signature: name the file without it.
+		return nil, fmt.Errorf("GET %s: %s", strings.SplitN(url, "?", 2)[0], resp.Status)
 	}
 	return io.ReadAll(resp.Body)
 }

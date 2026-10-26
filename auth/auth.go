@@ -33,6 +33,24 @@ const TokenEnv = "SUBAUD_TOKEN" //nolint:gosec // a variable's name, not a crede
 // ErrNotSignedIn is returned by Token when there is no token.
 var ErrNotSignedIn = errors.New("this machine is not signed in to subaud.tools: run `<tool> login`")
 
+// ErrSignInRefused is returned by Link when the service refuses the token:
+// the machine was removed on the account page, or the token is wrong.
+var ErrSignInRefused = errors.New("subaud.tools refused this machine's sign-in: run `<tool> login` to sign in again")
+
+// DefaultAccount is the account page, for a refusal that names none.
+const DefaultAccount = "https://subaud.tools/account/"
+
+// NotOwnedError is returned by Link when the account doesn't own the
+// product; Account is the page to buy it on.
+type NotOwnedError struct {
+	Product string
+	Account string
+}
+
+func (e *NotOwnedError) Error() string {
+	return fmt.Sprintf("this machine's subaud.tools account doesn't own %s: get it at %s", e.Product, e.Account)
+}
+
 // TokenPath is ConfigDir("subaud")/token, by the same rules as
 // tools.ConfigDir: an absolute $SUBAUD_HOME/config, else an absolute
 // $XDG_CONFIG_HOME/subaud, else ~/.config/subaud.
@@ -52,11 +70,13 @@ func TokenPath() string {
 
 // Token returns $SUBAUD_TOKEN if set, else the token file's;
 // ErrNotSignedIn when there is neither.
-func Token() (string, error) {
+func Token() (string, error) { return (&Client{}).token() }
+
+func (c *Client) token() (string, error) {
 	if t := os.Getenv(TokenEnv); t != "" {
 		return t, nil
 	}
-	return readToken(TokenPath())
+	return readToken(c.path())
 }
 
 func readToken(path string) (string, error) {
@@ -269,6 +289,48 @@ func (c *Client) readPending() *pending {
 
 func (c *Client) dropPending() { _ = os.Remove(c.pendingPath()) }
 
+// Link asks the access service for a five-minute signed URL of path (e.g.
+// "hail/latest" or "hail/0.4.0/hail_darwin_arm64.tar.gz") in product's
+// downloads, with this machine's token, using the default Client.
+func Link(ctx context.Context, product, path string) (string, error) {
+	return (&Client{}).Link(ctx, product, path)
+}
+
+// Link asks the access service for a signed URL of path in product's
+// downloads. With no token it asks nothing and returns ErrNotSignedIn; a
+// refused token is ErrSignInRefused and a product the account doesn't own a
+// *NotOwnedError.
+func (c *Client) Link(ctx context.Context, product, path string) (string, error) {
+	token, err := c.token()
+	if err != nil {
+		return "", err
+	}
+	var r struct {
+		URL string `json:"url"`
+	}
+	err = c.call(ctx, http.MethodPost, "/links", token, map[string]string{"product": product, "path": path}, &r)
+	var refused *apiError
+	if errors.As(err, &refused) {
+		switch refused.status {
+		case http.StatusUnauthorized:
+			return "", ErrSignInRefused
+		case http.StatusForbidden:
+			account := refused.account
+			if account == "" {
+				account = DefaultAccount
+			}
+			return "", &NotOwnedError{Product: product, Account: account}
+		}
+	}
+	if err != nil {
+		return "", err
+	}
+	if r.URL == "" {
+		return "", errors.New("the access service sent no link")
+	}
+	return r.URL, nil
+}
+
 // Logout removes this machine from its account and deletes the token file.
 func (c *Client) Logout(ctx context.Context, out io.Writer) error {
 	token, err := readToken(c.path())
@@ -294,8 +356,9 @@ func (c *Client) Logout(ctx context.Context, out io.Writer) error {
 
 // apiError is a non-200 answer of the access service.
 type apiError struct {
-	status int
-	code   string
+	status  int
+	code    string
+	account string
 }
 
 func (e *apiError) Error() string {
@@ -335,10 +398,11 @@ func (c *Client) call(ctx context.Context, method, path, token string, in, out a
 	}
 	if resp.StatusCode != http.StatusOK {
 		var e struct {
-			Error string `json:"error"`
+			Error   string `json:"error"`
+			Account string `json:"account"`
 		}
 		_ = json.Unmarshal(b, &e)
-		return &apiError{status: resp.StatusCode, code: e.Error}
+		return &apiError{status: resp.StatusCode, code: e.Error, account: e.Account}
 	}
 	if out == nil {
 		return nil

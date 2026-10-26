@@ -61,6 +61,9 @@ type Config struct {
 	Version Version // the tool's own ldflags-stamped values
 	Groups  []Group // optional; empty → flat usage
 	About   string  // optional overview: shown by `help` above the command list and as the man DESCRIPTION
+	// Gated: the tool's /dl is closed to anyone, so update fetches each file
+	// through a signed link the access service gives this machine's token.
+	Gated bool
 }
 
 // App is an instance-scoped CLI: it holds the tool name, domain, version, and
@@ -74,6 +77,7 @@ type App struct {
 	groups   []Group
 	about    string
 	dlHost   string
+	gated    bool
 	client   *http.Client
 	exePath  func() (string, error)
 	auth     *auth.Client // login and logout; tests point it at a fake service
@@ -92,6 +96,7 @@ func New(cfg Config) *App {
 		groups:   cfg.Groups,
 		about:    cfg.About,
 		dlHost:   "https://" + cfg.Domain,
+		gated:    cfg.Gated,
 		client:   http.DefaultClient,
 		exePath:  os.Executable,
 		auth:     &auth.Client{},

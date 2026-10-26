@@ -73,6 +73,13 @@ func main() {
 A tool can override any built-in by registering a command with the same `Name`
 (e.g. wrap `update` with domain-specific convergence).
 
+`Config.Gated` marks a tool whose `/dl` is closed to anyone: `update` then
+fetches `latest`, the tarball and its `.sha256` through five-minute signed
+links (`auth.Link`, `POST /links` with the machine's token) instead of from
+`https://<domain>/dl`. With no token, or one the service refuses, it says to
+run `<tool> login`; for a tool the account doesn't own it names the account
+page. An ungated tool never asks for links.
+
 `Config.About` is an optional overview: `help` prints it above the command
 list and `man` uses it as the DESCRIPTION.
 
@@ -107,6 +114,9 @@ different command; re-registering a `Name` replaces its aliases.
 5. Extract the `<tool>` binary from the tar.gz.
 6. Atomically replace the running binary (stage `.<tool>.new.<pid>` →
    `os.Rename`), so a running process keeps its inode.
+
+A gated tool (`Config.Gated`) asks for each of the three files as a signed
+link instead of a fixed URL.
 
 ## Version format
 
