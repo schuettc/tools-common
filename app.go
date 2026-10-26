@@ -17,13 +17,17 @@
 package tools
 
 import (
+	"context"
 	"errors"
 	"flag"
 	"fmt"
 	"io"
 	"net/http"
 	"os"
+	"runtime"
 	"strings"
+
+	"github.com/subaud-tools/tools-common/auth"
 )
 
 // UsageError signals a usage (exit code 2) error from a command's Run.
@@ -72,10 +76,12 @@ type App struct {
 	dlHost   string
 	client   *http.Client
 	exePath  func() (string, error)
+	auth     *auth.Client // login and logout; tests point it at a fake service
 }
 
 // New builds an App, sets dlHost = "https://"+cfg.Domain, and auto-registers
-// the five built-in commands: version, help, update, man, commands.
+// the seven built-in commands: version, help, update, login, logout, man,
+// commands.
 func New(cfg Config) *App {
 	a := &App{
 		name:     cfg.Name,
@@ -88,6 +94,7 @@ func New(cfg Config) *App {
 		dlHost:   "https://" + cfg.Domain,
 		client:   http.DefaultClient,
 		exePath:  os.Executable,
+		auth:     &auth.Client{},
 	}
 	a.Register(Command{
 		Name:    "version",
@@ -129,6 +136,29 @@ func New(cfg Config) *App {
 				_, _ = fmt.Fprintf(out, "%s is already the latest (%s)\n", a.name, a.version.Number)
 			}
 			return nil
+		},
+	})
+	a.Register(Command{
+		Name:     "login",
+		Summary:  "sign this machine in to its subaud.tools account, for every subaud tool on it",
+		Synopsis: "[--name NAME]",
+		Help: "Prints a code to type on https://subaud.tools/account/machine and waits while you allow the machine there.\n" +
+			"The token is kept in " + auth.TokenPath() + " (mode 600); $" + auth.TokenEnv + " wins over it.",
+		NewFlags: loginFlags,
+		Run: func(args []string, out, errw io.Writer) error {
+			fs := loginFlags()
+			fs.SetOutput(errw)
+			if err := fs.Parse(args); err != nil {
+				return err
+			}
+			return a.auth.Login(context.Background(), fs.Lookup("name").Value.String(), runtime.GOOS, out)
+		},
+	})
+	a.Register(Command{
+		Name:    "logout",
+		Summary: "sign this machine out and delete its token",
+		Run: func(args []string, out, errw io.Writer) error {
+			return a.auth.Logout(context.Background(), out)
 		},
 	})
 	a.Register(Command{
@@ -270,6 +300,14 @@ func (a *App) Dispatch(args []string, out, errw io.Writer) int {
 		return 1
 	}
 	return 0
+}
+
+// loginFlags are login's flags; the machine's name defaults to the hostname.
+func loginFlags() *flag.FlagSet {
+	fs := flag.NewFlagSet("login", flag.ContinueOnError)
+	host, _ := os.Hostname()
+	fs.String("name", host, "the name the account page shows for this machine")
+	return fs
 }
 
 // setDLHost overrides the download host; used by tests.

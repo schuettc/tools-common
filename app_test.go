@@ -5,8 +5,16 @@ import (
 	"encoding/json"
 	"flag"
 	"io"
+	"net/http"
+	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/subaud-tools/tools-common/auth"
 )
 
 func newTestApp() *App {
@@ -227,5 +235,45 @@ func TestSelfRoutedRefused(t *testing.T) {
 	a.Dispatch([]string{"commands", "--json"}, &out2, &errw2)
 	if !strings.Contains(out2.String(), "daemon") {
 		t.Fatalf("self-routed command should be listed: %q", out2.String())
+	}
+}
+
+// Every tool inherits login and logout, one sign-in for the machine.
+func TestLoginAndLogoutAreBuiltIn(t *testing.T) {
+	var started map[string]string
+	removed := 0
+	mux := http.NewServeMux()
+	mux.HandleFunc("POST /machine/start", func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewDecoder(r.Body).Decode(&started)
+		_, _ = io.WriteString(w, `{"device_code":"D","user_code":"ZJQG-NLSQ","url":"https://subaud.tools/account/machine","interval":5,"expires_in":600}`)
+	})
+	mux.HandleFunc("POST /machine/poll", func(w http.ResponseWriter, r *http.Request) {
+		_, _ = io.WriteString(w, `{"status":"allowed","token":"sbt_T","account":"court@example.test"}`)
+	})
+	mux.HandleFunc("DELETE /machine/self", func(w http.ResponseWriter, r *http.Request) {
+		removed++
+		_, _ = io.WriteString(w, `{"removed":"m1"}`)
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	a := newTestApp()
+	path := filepath.Join(t.TempDir(), "token")
+	a.auth = &auth.Client{API: srv.URL, Path: path, Sleep: func(time.Duration) {}}
+	var out, errw bytes.Buffer
+	if code := a.Dispatch([]string{"login", "--name", "ci-box"}, &out, &errw); code != 0 {
+		t.Fatalf("login: exit %d: %s", code, errw.String())
+	}
+	if started["name"] != "ci-box" || started["os"] != runtime.GOOS || !strings.Contains(out.String(), "type ZJQG-NLSQ") {
+		t.Fatalf("started %v, out %q", started, out.String())
+	}
+	if _, err := os.Stat(path); err != nil {
+		t.Fatal(err)
+	}
+	if code := a.Dispatch([]string{"logout"}, &out, &errw); code != 0 || removed != 1 {
+		t.Fatalf("logout: exit %d, removed %d: %s", code, removed, errw.String())
+	}
+	if _, err := os.Stat(path); !os.IsNotExist(err) {
+		t.Fatalf("token file after logout: %v", err)
 	}
 }
