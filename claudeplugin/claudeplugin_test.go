@@ -129,13 +129,19 @@ type modOpts struct {
 	ReportCode int
 	// ReportMs is how long each `BIN report` takes to exit.
 	ReportMs int
+	// SubmitMs is how long $.prompt.submit takes to resolve: a submit made
+	// mid-turn stays pending until the running turn completes.
+	SubmitMs int
 }
 
 // runMod runs a rendered register.js under node with a fake mods API: each
 // spawned watch prints out on stdout, then exits 0. It reports every
 // submitted prompt, how many times watch was spawned and how many restarts
-// were scheduled on $.clock.after. $.env.get finds nothing (plain Claude
-// Code), which the 0.17.0 mod asks.
+// were scheduled on $.clock.after. A $.clock.after callback due in under 2 s
+// (shorter than any restart delay) runs on a real timer, and the harness waits
+// for it and for every submit before turn.complete and before it reports; a
+// restart is counted and not run. $.env.get finds nothing (plain Claude Code),
+// which the 0.17.0 mod asks.
 func runMod(t *testing.T, js []byte, out string) modRun {
 	t.Helper()
 	return runModWith(t, js, out, modOpts{})
@@ -161,6 +167,13 @@ const hooks = {}
 register((name, fn) => { hooks[name] = fn })
 const out = ` + strconvQuote(out) + `
 const run = { submitted: [], spawns: 0, restarts: 0, reports: [], logs: [], order: [] }
+const waits = []
+const sleep = ms => new Promise(r => setTimeout(r, ms))
+async function settle() {
+  await sleep(200)
+  for (let n = 0; n < waits.length; n = waits.length) await Promise.all(waits)
+  await sleep(200)
+}
 const $ = {
   session: { id: async () => 'sid' },
   env: { get: async () => '' },
@@ -174,15 +187,26 @@ const $ = {
     run.spawns++
     return { result: Promise.resolve({ code: 0 }), return() {}, async *[Symbol.asyncIterator]() { yield { stream: 'stdout', text: out } } }
   } },
-  prompt: { submit: async ({ text }) => { run.submitted.push(text); return ` + submit + ` } },
+  prompt: { submit: ({ text }) => {
+    run.submitted.push(text)
+    const p = sleep(` + strconv.Itoa(o.SubmitMs) + `).then(() => (` + submit + `))
+    waits.push(p)
+    return p
+  } },
   ui: { log(text) { run.logs.push(text) } },
-  clock: { after() { run.restarts++ } },
+  clock: { after(ms, fn) {
+    if (ms >= 2000) {
+      run.restarts++
+      return
+    }
+    waits.push(sleep(ms).then(fn))
+  } },
 }
 await hooks['session.start']($, {}, async e => e)
-await new Promise(r => setTimeout(r, 200))
+await settle()
 if (` + strconv.FormatBool(o.TurnComplete) + `) {
   await hooks['turn.complete']($, {}, async e => e)
-  await new Promise(r => setTimeout(r, 200))
+  await settle()
 }
 console.log(JSON.stringify(run))
 `
@@ -424,5 +448,45 @@ func TestModLogsAFailedReportOnce(t *testing.T) {
 	}
 	if !slices.ContainsFunc(r.Logs, func(l string) bool { return strings.Contains(l, "report landed") && strings.Contains(l, "code 1") }) {
 		t.Fatalf("no log of the failed report: %q", r.Logs)
+	}
+}
+
+// TestModReportsHeldWhileTheSubmitIsPending: a submit still pending after a
+// second means the agent is mid-turn; the mod runs `BIN report held` before
+// that line's landed, and turn-ended after both.
+func TestModReportsHeldWhileTheSubmitIsPending(t *testing.T) {
+	files, err := Render(galley)
+	if err != nil {
+		t.Fatal(err)
+	}
+	r := runModWith(t, files["hooks/register.js"], `{"text":"hi","report":"t7"}`+"\n", modOpts{SubmitMs: 1500, TurnComplete: true})
+	want := []string{galley.Bin + " report held t7", galley.Bin + " report landed t7", galley.Bin + " report turn-ended"}
+	var got []string
+	for _, rep := range r.Reports {
+		got = append(got, strings.Join(rep.Argv, " "))
+		if rep.Env["CLAUDE_CODE_SESSION_ID"] != "sid" {
+			t.Fatalf("report %q ran without the session: %+v", rep.Argv, rep.Env)
+		}
+	}
+	if !slices.Equal(got, want) {
+		t.Fatalf("reports %q, want %q", got, want)
+	}
+}
+
+// TestModReportsNoHeldForAPromptThatStartsAtOnce: an idle session's submit
+// resolves at once, so only landed runs; and a line with no token (a tool not
+// on the lifecycle) reports nothing however long its submit waits.
+func TestModReportsNoHeldForAPromptThatStartsAtOnce(t *testing.T) {
+	files, err := Render(galley)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fast := runModWith(t, files["hooks/register.js"], `{"text":"hi","report":"t7"}`+"\n", modOpts{})
+	if len(fast.Reports) != 1 || strings.Join(fast.Reports[0].Argv, " ") != galley.Bin+" report landed t7" {
+		t.Fatalf("an idle session's prompt reported %+v", fast.Reports)
+	}
+	plain := runModWith(t, files["hooks/register.js"], `{"text":"hi"}`+"\n", modOpts{SubmitMs: 1500})
+	if len(plain.Reports) != 0 {
+		t.Fatalf("a line with no token reported %+v", plain.Reports)
 	}
 }
