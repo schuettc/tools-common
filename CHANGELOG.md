@@ -4,6 +4,19 @@ Root module releases are tagged `vX.Y.Z`; the separate `sqlitedb` module is
 tagged `sqlitedb/vX.Y.Z`. Releases before this file are described by their
 tags and PRs.
 
+## 0.26.0
+
+### Added
+- `login` and `logout`, built-in commands every tool inherits. `login` signs
+  the machine in to the subaud.tools account by device code: it prints a URL
+  and a code to type there, polls until the machine is allowed, denied or the
+  code expires, and stores the machine's token at `ConfigDir("subaud")/token`
+  (mode 600), shared by every tool. `logout` removes the machine from the
+  account and deletes the token; it keeps the file on a network error.
+- `auth`: `auth.Token()` returns `$SUBAUD_TOKEN`, else the stored token, for
+  downloaders. The API base is fixed in code, so the environment can't send
+  the token elsewhere.
+
 ## 0.25.0
 
 ### Added
