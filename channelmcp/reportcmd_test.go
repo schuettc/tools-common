@@ -53,6 +53,20 @@ func TestReportCommandDeliversLandedAndTurnEnded(t *testing.T) {
 	}
 }
 
+// The Claude Code plugin runs `report held <token>` when a line's submit is
+// still pending after a second: the agent is mid-turn.
+func TestReportCommandDeliversHeld(t *testing.T) {
+	claudeSession(t, "cc-1")
+	app, got := reportApp(t, nil)
+	var errw bytes.Buffer
+	if code := app.Dispatch([]string{"report", "held", "t7"}, &bytes.Buffer{}, &errw); code != 0 {
+		t.Fatalf("report held exit %d: %s", code, errw.String())
+	}
+	if want := (delivered{"cc-1", ReportHeld, "t7"}); len(*got) != 1 || (*got)[0] != want {
+		t.Fatalf("delivered %+v, want %+v", *got, want)
+	}
+}
+
 // A bridge child's turns belong to the hosting pi session, whose channel
 // reports for it: the command delivers nothing, as watch hears nothing.
 func TestReportCommandIsQuietInABridgeChild(t *testing.T) {
@@ -71,7 +85,7 @@ func TestReportCommandIsQuietInABridgeChild(t *testing.T) {
 func TestReportCommandRefusesBadArguments(t *testing.T) {
 	claudeSession(t, "cc-1")
 	app, got := reportApp(t, nil)
-	for _, args := range [][]string{{}, {"landed"}, {"landed", ""}, {"landed", "t7", "x"}, {"turn-ended", "t7"}, {"held", "t7"}, {"turn_ended"}} {
+	for _, args := range [][]string{{}, {"landed"}, {"landed", ""}, {"landed", "t7", "x"}, {"turn-ended", "t7"}, {"held"}, {"held", ""}, {"held", "t7", "x"}, {"turn_ended"}} {
 		if code := app.Dispatch(append([]string{"report"}, args...), &bytes.Buffer{}, &bytes.Buffer{}); code != 2 {
 			t.Errorf("report %q: exit %d, want 2", args, code)
 		}

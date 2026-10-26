@@ -4,6 +4,19 @@ Root module releases are tagged `vX.Y.Z`; the separate `sqlitedb` module is
 tagged `sqlitedb/vX.Y.Z`. Releases before this file are described by their
 tags and PRs.
 
+## 0.27.0
+
+### Added
+- The Claude Code mod reports held: when a line with a `report` token is
+  submitted and `prompt.submit` has not resolved a second later (the agent is
+  mid-turn, and the prompt waits for the turn to complete), it runs
+  `<bin> report held <token>` in the session, on the same chain as every
+  other report, so held always reaches the server before that line's landed.
+  A line with no token runs nothing. A tool's plugin must be regenerated to
+  get it.
+- `channelmcp.ReportCommand` accepts `<tool> report held <token>` and
+  delivers `ReportHeld` with the token.
+
 ## 0.26.0
 
 ### Added
