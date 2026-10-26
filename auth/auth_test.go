@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -275,7 +276,7 @@ func TestAPendingSignInPastItsExpiryIsNotPolled(t *testing.T) {
 	if err := os.MkdirAll(filepath.Dir(c.Path), 0o700); err != nil {
 		t.Fatal(err)
 	}
-	old := `{"device_code":"DEVICECODE","user_code":"ZJQG-NLSQ","url":"https://subaud.tools/account/machine","interval":5,"expires":"2020-01-01T00:00:00Z"}`
+	old := `{"device_code":"DEVICECODE","user_code":"ZJQG-NLSQ","url":"https://subaud.tools/account/machine","interval":5,"expires":1577836800}`
 	if err := os.WriteFile(pendingPath(c), []byte(old), 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -403,5 +404,25 @@ func TestLogoutDropsAPendingSignIn(t *testing.T) {
 	}
 	if _, err := os.Stat(c.pendingPath()); !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("pending file after logout: %v", err)
+	}
+}
+
+// install.sh writes the waiting sign-in as {"device_code","expires": unix
+// seconds}; the next login must finish it.
+func TestLoginFinishesASignInInstallShStarted(t *testing.T) {
+	c, _, _ := client(t, "allowed")
+	if err := os.MkdirAll(filepath.Dir(c.pendingPath()), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	body := fmt.Sprintf(`{"device_code":"DEVICECODE","expires":%d}`, time.Now().Add(5*time.Minute).Unix())
+	if err := os.WriteFile(c.pendingPath(), []byte(body), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	var out bytes.Buffer
+	if err := c.Login(context.Background(), "courts-mbp", "darwin", &out); err != nil {
+		t.Fatalf("%v: %s", err, out.String())
+	}
+	if _, err := os.Stat(c.Path); err != nil {
+		t.Fatalf("no token after finishing install.sh's sign-in: %v (%s)", err, out.String())
 	}
 }

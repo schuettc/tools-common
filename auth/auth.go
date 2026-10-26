@@ -138,12 +138,16 @@ const slowDownBy = 5 * time.Second
 // device code is the secret the service hands the token to: it stays in
 // the file and is never printed.
 type pending struct {
-	DeviceCode string    `json:"device_code"`
-	UserCode   string    `json:"user_code"`
-	URL        string    `json:"url"`
-	Interval   int       `json:"interval"`
-	Expires    time.Time `json:"expires"`
+	DeviceCode string `json:"device_code"`
+	UserCode   string `json:"user_code"`
+	URL        string `json:"url"`
+	Interval   int    `json:"interval"`
+	// Expires is unix seconds, the form install.sh writes too, so a sign-in
+	// either one starts the other can finish.
+	Expires int64 `json:"expires"`
 }
+
+func (p *pending) expired() bool { return time.Now().Unix() >= p.Expires }
 
 func (c *Client) pendingPath() string { return filepath.Join(filepath.Dir(c.path()), "pending") }
 
@@ -167,7 +171,7 @@ func (c *Client) Login(ctx context.Context, name, osName string, out io.Writer) 
 		_, _ = fmt.Fprintln(out, "Waiting for approval: run login again once you've allowed this machine.")
 		return nil
 	}
-	if !time.Now().Before(p.Expires) {
+	if p.expired() {
 		c.dropPending()
 		return errExpired
 	}
@@ -176,7 +180,11 @@ func (c *Client) Login(ctx context.Context, name, osName string, out io.Writer) 
 		return err
 	}
 	if status != "allowed" {
-		_, _ = fmt.Fprintf(out, "Still waiting for approval: go to %s and type %s, then run login again.\n", p.URL, p.UserCode)
+		if p.UserCode != "" {
+			_, _ = fmt.Fprintf(out, "Still waiting for approval: go to %s and type %s, then run login again.\n", p.URL, p.UserCode)
+		} else {
+			_, _ = fmt.Fprintln(out, "Still waiting for approval: allow this machine on the account page, then run login again.")
+		}
 	}
 	return nil
 }
@@ -187,7 +195,8 @@ func (c *Client) Login(ctx context.Context, name, osName string, out io.Writer) 
 // expires.
 func (c *Client) LoginWait(ctx context.Context, name, osName string, out io.Writer) error {
 	p := c.readPending()
-	if p == nil || !time.Now().Before(p.Expires) {
+	// One install.sh started carries no code to show, so start afresh.
+	if p == nil || p.expired() || p.UserCode == "" {
 		var err error
 		if p, err = c.start(ctx, name, osName); err != nil {
 			return err
@@ -198,7 +207,7 @@ func (c *Client) LoginWait(ctx context.Context, name, osName string, out io.Writ
 	if interval <= 0 {
 		interval = 5 * time.Second
 	}
-	deadline := p.Expires.Add(time.Minute)
+	deadline := time.Unix(p.Expires, 0).Add(time.Minute)
 	for time.Now().Before(deadline) {
 		c.sleep(interval)
 		status, err := c.poll(ctx, p, out)
@@ -226,7 +235,7 @@ func (c *Client) start(ctx context.Context, name, osName string) (*pending, erro
 		return nil, err
 	}
 	p := st.pending
-	p.Expires = time.Now().Add(time.Duration(st.ExpiresIn) * time.Second)
+	p.Expires = time.Now().Add(time.Duration(st.ExpiresIn) * time.Second).Unix()
 	b, err := json.Marshal(p)
 	if err != nil {
 		return nil, err
