@@ -161,8 +161,7 @@ var errExpired = errors.New("the code expired before it was allowed: run login a
 // file, still pending says so, and denied or expired drops the sign-in so
 // the run after starts a new one.
 func (c *Client) Login(ctx context.Context, name, osName string, out io.Writer) error {
-	p := c.readPending()
-	if p == nil {
+	begin := func() error {
 		started, err := c.start(ctx, name, osName)
 		if err != nil {
 			return err
@@ -171,11 +170,20 @@ func (c *Client) Login(ctx context.Context, name, osName string, out io.Writer) 
 		_, _ = fmt.Fprintln(out, "Waiting for approval: run login again once you've allowed this machine.")
 		return nil
 	}
+	p := c.readPending()
+	if p == nil {
+		return begin()
+	}
+	// An expired code can't be allowed any more: replace it in this run, so
+	// the person always has a code to type.
 	if p.expired() {
 		c.dropPending()
-		return errExpired
+		return begin()
 	}
 	status, err := c.poll(ctx, p, out)
+	if errors.Is(err, errExpired) {
+		return begin()
+	}
 	if err != nil {
 		return err
 	}

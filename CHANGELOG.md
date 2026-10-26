@@ -4,6 +4,14 @@ Root module releases are tagged `vX.Y.Z`; the separate `sqlitedb` module is
 tagged `sqlitedb/vX.Y.Z`. Releases before this file are described by their
 tags and PRs.
 
+## 0.29.0
+
+### Fixed
+- `login`: a sign-in whose code expired (its time passed, or the service
+  says so) is replaced in the same run, printing a new code to type, instead
+  of ending with an error and nothing to act on. A denied sign-in still stops
+  and says to run login again.
+
 ## 0.28.0
 
 ### Added

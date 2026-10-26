@@ -252,40 +252,62 @@ func TestLoginAgainWhilePendingSaysSo(t *testing.T) {
 	}
 }
 
-func TestLoginAgainAfterADenialOrExpiryStartsOver(t *testing.T) {
-	for _, status := range []string{"denied", "expired"} {
-		c, _, _ := client(t, status)
-		if err := c.Login(context.Background(), "courts-mbp", "darwin", &bytes.Buffer{}); err != nil {
-			t.Fatal(err)
-		}
-		err := c.Login(context.Background(), "courts-mbp", "darwin", &bytes.Buffer{})
-		if err == nil || !strings.Contains(err.Error(), status) || !strings.Contains(err.Error(), "run login again") {
-			t.Fatalf("%s: err = %v", status, err)
-		}
-		if _, err := os.Stat(pendingPath(c)); !errors.Is(err, os.ErrNotExist) {
-			t.Fatalf("%s: pending file: %v", status, err)
-		}
-		if _, err := os.Stat(c.Path); !errors.Is(err, os.ErrNotExist) {
-			t.Fatalf("%s: token file: %v", status, err)
-		}
-	}
-}
-
-func TestAPendingSignInPastItsExpiryIsNotPolled(t *testing.T) {
-	c, _, _ := client(t) // a poll would fail the test: no answers
-	if err := os.MkdirAll(filepath.Dir(c.Path), 0o700); err != nil {
-		t.Fatal(err)
-	}
-	old := `{"device_code":"DEVICECODE","user_code":"ZJQG-NLSQ","url":"https://subaud.tools/account/machine","interval":5,"expires":1577836800}`
-	if err := os.WriteFile(pendingPath(c), []byte(old), 0o600); err != nil {
+func TestLoginAgainAfterADenialStopsAndSaysSo(t *testing.T) {
+	c, _, _ := client(t, "denied")
+	if err := c.Login(context.Background(), "courts-mbp", "darwin", &bytes.Buffer{}); err != nil {
 		t.Fatal(err)
 	}
 	err := c.Login(context.Background(), "courts-mbp", "darwin", &bytes.Buffer{})
-	if err == nil || !strings.Contains(err.Error(), "run login again") {
+	if err == nil || !strings.Contains(err.Error(), "denied") || !strings.Contains(err.Error(), "run login again") {
 		t.Fatalf("err = %v", err)
 	}
 	if _, err := os.Stat(pendingPath(c)); !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("pending file: %v", err)
+	}
+	if _, err := os.Stat(c.Path); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("token file: %v", err)
+	}
+}
+
+// A code that expired (the service says so, or its time has passed) is
+// replaced in the same run: the person sees a new code to type, not an
+// error with nothing to act on.
+func TestAnExpiredSignInStartsANewOneInTheSameRun(t *testing.T) {
+	c, f, _ := client(t, "expired")
+	if err := c.Login(context.Background(), "courts-mbp", "darwin", &bytes.Buffer{}); err != nil {
+		t.Fatal(err)
+	}
+	f.started = nil
+	var out bytes.Buffer
+	if err := c.Login(context.Background(), "courts-mbp", "darwin", &out); err != nil {
+		t.Fatalf("err = %v (%s)", err, out.String())
+	}
+	if !strings.Contains(out.String(), "type ZJQG-NLSQ") || f.started == nil {
+		t.Fatalf("no new sign-in started: %q", out.String())
+	}
+	if _, err := os.Stat(pendingPath(c)); err != nil {
+		t.Fatalf("the new sign-in is not saved: %v", err)
+	}
+}
+
+func TestAPendingSignInPastItsExpiryIsReplacedNotPolled(t *testing.T) {
+	c, f, _ := client(t) // a poll would fail the test: no answers
+	if err := os.MkdirAll(filepath.Dir(c.Path), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	old := `{"device_code":"OLDCODE","user_code":"ZJQG-NLSQ","url":"https://subaud.tools/account/machine","interval":5,"expires":1577836800}`
+	if err := os.WriteFile(pendingPath(c), []byte(old), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	var out bytes.Buffer
+	if err := c.Login(context.Background(), "courts-mbp", "darwin", &out); err != nil {
+		t.Fatalf("err = %v", err)
+	}
+	if f.started == nil || !strings.Contains(out.String(), "type ZJQG-NLSQ") {
+		t.Fatalf("no new sign-in started: %q", out.String())
+	}
+	if b, _ := os.ReadFile(pendingPath(c)); strings.Contains(string(b), "OLDCODE") {
+		t.Fatalf("the expired sign-in is still saved: %s", b)
 	}
 }
 
