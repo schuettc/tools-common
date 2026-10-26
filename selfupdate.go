@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	neturl "net/url"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -106,14 +107,19 @@ func (a *App) fetch(path string) ([]byte, error) {
 }
 
 func (a *App) download(url string) ([]byte, error) {
+	// A signed link's query is its signature: name the file without it.
+	file := strings.SplitN(url, "?", 2)[0]
 	resp, err := a.client.Get(url)
 	if err != nil {
-		return nil, err
+		var ue *neturl.Error
+		if errors.As(err, &ue) {
+			err = ue.Err
+		}
+		return nil, fmt.Errorf("GET %s: %w", file, err)
 	}
 	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
-		// A signed link's query is its signature: name the file without it.
-		return nil, fmt.Errorf("GET %s: %s", strings.SplitN(url, "?", 2)[0], resp.Status)
+		return nil, fmt.Errorf("GET %s: %s", file, resp.Status)
 	}
 	return io.ReadAll(resp.Body)
 }

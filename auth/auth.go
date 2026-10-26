@@ -333,6 +333,9 @@ func (c *Client) Link(ctx context.Context, product, path string) (string, error)
 
 // Logout removes this machine from its account and deletes the token file.
 func (c *Client) Logout(ctx context.Context, out io.Writer) error {
+	// A sign-in still waiting would otherwise sign the machine back in on the
+	// next login with an approval given before this logout.
+	c.dropPending()
 	token, err := readToken(c.path())
 	if errors.Is(err, ErrNotSignedIn) {
 		_, _ = fmt.Fprintln(out, "This machine is not signed in.")

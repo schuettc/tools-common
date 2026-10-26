@@ -387,3 +387,21 @@ func TestAProductNotOwnedNamesTheAccountPage(t *testing.T) {
 		t.Fatalf("err = %v", err)
 	}
 }
+
+// Logout also drops a sign-in still waiting, so an approval given before the
+// logout can't sign the machine back in on the next login.
+func TestLogoutDropsAPendingSignIn(t *testing.T) {
+	c, _, _ := client(t, "pending")
+	if err := c.Login(context.Background(), "courts-mbp", "darwin", &bytes.Buffer{}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(c.pendingPath()); err != nil {
+		t.Fatalf("no pending file after the first run: %v", err)
+	}
+	if err := c.Logout(context.Background(), &bytes.Buffer{}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(c.pendingPath()); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("pending file after logout: %v", err)
+	}
+}

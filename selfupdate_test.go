@@ -289,3 +289,19 @@ func TestAnUngatedToolNeverAsksForLinks(t *testing.T) {
 		t.Fatalf("asked for links: %v", *asked)
 	}
 }
+
+// A signed link's query is a credential for five minutes: a failed
+// connection must not print it.
+func TestAFailedDownloadNamesTheFileWithoutTheSignature(t *testing.T) {
+	a := New(Config{Name: "kempt", Domain: "kempt.tools", Version: Version{Number: "0.1.0"}})
+	_, err := a.download("http://127.0.0.1:1/dl/kempt/latest?Expires=1&Signature=SECRET&Key-Pair-Id=K")
+	if err == nil {
+		t.Fatal("no error")
+	}
+	if strings.Contains(err.Error(), "SECRET") || strings.Contains(err.Error(), "Signature") {
+		t.Fatalf("the error carries the signature: %v", err)
+	}
+	if !strings.Contains(err.Error(), "/dl/kempt/latest") {
+		t.Fatalf("the error should name the file: %v", err)
+	}
+}
