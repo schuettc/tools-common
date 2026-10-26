@@ -1,8 +1,8 @@
 // Package auth signs a machine in to its subaud.tools account, once for
-// every family tool on it. Login asks the access service for a code, prints
-// where to type it and waits while the buyer allows the machine on the
-// account page; the service then hands over the machine's own token, kept
-// in ConfigDir("subaud")/token with mode 600. Token is what the downloaders
+// every family tool on it. Login asks the access service for a code and
+// prints where to type it; once the buyer allows the machine on the account
+// page, the next Login gets the machine's own token, kept in
+// ConfigDir("subaud")/token with mode 600. Token is what the downloaders
 // send.
 //
 // stdlib-only, and it doesn't import tools-common's root package, which
@@ -114,56 +114,160 @@ func (c *Client) sleep(d time.Duration) {
 // slowDownBy is how much longer the tool waits after a slow_down.
 const slowDownBy = 5 * time.Second
 
-// Login signs this machine in: it prints where to type the code, waits
-// while the buyer decides, then writes the token file and says which
-// account the machine is signed in to.
+// pending is a sign-in in progress, kept between login's two runs. The
+// device code is the secret the service hands the token to: it stays in
+// the file and is never printed.
+type pending struct {
+	DeviceCode string    `json:"device_code"`
+	UserCode   string    `json:"user_code"`
+	URL        string    `json:"url"`
+	Interval   int       `json:"interval"`
+	Expires    time.Time `json:"expires"`
+}
+
+func (c *Client) pendingPath() string { return filepath.Join(filepath.Dir(c.path()), "pending") }
+
+var errDenied = errors.New("the sign-in was denied on the account page: run login again to start a new one")
+
+var errExpired = errors.New("the code expired before it was allowed: run login again")
+
+// Login signs this machine in over two short runs, so nothing waits on a
+// person. The first run starts a sign-in, saves it at PendingPath and prints
+// where to type the code. The next run asks once: allowed writes the token
+// file, still pending says so, and denied or expired drops the sign-in so
+// the run after starts a new one.
 func (c *Client) Login(ctx context.Context, name, osName string, out io.Writer) error {
-	var st struct {
-		DeviceCode string `json:"device_code"`
-		UserCode   string `json:"user_code"`
-		URL        string `json:"url"`
-		Interval   int    `json:"interval"`
-		ExpiresIn  int    `json:"expires_in"`
+	p := c.readPending()
+	if p == nil {
+		started, err := c.start(ctx, name, osName)
+		if err != nil {
+			return err
+		}
+		_, _ = fmt.Fprintf(out, "Go to %s and type %s\n", started.URL, started.UserCode)
+		_, _ = fmt.Fprintln(out, "Waiting for approval: run login again once you've allowed this machine.")
+		return nil
 	}
-	if err := c.call(ctx, http.MethodPost, "/machine/start", "", map[string]string{"name": name, "os": osName}, &st); err != nil {
+	if !time.Now().Before(p.Expires) {
+		c.dropPending()
+		return errExpired
+	}
+	status, err := c.poll(ctx, p, out)
+	if err != nil {
 		return err
 	}
-	_, _ = fmt.Fprintf(out, "Go to %s and type %s\n", st.URL, st.UserCode)
-	interval := time.Duration(st.Interval) * time.Second
+	if status != "allowed" {
+		_, _ = fmt.Fprintf(out, "Still waiting for approval: go to %s and type %s, then run login again.\n", p.URL, p.UserCode)
+	}
+	return nil
+}
+
+// LoginWait signs this machine in in one run, for a person at a terminal:
+// it prints where to type the code (a sign-in already started keeps its
+// code), then asks every interval until the buyer decides or the code
+// expires.
+func (c *Client) LoginWait(ctx context.Context, name, osName string, out io.Writer) error {
+	p := c.readPending()
+	if p == nil || !time.Now().Before(p.Expires) {
+		var err error
+		if p, err = c.start(ctx, name, osName); err != nil {
+			return err
+		}
+	}
+	_, _ = fmt.Fprintf(out, "Go to %s and type %s\n", p.URL, p.UserCode)
+	interval := time.Duration(p.Interval) * time.Second
 	if interval <= 0 {
 		interval = 5 * time.Second
 	}
-	deadline := time.Now().Add(time.Duration(st.ExpiresIn)*time.Second + time.Minute)
+	deadline := p.Expires.Add(time.Minute)
 	for time.Now().Before(deadline) {
 		c.sleep(interval)
-		var p struct {
-			Status  string `json:"status"`
-			Token   string `json:"token"`
-			Account string `json:"account"`
-		}
-		if err := c.call(ctx, http.MethodPost, "/machine/poll", "", map[string]string{"device_code": st.DeviceCode}, &p); err != nil {
+		status, err := c.poll(ctx, p, out)
+		if err != nil {
 			return err
 		}
-		switch p.Status {
-		case "pending":
+		switch status {
+		case "allowed":
+			return nil
 		case "slow_down":
 			interval += slowDownBy
-		case "denied":
-			return errors.New("the sign-in was denied on the account page")
-		case "expired":
-			return errors.New("the code expired before it was allowed: run login again")
-		case "allowed":
-			if err := writeToken(c.path(), p.Token); err != nil {
-				return err
-			}
-			_, _ = fmt.Fprintf(out, "Signed in to %s. Every subaud tool on this machine uses this sign-in.\n", p.Account)
-			return nil
-		default:
-			return fmt.Errorf("the access service answered %q", p.Status)
 		}
 	}
-	return errors.New("the code expired before it was allowed: run login again")
+	c.dropPending()
+	return errExpired
 }
+
+// start asks the service for a code and saves it as the pending sign-in.
+func (c *Client) start(ctx context.Context, name, osName string) (*pending, error) {
+	var st struct {
+		pending
+		ExpiresIn int `json:"expires_in"`
+	}
+	if err := c.call(ctx, http.MethodPost, "/machine/start", "", map[string]string{"name": name, "os": osName}, &st); err != nil {
+		return nil, err
+	}
+	p := st.pending
+	p.Expires = time.Now().Add(time.Duration(st.ExpiresIn) * time.Second)
+	b, err := json.Marshal(p)
+	if err != nil {
+		return nil, err
+	}
+	if err := writePrivate(c.pendingPath(), b); err != nil {
+		return nil, err
+	}
+	return &p, nil
+}
+
+// poll asks once how the pending sign-in stands. allowed writes the token
+// file; denied and expired drop the sign-in and return an error; pending
+// and slow_down are returned as they are.
+func (c *Client) poll(ctx context.Context, p *pending, out io.Writer) (string, error) {
+	var r struct {
+		Status  string `json:"status"`
+		Token   string `json:"token"`
+		Account string `json:"account"`
+	}
+	if err := c.call(ctx, http.MethodPost, "/machine/poll", "", map[string]string{"device_code": p.DeviceCode}, &r); err != nil {
+		return "", err
+	}
+	switch r.Status {
+	case "pending", "slow_down":
+		return r.Status, nil
+	case "denied":
+		c.dropPending()
+		return "", errDenied
+	case "expired":
+		c.dropPending()
+		return "", errExpired
+	case "allowed":
+		if r.Token == "" {
+			return "", errors.New("the access service sent no token")
+		}
+		if err := writePrivate(c.path(), []byte(r.Token+"\n")); err != nil {
+			return "", err
+		}
+		c.dropPending()
+		_, _ = fmt.Fprintf(out, "Signed in to %s. Every subaud tool on this machine uses this sign-in.\n", r.Account)
+		return r.Status, nil
+	default:
+		return "", fmt.Errorf("the access service answered %q", r.Status)
+	}
+}
+
+// readPending returns the pending sign-in, or nil when there is none or
+// the file can't be read as one.
+func (c *Client) readPending() *pending {
+	b, err := os.ReadFile(c.pendingPath())
+	if err != nil {
+		return nil
+	}
+	var p pending
+	if json.Unmarshal(b, &p) != nil || p.DeviceCode == "" {
+		return nil
+	}
+	return &p
+}
+
+func (c *Client) dropPending() { _ = os.Remove(c.pendingPath()) }
 
 // Logout removes this machine from its account and deletes the token file.
 func (c *Client) Logout(ctx context.Context, out io.Writer) error {
@@ -245,21 +349,18 @@ func (c *Client) call(ctx context.Context, method, path, token string, in, out a
 	return nil
 }
 
-// writeToken replaces the token file with mode 600, in a 700 directory.
-func writeToken(path, token string) error {
-	if token == "" {
-		return errors.New("the access service sent no token")
-	}
+// writePrivate replaces path with data, mode 600, in a 700 directory.
+func writePrivate(path string, data []byte) error {
 	dir := filepath.Dir(path)
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return err
 	}
-	f, err := os.CreateTemp(dir, ".token-*")
+	f, err := os.CreateTemp(dir, "."+filepath.Base(path)+"-*")
 	if err != nil {
 		return err
 	}
 	defer func() { _ = os.Remove(f.Name()) }()
-	if _, err := f.WriteString(token + "\n"); err != nil {
+	if _, err := f.Write(data); err != nil {
 		_ = f.Close()
 		return err
 	}

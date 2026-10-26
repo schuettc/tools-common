@@ -141,8 +141,9 @@ func New(cfg Config) *App {
 	a.Register(Command{
 		Name:     "login",
 		Summary:  "sign this machine in to its subaud.tools account, for every subaud tool on it",
-		Synopsis: "[--name NAME]",
-		Help: "Prints a code to type on https://subaud.tools/account/machine and waits while you allow the machine there.\n" +
+		Synopsis: "[--name NAME] [--wait]",
+		Help: "Signs in over two short runs. The first prints a code to type on https://subaud.tools/account/machine and exits;\n" +
+			"once you've allowed the machine there, the second saves its token. --wait does both in one run, waiting while you allow it.\n" +
 			"The token is kept in " + auth.TokenPath() + " (mode 600); $" + auth.TokenEnv + " wins over it.",
 		NewFlags: loginFlags,
 		Run: func(args []string, out, errw io.Writer) error {
@@ -151,7 +152,11 @@ func New(cfg Config) *App {
 			if err := fs.Parse(args); err != nil {
 				return err
 			}
-			return a.auth.Login(context.Background(), fs.Lookup("name").Value.String(), runtime.GOOS, out)
+			name := fs.Lookup("name").Value.String()
+			if fs.Lookup("wait").Value.String() == "true" {
+				return a.auth.LoginWait(context.Background(), name, runtime.GOOS, out)
+			}
+			return a.auth.Login(context.Background(), name, runtime.GOOS, out)
 		},
 	})
 	a.Register(Command{
@@ -307,6 +312,7 @@ func loginFlags() *flag.FlagSet {
 	fs := flag.NewFlagSet("login", flag.ContinueOnError)
 	host, _ := os.Hostname()
 	fs.String("name", host, "the name the account page shows for this machine")
+	fs.Bool("wait", false, "wait in this run while the machine is allowed, instead of exiting to be run again")
 	return fs
 }
 

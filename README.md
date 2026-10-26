@@ -65,7 +65,7 @@ func main() {
 - `version` — prints `"<Name> <Version>"` (e.g. `kempt 0.1.0 (abc, 2026-08-30)`).
 - `help` — prints usage, or `help <command>` for one command.
 - `update` — self-updates via the `/dl` contract below.
-- `login` — signs this machine in to the subaud.tools account: prints a URL and a code to type there, then stores the machine's token (shared by every tool) once it is allowed.
+- `login` — signs this machine in to the subaud.tools account in two short runs, so nothing waits on a person: the first prints a URL and a code to type there, saves the sign-in at `ConfigDir("subaud")/pending` (mode 600) and exits 0; run again once the machine is allowed, it stores the machine's token (shared by every tool). A run while it is still pending says so and exits 0; a denied or expired code is dropped, and the next run starts over. `login --wait` does both in one run, for a person at a terminal.
 - `logout` — removes this machine from the account and deletes its token.
 - `man` — prints a roff man page.
 - `commands` — lists commands; `commands --json` is the machine-readable index.
