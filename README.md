@@ -78,7 +78,9 @@ fetches `latest`, the tarball and its `.sha256` through five-minute signed
 links (`auth.Link`, `POST /links` with the machine's token) instead of from
 `https://<domain>/dl`. With no token, or one the service refuses, it says to
 run `<tool> login`; for a tool the account doesn't own it names the account
-page. An ungated tool never asks for links.
+page. An ungated tool never asks for links. The links are asked for
+`Config.Product`, or `Name` when it is empty: set it when one product covers
+several tools (`Product: "tackle"` for each of tackle's six).
 
 `Config.About` is an optional overview: `help` prints it above the command
 list and `man` uses it as the DESCRIPTION.

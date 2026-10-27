@@ -32,8 +32,8 @@ import (
 //  6. Atomically replace the running binary (stage .<Name>.new.<pid> → rename).
 //
 // A gated tool fetches each of the three files through a signed link the
-// access service gives this machine's token (auth.Link), instead of from
-// <dlHost>/dl.
+// access service gives this machine's token (auth.Link, asked for
+// Config.Product), instead of from <dlHost>/dl.
 func (a *App) SelfUpdate(out, errw io.Writer) (updated bool, newVersion string, err error) {
 	latest, err := a.fetchLatest()
 	if err != nil {
@@ -94,7 +94,7 @@ func (a *App) fetch(path string) ([]byte, error) {
 	if !a.gated {
 		return a.download(a.dlHost + "/dl/" + path)
 	}
-	link, err := a.auth.Link(context.Background(), a.name, path)
+	link, err := a.auth.Link(context.Background(), a.product, path)
 	switch {
 	case errors.Is(err, auth.ErrNotSignedIn):
 		return nil, fmt.Errorf("this machine is not signed in to subaud.tools: run `%s login`", a.name)
