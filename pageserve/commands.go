@@ -29,6 +29,10 @@ type Commands struct {
 	// Serve runs serve in this process until ctx ends: `<tool> serve
 	// --foreground`, which the background start runs.
 	Serve func(ctx context.Context, port int, errw io.Writer) error
+	// Foreground: `<tool> serve` runs serve in this process with no flag and
+	// opens no browser, for a tool whose one server its channel starts and
+	// whose page the agent opens (diazo).
+	Foreground bool
 	// Page checks serve's arguments before serve is found or started, and
 	// returns the fragment of the page to open ("#/p/3") and a line to print
 	// once serve runs ("" for none). nil: serve takes no arguments.
@@ -112,7 +116,7 @@ func (c Commands) ServeCommand(h Help) tools.Command {
 			return nil
 		}
 		port := fs.Lookup("port").Value.(flag.Getter).Get().(int)
-		if boolFlag(fs, "foreground") {
+		if c.Foreground || boolFlag(fs, "foreground") {
 			sctx, stop := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
 			defer stop()
 			return c.Serve(sctx, port, errw)
@@ -153,7 +157,7 @@ func (c Commands) ChannelCommand(stdin io.Reader, h Help) tools.Command {
 	nf := newFlags("channel", strings.TrimSpace(tool+" channel "+h.Synopsis), h.Long, nil)
 	run := func(args []string, out, errw io.Writer) error {
 		fs := nf()
-		pos, err := parse(fs, args, out)
+		pos, err := parse(fs, args, errw) // stdout is the MCP stream
 		if err != nil {
 			return err
 		}

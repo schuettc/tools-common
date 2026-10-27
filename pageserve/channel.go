@@ -107,6 +107,17 @@ type Channel struct {
 	reports chan report // pi's reports, posted to serve in order by one goroutine
 }
 
+// queueReport hands a report to the goroutine that posts them. A full queue
+// drops it, logged without its token: the token is the harness's delivery
+// claim, not something a log should carry.
+func (ch *Channel) queueReport(event channelmcp.ReportEvent, token string) {
+	select {
+	case ch.reports <- report{event, token}:
+	default:
+		ch.logf("dropped report %s: too many waiting", event)
+	}
+}
+
 // report is one report from the harness, waiting to be posted to serve.
 type report struct {
 	event channelmcp.ReportEvent
@@ -132,13 +143,7 @@ func New(spec Spec, id Identity, c *Client) *Channel {
 		},
 		// Run's read loop hands each report over and goes on: posting it
 		// to serve waits on the network, and tool calls must not.
-		OnReport: func(event channelmcp.ReportEvent, token string) {
-			select {
-			case ch.reports <- report{event, token}:
-			default:
-				ch.logf("dropped report %s %s: too many waiting", event, token)
-			}
-		},
+		OnReport: ch.queueReport,
 	})
 	ch.Push = ch.Server
 	return ch

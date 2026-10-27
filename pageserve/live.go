@@ -292,6 +292,8 @@ func (l Live) Claim(room, newOwner string) (bool, error) {
 		return false, err
 	}
 	switch {
+	case future(e.V):
+		return false, nil // a newer binary's entry: rewriting it would drop what this one can't read
 	case e.Owner == newOwner:
 		return true, nil // already ours
 	case e.Owner != "" && l.SessionLive(e.Owner):
