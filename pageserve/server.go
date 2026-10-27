@@ -34,9 +34,10 @@ type Options struct {
 	Idle    time.Duration // shut down after this long with no API traffic (0: never)
 	Version string
 	Log     io.Writer // one line per start/stop
-	// OnStart runs the tool's own start-up steps once the entry is written,
-	// with the server's context and the page's URL; anything it starts in
-	// the background must end with ctx.
+	// OnStart runs the tool's own start-up steps once the server listens and
+	// before its entry is written, so whoever finds the entry finds them
+	// done; it gets the server's context and the page's URL, and anything it
+	// starts in the background must end with ctx.
 	OnStart func(ctx context.Context, url string)
 	Ready   func(url string)
 }
@@ -98,6 +99,12 @@ func Run(ctx context.Context, o Options) error {
 	if err != nil {
 		return err
 	}
+	// THE TOOL IS SET UP BEFORE IT CAN BE FOUND. A channel that reads the
+	// entry calls the tool's API at once, so OnStart (cull sets its page URL
+	// there) runs first; anything it starts ends with ctx if the write fails.
+	if o.OnStart != nil {
+		o.OnStart(ctx, srv.URL)
+	}
 	e := Entry{URL: srv.URL, Base: "http://" + srv.Addr(), Token: srv.Token, PID: os.Getpid(), Version: o.Version, StartedAt: time.Now().UTC()}
 	if err := o.Live.Advertise(e); err != nil {
 		cancel()
@@ -108,9 +115,6 @@ func Run(ctx context.Context, o Options) error {
 	defer o.Live.Withdraw(e.PID)
 	_, _ = fmt.Fprintf(o.Log, "%s serve: started %s (pid %d)\n", tool, e.Base, e.PID)
 	defer func() { _, _ = fmt.Fprintf(o.Log, "%s serve: stopped (pid %d)\n", tool, e.PID) }()
-	if o.OnStart != nil {
-		o.OnStart(ctx, srv.URL)
-	}
 	if o.Idle > 0 {
 		go idle(ctx, o.Idle, &activity, cancel)
 	}
