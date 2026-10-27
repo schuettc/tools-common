@@ -7,8 +7,9 @@ binary hand-rolls: **version reporting**, **self-update** from the family
 
 One module, **stdlib-only** (no external dependencies): the root package `tools`
 (CLI foundation and small helpers) plus focused subpackages, each importable on
-its own. Subpackages never import each other; `localweb` imports only the root,
-and `localweb/page` imports nothing from the module.
+its own. Subpackages never import each other, except `pageserve`, which is the
+shell built on `channelmcp`, `harness`, `localweb` and `skills`; `localweb`
+imports only the root, and `localweb/page` imports nothing from the module.
 
 | Import | What |
 |---|---|
@@ -19,6 +20,7 @@ and `localweb/page` imports nothing from the module.
 | `tools-common/claudeplugin` | renders a tool's Claude Code plugin (manifest, `.mcp.json`, the mod that runs `<tool> watch` and reports back with `<tool> report`) from one template; `AssertCurrent` keeps a repo's copy equal to it |
 | `tools-common/localweb` | loopback local-page server: per-launch token, rebinding/CSRF guards, remembered port, `OpenBrowser`, `CanShare`/`PutFile` (a file on the macOS clipboard) |
 | `tools-common/localweb/page` | the galley-style page kit: tokens, bar, list panel, reading-column components, keyboard layer, API and live clients, served under `/_kit/` |
+| `tools-common/pageserve` | the server behind a tool's page, found and driven by its channel: `Live` entries (one JSON file per open page, with `Claim` by an owner session, session presence, `Inspect`'s problems; a one-page tool's `serve.json` through `Running`/`Advertise`/`Withdraw`), the `Events` log behind `/api/events` and `/api/poll`, `Run` (the serve process, `/api/stop`, idle exit), `Process.Start`/`Ensure` and `Stop`, the channel's `Client` and `Channel` (presence, long poll, reports) from a tool's `Spec`, and the `serve`, `channel`, `watch`, `report` and `skills` commands |
 
 **Separate module:** `github.com/subaud-tools/tools-common/sqlitedb` has its own
 `go.mod` and `sqlitedb/vX.Y.Z` tags, because it needs the SQLite driver
