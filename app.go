@@ -17,6 +17,7 @@
 package tools
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"flag"
@@ -64,12 +65,17 @@ type Config struct {
 	// Gated: the tool's /dl is closed to anyone, so update fetches each file
 	// through a signed link the access service gives this machine's token.
 	Gated bool
+	// Product: what the account buys that covers this tool, asked of the
+	// access service for its links; "" → Name. One product can cover several
+	// tools (tackle's six).
+	Product string
 }
 
 // App is an instance-scoped CLI: it holds the tool name, domain, version, and
 // command registry (no package globals).
 type App struct {
 	name     string
+	product  string
 	domain   string
 	version  Version
 	registry map[string]Command
@@ -89,6 +95,7 @@ type App struct {
 func New(cfg Config) *App {
 	a := &App{
 		name:     cfg.Name,
+		product:  cmp.Or(cfg.Product, cfg.Name),
 		domain:   cfg.Domain,
 		version:  cfg.Version,
 		registry: map[string]Command{},

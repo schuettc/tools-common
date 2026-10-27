@@ -167,16 +167,16 @@ func TestSelfUpdateMissingBinary(t *testing.T) {
 	}
 }
 
-// linksServer stands for the access service's POST /links: status 200
-// answers a signed URL on files, else the service's error body. It counts
-// the paths it was asked for.
-func linksServer(t *testing.T, files *httptest.Server, status int) (*httptest.Server, *[]string) {
+// linksServer stands for the access service's POST /links for product:
+// status 200 answers a signed URL on files, else the service's error body.
+// It counts the paths it was asked for.
+func linksServer(t *testing.T, files *httptest.Server, product string, status int) (*httptest.Server, *[]string) {
 	t.Helper()
 	var asked []string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var in struct{ Product, Path string }
 		_ = json.NewDecoder(r.Body).Decode(&in)
-		if r.Header.Get("Authorization") != "Bearer sbt_T" || in.Product != "kempt" {
+		if r.Header.Get("Authorization") != "Bearer sbt_T" || in.Product != product {
 			t.Errorf("asked by %q for %q", r.Header.Get("Authorization"), in.Product)
 		}
 		asked = append(asked, in.Path)
@@ -217,7 +217,7 @@ func TestAGatedToolUpdatesThroughSignedLinks(t *testing.T) {
 	tarball := makeTarGz(t, "kempt", newBin)
 	files := dlServer(t, "kempt", "0.2.0", tarball, sidecarFor("kempt", tarball))
 	defer files.Close()
-	links, asked := linksServer(t, files, http.StatusOK)
+	links, asked := linksServer(t, files, "kempt", http.StatusOK)
 	exe := filepath.Join(t.TempDir(), "kempt")
 	_ = os.WriteFile(exe, []byte("old"), 0o755)
 	a := gatedApp(t, true, links, true, exe)
@@ -236,10 +236,30 @@ func TestAGatedToolUpdatesThroughSignedLinks(t *testing.T) {
 	}
 }
 
+func TestAToolAsksForItsProductsLinks(t *testing.T) {
+	tarball := makeTarGz(t, "cull", []byte("cull binary"))
+	files := dlServer(t, "cull", "0.2.0", tarball, sidecarFor("cull", tarball))
+	defer files.Close()
+	links, asked := linksServer(t, files, "tackle", http.StatusOK)
+	exe := filepath.Join(t.TempDir(), "cull")
+	_ = os.WriteFile(exe, []byte("old"), 0o755)
+	t.Setenv(auth.TokenEnv, "sbt_T")
+	a := New(Config{Name: "cull", Product: "tackle", Domain: "tackle.tools", Version: Version{Number: "0.1.0"}, Gated: true})
+	a.auth = &auth.Client{API: links.URL, Path: filepath.Join(t.TempDir(), "token")}
+	a.exePath = func() (string, error) { return exe, nil }
+
+	if _, _, err := a.SelfUpdate(io.Discard, io.Discard); err != nil {
+		t.Fatal(err)
+	}
+	if (*asked)[0] != "cull/latest" {
+		t.Fatalf("asked %v, want cull/latest first", *asked)
+	}
+}
+
 func TestAGatedToolWithNoTokenNamesLogin(t *testing.T) {
 	files := dlServer(t, "kempt", "0.2.0", nil, "")
 	defer files.Close()
-	links, asked := linksServer(t, files, http.StatusOK)
+	links, asked := linksServer(t, files, "kempt", http.StatusOK)
 	a := gatedApp(t, true, links, false, filepath.Join(t.TempDir(), "kempt"))
 	var out, errw bytes.Buffer
 	if code := a.Dispatch([]string{"update"}, &out, &errw); code != 1 {
@@ -253,7 +273,7 @@ func TestAGatedToolWithNoTokenNamesLogin(t *testing.T) {
 func TestAGatedToolWithARefusedTokenNamesLogin(t *testing.T) {
 	files := dlServer(t, "kempt", "0.2.0", nil, "")
 	defer files.Close()
-	links, _ := linksServer(t, files, http.StatusUnauthorized)
+	links, _ := linksServer(t, files, "kempt", http.StatusUnauthorized)
 	a := gatedApp(t, true, links, true, filepath.Join(t.TempDir(), "kempt"))
 	_, _, err := a.SelfUpdate(io.Discard, io.Discard)
 	if err == nil || !strings.Contains(err.Error(), "run `kempt login`") {
@@ -264,7 +284,7 @@ func TestAGatedToolWithARefusedTokenNamesLogin(t *testing.T) {
 func TestAGatedToolNotOwnedNamesTheAccountPage(t *testing.T) {
 	files := dlServer(t, "kempt", "0.2.0", nil, "")
 	defer files.Close()
-	links, _ := linksServer(t, files, http.StatusForbidden)
+	links, _ := linksServer(t, files, "kempt", http.StatusForbidden)
 	a := gatedApp(t, true, links, true, filepath.Join(t.TempDir(), "kempt"))
 	_, _, err := a.SelfUpdate(io.Discard, io.Discard)
 	if err == nil || !strings.Contains(err.Error(), "https://subaud.tools/account/") {
@@ -276,7 +296,7 @@ func TestAnUngatedToolNeverAsksForLinks(t *testing.T) {
 	tarball := makeTarGz(t, "kempt", []byte("plain binary"))
 	files := dlServer(t, "kempt", "0.2.0", tarball, sidecarFor("kempt", tarball))
 	defer files.Close()
-	links, asked := linksServer(t, files, http.StatusOK)
+	links, asked := linksServer(t, files, "kempt", http.StatusOK)
 	exe := filepath.Join(t.TempDir(), "kempt")
 	_ = os.WriteFile(exe, []byte("old"), 0o755)
 	a := gatedApp(t, false, links, true, exe)

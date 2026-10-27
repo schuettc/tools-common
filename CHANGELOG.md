@@ -4,6 +4,13 @@ Root module releases are tagged `vX.Y.Z`; the separate `sqlitedb` module is
 tagged `sqlitedb/vX.Y.Z`. Releases before this file are described by their
 tags and PRs.
 
+## 0.30.0
+
+### Added
+- `Config.Product`: the product a gated tool's `update` asks `/links` for,
+  when one product covers several tools (tackle's six). Left empty it is
+  `Name`, as before.
+
 ## 0.29.0
 
 ### Fixed
