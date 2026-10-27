@@ -4,7 +4,7 @@ Root module releases are tagged `vX.Y.Z`; the separate `sqlitedb` module is
 tagged `sqlitedb/vX.Y.Z`. Releases before this file are described by their
 tags and PRs.
 
-## Unreleased
+## 0.31.0
 
 ### Added
 - `pageserve`: the page-tool server shell diazo, sift, cull and casebook
