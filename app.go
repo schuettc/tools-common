@@ -147,6 +147,7 @@ func New(cfg Config) *App {
 			} else {
 				_, _ = fmt.Fprintf(out, "%s is already the latest (%s)\n", a.name, a.version.Number)
 			}
+			a.PrintNotice(errw)
 			return nil
 		},
 	})

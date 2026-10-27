@@ -16,6 +16,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"time"
 
 	"github.com/subaud-tools/tools-common/auth"
 )
@@ -82,6 +83,13 @@ func (a *App) SelfUpdate(out, errw io.Writer) (updated bool, newVersion string, 
 
 func (a *App) fetchLatest() (string, error) {
 	body, err := a.fetch(a.name + "/latest")
+	var se *statusError
+	if !a.gated && errors.As(err, &se) && (se.code == http.StatusForbidden || se.code == http.StatusNotFound) {
+		// A gated site's /dl refuses an unsigned request with 403 or 404; a 404
+		// is also a release missing from an open site, so say only what we saw.
+		return "", fmt.Errorf("%s refused the download (HTTP %d); if it now needs a signed-in machine, get %s at %s, then install it again with `curl -fsSL https://%s/install.sh | sh`",
+			a.domain, se.code, a.name, auth.DefaultAccount, a.domain)
+	}
 	if err != nil {
 		return "", err
 	}
@@ -119,9 +127,49 @@ func (a *App) download(url string) ([]byte, error) {
 	}
 	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("GET %s: %s", file, resp.Status)
+		return nil, &statusError{file: file, code: resp.StatusCode, status: resp.Status}
 	}
 	return io.ReadAll(resp.Body)
+}
+
+// statusError is a download answered with a status other than 200.
+type statusError struct {
+	file   string
+	code   int
+	status string
+}
+
+func (e *statusError) Error() string { return fmt.Sprintf("GET %s: %s", e.file, e.status) }
+
+// noticeMax caps how much of a site's notice update prints.
+const noticeMax = 2048
+
+// PrintNotice prints the tool site's notice (<dlHost>/notice.txt, ungated)
+// to errw, trimmed and cut to noticeMax bytes. A site with no notice, an
+// error or an empty body prints nothing. The built-in update calls it after
+// its own output; a tool that replaces update calls it the same way.
+func (a *App) PrintNotice(errw io.Writer) {
+	c := *a.client
+	c.Timeout = time.Second
+	resp, err := c.Get(a.dlHost + "/notice.txt")
+	if err != nil {
+		return
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != http.StatusOK {
+		return
+	}
+	body, err := io.ReadAll(io.LimitReader(resp.Body, noticeMax+1024))
+	if err != nil {
+		return
+	}
+	text := strings.TrimSpace(string(body))
+	if len(text) > noticeMax {
+		text = strings.TrimSpace(strings.ToValidUTF8(text[:noticeMax], ""))
+	}
+	if text != "" {
+		_, _ = fmt.Fprintln(errw, text)
+	}
 }
 
 // firstField returns the first whitespace-delimited field of a shasum sidecar

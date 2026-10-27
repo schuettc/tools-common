@@ -325,3 +325,107 @@ func TestAFailedDownloadNamesTheFileWithoutTheSignature(t *testing.T) {
 		t.Fatalf("the error should name the file: %v", err)
 	}
 }
+
+// noticeSite serves the /dl contract for kempt at latest with the site's
+// notice.txt answered by notice (nil: the site has none).
+func noticeSite(t *testing.T, latest string, notice http.HandlerFunc) *httptest.Server {
+	t.Helper()
+	mux := http.NewServeMux()
+	mux.HandleFunc("/dl/kempt/latest", func(w http.ResponseWriter, r *http.Request) {
+		_, _ = fmt.Fprintln(w, latest)
+	})
+	if notice != nil {
+		mux.HandleFunc("/notice.txt", notice)
+	}
+	srv := httptest.NewServer(mux)
+	t.Cleanup(srv.Close)
+	return srv
+}
+
+func TestUpdatePrintsTheSitesNoticeAfterItsOwnOutput(t *testing.T) {
+	srv := noticeSite(t, "0.1.0", func(w http.ResponseWriter, r *http.Request) {
+		_, _ = io.WriteString(w, "\n  kempt closes on 2026-12-01: see https://subaud.tools/account/\n\n")
+	})
+	a := newUpdateApp(t, srv, "0.1.0", filepath.Join(t.TempDir(), "kempt"))
+	var out, errw bytes.Buffer
+	if code := a.Dispatch([]string{"update"}, &out, &errw); code != 0 {
+		t.Fatalf("exit %d: %s", code, errw.String())
+	}
+	if !strings.Contains(out.String(), "already the latest") {
+		t.Fatalf("out %q", out.String())
+	}
+	if errw.String() != "kempt closes on 2026-12-01: see https://subaud.tools/account/\n" {
+		t.Fatalf("errw %q", errw.String())
+	}
+}
+
+func TestANoticeIsCut(t *testing.T) {
+	srv := noticeSite(t, "0.1.0", func(w http.ResponseWriter, r *http.Request) {
+		_, _ = io.WriteString(w, strings.Repeat("x", 10000))
+	})
+	a := newUpdateApp(t, srv, "0.1.0", filepath.Join(t.TempDir(), "kempt"))
+	var errw bytes.Buffer
+	a.PrintNotice(&errw)
+	if n := len(strings.TrimSpace(errw.String())); n != noticeMax {
+		t.Fatalf("printed %d bytes, want %d", n, noticeMax)
+	}
+}
+
+func TestNoNoticePrintsNothingAndNeverFailsTheUpdate(t *testing.T) {
+	for name, h := range map[string]http.HandlerFunc{
+		"absent": nil,
+		"error": func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusForbidden)
+			_, _ = io.WriteString(w, "denied")
+		},
+		"empty": func(w http.ResponseWriter, r *http.Request) { _, _ = io.WriteString(w, " \n") },
+	} {
+		t.Run(name, func(t *testing.T) {
+			srv := noticeSite(t, "0.1.0", h)
+			a := newUpdateApp(t, srv, "0.1.0", filepath.Join(t.TempDir(), "kempt"))
+			var out, errw bytes.Buffer
+			if code := a.Dispatch([]string{"update"}, &out, &errw); code != 0 || errw.Len() != 0 {
+				t.Fatalf("exit %d, errw %q", code, errw.String())
+			}
+		})
+	}
+}
+
+func TestAnUnreachableNoticePrintsNothing(t *testing.T) {
+	a := New(Config{Name: "kempt", Domain: "kempt.tools", Version: Version{Number: "0.1.0"}})
+	a.setDLHost("http://127.0.0.1:1")
+	var errw bytes.Buffer
+	a.PrintNotice(&errw)
+	if errw.Len() != 0 {
+		t.Fatalf("errw %q", errw.String())
+	}
+}
+
+// A site whose /dl is gated refuses an unsigned request with 403 or 404:
+// an ungated binary names the account page and the site's install command.
+func TestAnUngatedToolRefusedByAGatedSiteNamesTheAccountAndInstall(t *testing.T) {
+	for _, status := range []int{http.StatusForbidden, http.StatusNotFound} {
+		t.Run(http.StatusText(status), func(t *testing.T) {
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(status)
+			}))
+			defer srv.Close()
+			a := newUpdateApp(t, srv, "0.1.0", filepath.Join(t.TempDir(), "kempt"))
+			var out, errw bytes.Buffer
+			if code := a.Dispatch([]string{"update"}, &out, &errw); code == 0 {
+				t.Fatalf("exit 0: %s", errw.String())
+			}
+			msg := errw.String()
+			// A 404 is also a missing release on an open site, so the message
+			// says what the status was and only then what to do if the site closed.
+			for _, want := range []string{fmt.Sprintf("HTTP %d", status), "if it now needs a signed-in machine", "https://subaud.tools/account/", "curl -fsSL https://kempt.tools/install.sh | sh"} {
+				if !strings.Contains(msg, want) {
+					t.Errorf("errw %q lacks %q", msg, want)
+				}
+			}
+			if strings.Contains(msg, "—") || strings.Contains(msg, "now downloads only") {
+				t.Errorf("errw %q", msg)
+			}
+		})
+	}
+}
