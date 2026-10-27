@@ -85,9 +85,10 @@ func (a *App) fetchLatest() (string, error) {
 	body, err := a.fetch(a.name + "/latest")
 	var se *statusError
 	if !a.gated && errors.As(err, &se) && (se.code == http.StatusForbidden || se.code == http.StatusNotFound) {
-		// A gated site's /dl refuses an unsigned request with 403 or 404.
-		return "", fmt.Errorf("%s now downloads only for a signed-in machine: get %s at %s, then install it again with `curl -fsSL https://%s/install.sh | sh`",
-			a.domain, a.name, auth.DefaultAccount, a.domain)
+		// A gated site's /dl refuses an unsigned request with 403 or 404; a 404
+		// is also a release missing from an open site, so say only what we saw.
+		return "", fmt.Errorf("%s refused the download (HTTP %d); if it now needs a signed-in machine, get %s at %s, then install it again with `curl -fsSL https://%s/install.sh | sh`",
+			a.domain, se.code, a.name, auth.DefaultAccount, a.domain)
 	}
 	if err != nil {
 		return "", err
@@ -149,7 +150,7 @@ const noticeMax = 2048
 // its own output; a tool that replaces update calls it the same way.
 func (a *App) PrintNotice(errw io.Writer) {
 	c := *a.client
-	c.Timeout = 3 * time.Second
+	c.Timeout = time.Second
 	resp, err := c.Get(a.dlHost + "/notice.txt")
 	if err != nil {
 		return
