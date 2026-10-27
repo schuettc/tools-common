@@ -123,3 +123,21 @@ func TestCommandsJSONShape(t *testing.T) {
 		t.Fatalf("flags wrong: %v", flags)
 	}
 }
+
+// A synopsis that gives only the arguments still prints the command's name:
+// `Usage: diazo skills install …`, not `Usage: diazo install …`. One that
+// already starts with the name is printed as it is.
+func TestHelpForNamesTheCommand(t *testing.T) {
+	for _, tc := range []struct{ syn, want string }{
+		{"install [--agent NAME]…", "Usage: diazo skills install [--agent NAME]…\n"},
+		{"skills install [--agent NAME]…", "Usage: diazo skills install [--agent NAME]…\n"},
+		{"skillset", "Usage: diazo skills skillset\n"},
+		{"", "Usage: diazo skills\n"},
+	} {
+		var b strings.Builder
+		HelpFor(&b, "diazo", Command{Name: "skills", Synopsis: tc.syn})
+		if got, _, _ := strings.Cut(b.String(), "\n"); got+"\n" != tc.want {
+			t.Errorf("synopsis %q: got %q, want %q", tc.syn, got+"\n", tc.want)
+		}
+	}
+}
