@@ -62,14 +62,24 @@ func writeRows(w io.Writer, cmds []Command) {
 	_ = tw.Flush()
 }
 
+// usageOf is the command's usage after the tool's name: its Synopsis, led by
+// the command's name when the Synopsis gives only the arguments (most do), so
+// `<tool> skills -h` reads `Usage: <tool> skills install …`.
+func usageOf(c Command) string {
+	syn := c.Synopsis
+	if syn == c.Name || strings.HasPrefix(syn, c.Name+" ") {
+		return syn
+	}
+	if syn == "" {
+		return c.Name
+	}
+	return c.Name + " " + syn
+}
+
 // HelpFor prints one command's help: the usage line, its long Help, and its
 // flags (from NewFlags). Synopsis falls back to the bare name.
 func HelpFor(w io.Writer, name string, c Command) {
-	syn := c.Synopsis
-	if syn == "" {
-		syn = c.Name
-	}
-	_, _ = fmt.Fprintf(w, "Usage: %s %s\n", name, syn)
+	_, _ = fmt.Fprintf(w, "Usage: %s %s\n", name, usageOf(c))
 	if len(c.Aliases) > 0 {
 		_, _ = fmt.Fprintf(w, "aliases: %s\n", strings.Join(c.Aliases, ", "))
 	}
@@ -150,11 +160,7 @@ func manPage(name, domain, about string, groups []Group, cmds []Command) string 
 
 	fmt.Fprintf(&b, ".SH COMMANDS\n")
 	for _, c := range sorted {
-		syn := c.Synopsis
-		if syn == "" {
-			syn = c.Name
-		}
-		fmt.Fprintf(&b, ".TP\n.B %s\n%s\n", roffEscape(syn), roffEscape(c.Summary))
+		fmt.Fprintf(&b, ".TP\n.B %s\n%s\n", roffEscape(usageOf(c)), roffEscape(c.Summary))
 		var flags []FlagInfo
 		if c.NewFlags != nil {
 			flags = FlagsOf(c.NewFlags())
