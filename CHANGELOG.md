@@ -4,6 +4,43 @@ Root module releases are tagged `vX.Y.Z`; the separate `sqlitedb` module is
 tagged `sqlitedb/vX.Y.Z`. Releases before this file are described by their
 tags and PRs.
 
+## Unreleased
+
+### Added
+- `pageserve`: the page-tool server shell diazo, sift, cull and casebook
+  each carried a copy of, with galley's registry, so each tool keeps only
+  its own routes and channel tools. Built on `channelmcp`, `harness`,
+  `localweb` and `skills`; the tool's name parameterizes every message.
+  - `Entry`: the superset of a one-page tool's advert (`url`, `base`,
+    `token`, `pid`, `version`, `stale`, `started_at`) and galley's registry
+    entry (`v`, `url`, `room`, `page`, `pid`, `owner`), under the same JSON
+    names, with the fields one of them never had omitted when empty, so
+    each file keeps its shape and an old binary still reads a new one's.
+  - `Live{Tool, Dir}` (`LiveFor(tool)` is `StateDir(tool)/live`): `Write`,
+    `Remove`, `Claim` (an flock on the sibling `<room>.lock`: exactly one
+    channel owns an unowned or orphaned entry), `List`/`Inspect` (reap dead
+    pids, drop a second entry for one URL, report every file declined as a
+    `Problem`; an entry from a newer version is reported and left alone),
+    session presence (`AnnounceSession`, `WithdrawSession`, `SessionLive`),
+    `LogDir`, `Token`, and per-page port hints (`LastPort`,
+    `SaveLastPort`). Moved from galley's `internal/registry`.
+  - A one-page tool's entry, `live/serve.json`: `Running`, `Advertise`,
+    `Withdraw`, `ErrNotRunning`.
+  - `Events`: the event log the page kit's `live()` reads, `Emit`,
+    `Cursor`, and the `Poll` and `Stream` handlers, with `Tabs` check-ins.
+  - `Run(ctx, Options)`: the serve process: one per machine (under
+    `serve.lock`), its entry while it runs, `/api/events`, `/api/poll`,
+    `/api/stop`, the idle exit, and an `OnStart` hook for the tool's own
+    steps. `Process{Live, Args, Dir}.Start`/`Ensure` start it in the
+    background; `Stop` stops it.
+  - `Client` (`Do`, `Report`, `Fresh`, `StatusError`, `ErrNoServe`,
+    `Query`) and `Channel` (`New`, `ForSession`, `Run`, `Watch`, `Root`)
+    from a tool's `Spec`: its tools, its project root, how it reads a wait's
+    answer (`Wake`), and whether its serve takes presence.
+  - `Commands`: the `serve`, `channel`, `watch` and `report` commands from
+    a tool's `Spec`, `Process` and hooks; `SkillsCommand(tool, skill)` is
+    `<tool> skills install [--agent NAME]…`.
+
 ## 0.30.0
 
 ### Added
