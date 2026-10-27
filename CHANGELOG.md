@@ -4,6 +4,11 @@ Root module releases are tagged `vX.Y.Z`; the separate `sqlitedb` module is
 tagged `sqlitedb/vX.Y.Z`. Releases before this file are described by their
 tags and PRs.
 
+## 0.31.1
+
+### Fixed
+- `pageserve.Run` calls `OnStart` before it writes the entry, so a channel that finds a running serve finds the tool's own start-up done. Before, a channel could call the tool's API in the moment between the entry and `OnStart` (cull's page URL was still unset).
+
 ## 0.31.0
 
 ### Added
