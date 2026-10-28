@@ -315,6 +315,36 @@ func TestSendReachesThisChannelOnceAndNoOtherProject(t *testing.T) {
 	}
 }
 
+// A delivery the tool's Wake refuses is logged with the start of its body,
+// so a lost delivery leaves a trace (diazo's overdue wake vanished silently).
+func TestARefusedDeliveryIsLogged(t *testing.T) {
+	f := newFakeServe(t)
+	root := t.TempDir()
+	spec := cullSpec()
+	spec.Wake = func(json.RawMessage) (string, map[string]string, bool) { return "", nil, false }
+	c := connect(t, New(spec, Identity{Session: "s-1", Harness: "pi", Label: "pi · a", CWD: root}, f.client()))
+	f.send(root, "a delivery the tool cannot read "+strings.Repeat("x", 300))
+	deadline := time.Now().Add(5 * time.Second)
+	for !strings.Contains(c.logs.String(), "refused delivery:") && time.Now().Before(deadline) {
+		time.Sleep(20 * time.Millisecond)
+	}
+	logs := c.logs.String()
+	i := strings.Index(logs, `cull channel: refused delivery: {"id":1,`)
+	if i < 0 {
+		t.Fatalf("logs = %q", logs)
+	}
+	line, _, _ := strings.Cut(logs[i:], "\n")
+	if !strings.Contains(line, "a delivery the tool cannot read") {
+		t.Fatalf("line = %q", line)
+	}
+	if strings.Count(line, "x") >= 300 {
+		t.Errorf("the whole body was logged, not its first 200 bytes: %q", line)
+	}
+	if ev, got := c.expectEvent(300 * time.Millisecond); got {
+		t.Errorf("a refused delivery was pushed: %s", ev.Content)
+	}
+}
+
 // Presence names the session and the folder its Sends come from; a tool
 // without a project names no root, and one whose serve has no presence
 // route (diazo's) only waits.
