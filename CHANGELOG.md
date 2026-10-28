@@ -8,6 +8,8 @@ tags and PRs.
 
 ### Added
 - `wiregen`: writes a page tool's `wire.d.ts` from its Go view structs and checks the committed file, the generator galley, diazo and casebook each carried in their `wire_test.go`. `Generate(roots, Options)` and `CheckCommitted(path, roots, Options, update)` (the drift test: an error naming the first differing line, or with `update` the file rewritten); `Options` holds the tool's `Header`, the `Regenerate` command its errors name, and `AllowUnknown`. It is the union of the three: a named string type with `Values()` is a union (wrapped one value per line past 80 columns, as prettier writes it), untagged embedded structs are promoted (pointer or not), `omitzero` is optional, references are followed across packages, maps are `Record<K, V>` unless the file declares a type named `Record` (then `{ [key: K]: V }`), and two Go types with one TypeScript name, or a field it can only call `unknown`, are refused.
+- `mermaidkit`, a separate module (`github.com/subaud-tools/tools-common/mermaidkit`, tagged `mermaidkit/vX.Y.Z`, because it needs goja and goldmark): diazo's diagram check and galley's themed page. `NewParser(Bundle).Check(text)` parses a diagram with mermaid's own parser in goja and returns mermaid's reason (its first two lines). `Render(md, Theme, Bundle, docDir)` turns markdown into one self-contained HTML page (sidebar, local images embedded, the bundle inlined only when a diagram needs it) with `Theme`, `Palette`, `Font`, `BaseTheme()`, `ReadTheme(name, dir)` and `ImageTypes`. `Bundle{JS, Global}` is the tool's own built bundle and its esbuild `--global-name`. `just verify-extra` gates it as it does sqlitedb.
+- `localweb/page/build/mermaid-entry.ts`: the mermaid bundle's entry a tool's build copies.
 
 ## 0.32.1
 
