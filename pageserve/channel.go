@@ -18,10 +18,13 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"net/http"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/subaud-tools/tools-common/channelmcp"
@@ -323,7 +326,7 @@ func (ch *Channel) loop(ctx context.Context) {
 			lastErr = ""
 			text, meta, ok := ch.Spec.Wake(got)
 			if !ok {
-				ch.logf("refused delivery: %s", got[:min(len(got), refusedBytes)])
+				ch.logf("refused delivery: %s", refused(got))
 				continue
 			}
 			if err := ch.Push.Notify(text, meta); err != nil {
@@ -335,8 +338,16 @@ func (ch *Channel) loop(ctx context.Context) {
 	}
 }
 
-// refusedBytes is how much of a refused delivery's body the log keeps.
-const refusedBytes = 200
+// refused describes a delivery the tool's Wake refused by its size and its
+// top-level field names, never its values: they carry Court's words.
+func refused(body json.RawMessage) string {
+	var fields map[string]json.RawMessage
+	if json.Unmarshal(body, &fields) != nil {
+		return fmt.Sprintf("%d bytes, not a JSON object", len(body))
+	}
+	names := slices.Sorted(maps.Keys(fields))
+	return fmt.Sprintf("%d bytes, fields %s", len(body), strings.Join(names, " "))
+}
 
 func sleep(ctx context.Context, d time.Duration) {
 	t := time.NewTimer(d)

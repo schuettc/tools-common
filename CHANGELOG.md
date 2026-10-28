@@ -7,7 +7,7 @@ tags and PRs.
 ## Unreleased
 
 ### Fixed
-- A channel's wait loop logs each delivery the tool's `Wake` refuses (`<tool> channel: refused delivery: ` and the body's first 200 bytes) instead of dropping it silently. diazo's channel dropped its overdue-wait wakes this way and left no trace.
+- A channel's wait loop logs each delivery the tool's `Wake` refuses (`<tool> channel: refused delivery: ` with its size and field names, never their values) instead of dropping it silently. diazo's channel dropped its overdue-wait wakes this way and left no trace.
 
 ## mermaidkit 0.2.0
 
