@@ -46,7 +46,8 @@ const rules = {
  * @param {string[]} [opts.testFiles] files tsconfig.json leaves out (test files
  *   with node: imports) linted in a default project; [] for none.
  * @param {number} [opts.maxTestFiles] how many files may match testFiles,
- *   when more than typescript-eslint's default of eight do.
+ *   when more than typescript-eslint's default of eight do; an error with
+ *   testFiles [].
  * @param {boolean} [opts.ambientGlobals] the page's types are ambient globals
  *   (wire.d.ts, kit.d.ts), so no-undef is off for .ts and tsc checks names.
  * @returns {import('eslint').Linter.Config[]}
@@ -59,6 +60,10 @@ export default function base({
   ambientGlobals = true,
 } = {}) {
   if (!root) throw new Error('eslint.base.mjs: pass root: import.meta.dirname');
+  if (maxTestFiles && !testFiles.length)
+    throw new Error(
+      'eslint.base.mjs: maxTestFiles caps how many files match testFiles, and testFiles is []',
+    );
   const projectService = testFiles.length
     ? {
         allowDefaultProject: testFiles,

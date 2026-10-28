@@ -117,13 +117,15 @@ console.log(JSON.stringify([
   g.rules['no-undef'],
   base({ root: '/r', ignores: ['x.js'] })[0].ignores,
 ]));
-try { base(); } catch (e) { console.log(e.message); }`
+try { base(); } catch (e) { console.log(e.message); }
+try { base({ root: '/r', testFiles: [], maxTestFiles: 24 }); } catch (e) { console.log(e.message); }`
 		out, err := runIn(t, dir, nil, "node", "--input-type=module", "-e", script)
 		if err != nil {
 			t.Fatalf("node: %v\n%s", err, out)
 		}
 		want := `[{"projectService":{"allowDefaultProject":["*.test.ts"],"maximumDefaultProjectFileMatchCount_THIS_WILL_SLOW_DOWN_LINTING":24},"tsconfigRootDir":"/r"},"error",true,"off",["node_modules/","x.js"]]` + "\n" +
-			"eslint.base.mjs: pass root: import.meta.dirname\n"
+			"eslint.base.mjs: pass root: import.meta.dirname\n" +
+			"eslint.base.mjs: maxTestFiles caps how many files match testFiles, and testFiles is []\n"
 		if out != want {
 			t.Fatalf("got\n%s\nwant\n%s", out, want)
 		}
