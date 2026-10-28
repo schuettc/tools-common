@@ -18,10 +18,13 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"net/http"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/subaud-tools/tools-common/channelmcp"
@@ -266,7 +269,9 @@ func (ch *Channel) Announce(ctx context.Context, c *Client) error {
 // loop keeps presence fresh and long-polls for sends, emitting each claimed
 // send as one channel event. The next poll is armed as soon as an event is
 // queued (Notify only queues), so nothing sent meanwhile is missed. serve
-// claims a send for exactly one caller, so an event is never duplicated. It
+// claims a send for exactly one caller, so an event is never duplicated. A
+// delivery the tool's Wake refuses is logged with its first 200 bytes, so a
+// lost one leaves a trace. It
 // never starts serve (only a tool call does), so serve's idle exit can
 // happen, and while no serve runs it logs nothing.
 func (ch *Channel) loop(ctx context.Context) {
@@ -321,6 +326,7 @@ func (ch *Channel) loop(ctx context.Context) {
 			lastErr = ""
 			text, meta, ok := ch.Spec.Wake(got)
 			if !ok {
+				ch.logf("refused delivery: %s", refused(got))
 				continue
 			}
 			if err := ch.Push.Notify(text, meta); err != nil {
@@ -330,6 +336,17 @@ func (ch *Channel) loop(ctx context.Context) {
 			lastErr = ""
 		}
 	}
+}
+
+// refused describes a delivery the tool's Wake refused by its size and its
+// top-level field names, never its values: they carry Court's words.
+func refused(body json.RawMessage) string {
+	var fields map[string]json.RawMessage
+	if json.Unmarshal(body, &fields) != nil {
+		return fmt.Sprintf("%d bytes, not a JSON object", len(body))
+	}
+	names := slices.Sorted(maps.Keys(fields))
+	return fmt.Sprintf("%d bytes, fields %s", len(body), strings.Join(names, " "))
 }
 
 func sleep(ctx context.Context, d time.Duration) {
