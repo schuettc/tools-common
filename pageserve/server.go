@@ -44,6 +44,10 @@ type Options struct {
 	// a tool whose page streams from its own event bus (casebook's).
 	// GET /api/poll stays Events'.
 	Stream http.HandlerFunc
+	// Busy, when set, keeps serve up past Idle while it answers true: a tool
+	// whose open page should keep its serve alive (casebook counts its tabs)
+	// says so here. nil: only API requests count as activity.
+	Busy func() bool
 	// Entry, when set, edits the entry just before it is written: the
 	// server's own start time as StartedAt, Reopened. The edited entry must
 	// still validate, or Run fails.
@@ -131,7 +135,7 @@ func Run(ctx context.Context, o Options) error {
 	_, _ = fmt.Fprintf(o.Log, "%s serve: started %s (pid %d)\n", tool, e.Base, e.PID)
 	defer func() { _, _ = fmt.Fprintf(o.Log, "%s serve: stopped (pid %d)\n", tool, e.PID) }()
 	if o.Idle > 0 {
-		go idle(ctx, o.Idle, &activity, cancel)
+		go idle(ctx, o.Idle, &activity, o.Busy, cancel)
 	}
 	if o.Ready != nil {
 		o.Ready(srv.URL)
@@ -142,7 +146,7 @@ func Run(ctx context.Context, o Options) error {
 	return err
 }
 
-func idle(ctx context.Context, limit time.Duration, activity *atomic.Int64, stop context.CancelFunc) {
+func idle(ctx context.Context, limit time.Duration, activity *atomic.Int64, busy func() bool, stop context.CancelFunc) {
 	every := min(max(limit/4, 5*time.Millisecond), time.Minute)
 	t := time.NewTicker(every)
 	defer t.Stop()
@@ -151,6 +155,10 @@ func idle(ctx context.Context, limit time.Duration, activity *atomic.Int64, stop
 		case <-ctx.Done():
 			return
 		case <-t.C:
+			if busy != nil && busy() {
+				activity.Store(time.Now().UnixMilli())
+				continue
+			}
 			if time.Since(time.UnixMilli(activity.Load())) > limit {
 				stop()
 				return

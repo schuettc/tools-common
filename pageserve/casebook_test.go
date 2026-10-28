@@ -254,3 +254,18 @@ func TestRunEntryHook(t *testing.T) {
 		t.Fatalf("serve.json %s", b)
 	}
 }
+
+// Busy keeps serve up while it answers true, whatever the idle limit says:
+// casebook's open page keeps its serve alive (its own stream counts tabs).
+func TestBusyKeepsServeUpPastTheIdleLimit(t *testing.T) {
+	var busy atomic.Bool
+	busy.Store(true)
+	r := startRun(t, Options{Idle: 150 * time.Millisecond, Busy: busy.Load})
+	select {
+	case err := <-r.done:
+		t.Fatalf("serve stopped while busy: %v", err)
+	case <-time.After(600 * time.Millisecond):
+	}
+	busy.Store(false)
+	wait(t, r) // no longer busy and past the limit: it stops
+}

@@ -13,6 +13,7 @@ tags and PRs.
   - `Spec.PresenceBody(Identity)`: the body the channel posts to `/api/agent/presence`; `Identity.PID` is the harness's pid (the channel's parent); `Channel.Announce(ctx, client)` posts it, for a tool call that re-registers.
   - `Spec.OnServe(ctx, ch, entry)`: runs in the wait loop when the serve it reaches is a new process (a tool tells the agent what the restart interrupted), and the loop registers presence with it.
   - `Options.Stream`: answers `GET /api/events` instead of the `Events` log, for a page that streams from the tool's own event bus.
+  - `Options.Busy`: while it answers true, serve stays up past `Idle` (for a page whose open tab should keep its serve alive).
   - `Options.Entry(*Entry)`: edits the entry before it is written (the server's own `StartedAt`); `Entry.Reopened` (`reopened`, omitted when false).
   - `Client.Passive()`: a copy of a client that never starts serve.
 
