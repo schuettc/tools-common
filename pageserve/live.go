@@ -47,8 +47,9 @@ const Version = 1
 func future(v int) bool { return v > Version }
 
 // Entry is one running page server: the superset of a one-page tool's
-// advert (url, base, token, pid, version, stale, started_at) and galley's
-// registry entry (v, url, room, page, pid, owner), under the same JSON names,
+// advert (url, base, token, pid, version, stale, started_at, and casebook's
+// reopened) and galley's registry entry (v, url, room, page, pid, owner),
+// under the same JSON names,
 // so a file either wrote reads back here with every field, and a file
 // written here reads back with either's type. Fields one of them never had
 // are omitted when empty, so each file keeps its shape.
@@ -72,6 +73,9 @@ type Entry struct {
 	// Stale: the binary this serve runs was replaced; Client.Fresh restarts it.
 	Stale     bool      `json:"stale,omitempty"`
 	StartedAt time.Time `json:"started_at,omitzero"`
+	// Reopened: a tab was open when the previous serve went away, so this
+	// one opened the page again (casebook's; set through Options.Entry).
+	Reopened bool `json:"reopened,omitempty"`
 }
 
 // Live is a tool's directory of entries: one JSON file per running page,

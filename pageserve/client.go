@@ -43,6 +43,13 @@ func NewClient(l Live, start func() (Entry, error)) *Client {
 		Stop: func(ctx context.Context) error { return Stop(ctx, l) }}
 }
 
+// Passive is a copy of c that never starts serve: the client the channel's
+// wait loop, its reports, `<tool> watch` and `<tool> report` use, so that
+// serve's idle exit can happen. Only a tool call starts serve.
+func (c *Client) Passive() *Client {
+	return &Client{Tool: c.Tool, HTTP: c.HTTP, Find: c.Find, Stop: c.Stop}
+}
+
 // errStart is a failed start, wrapped as "starting cull serve: ...".
 var errStart = errors.New("starting")
 
@@ -90,11 +97,14 @@ func (c *Client) Fresh(ctx context.Context) error {
 // isn't running".
 var ErrNoServe = errors.New("serve isn't running")
 
-// StatusError is a non-2xx answer from serve.
+// StatusError is a non-2xx answer from serve. ErrCode is the JSON body's
+// "code" when it has one ("unknown_session"), so a caller can tell two
+// answers with one status apart; "" without one.
 type StatusError struct {
-	Tool string
-	Code int
-	Msg  string
+	Tool    string
+	Code    int
+	Msg     string
+	ErrCode string
 }
 
 func (e *StatusError) Error() string { return fmt.Sprintf("%s serve: %d %s", e.Tool, e.Code, e.Msg) }
@@ -133,12 +143,13 @@ func (c *Client) Do(ctx context.Context, method, path string, body, out any) (in
 	if resp.StatusCode >= 300 {
 		var e struct {
 			Error string `json:"error"`
+			Code  string `json:"code"`
 		}
 		_ = json.Unmarshal(b, &e)
 		if e.Error == "" {
 			e.Error = string(bytes.TrimSpace(b))
 		}
-		return resp.StatusCode, &StatusError{Tool: c.Tool, Code: resp.StatusCode, Msg: e.Error}
+		return resp.StatusCode, &StatusError{Tool: c.Tool, Code: resp.StatusCode, Msg: e.Error, ErrCode: e.Code}
 	}
 	if out != nil && resp.StatusCode != http.StatusNoContent && len(b) > 0 {
 		if err := json.Unmarshal(b, out); err != nil {

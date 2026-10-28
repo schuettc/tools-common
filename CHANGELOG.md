@@ -8,12 +8,21 @@ tags and PRs.
 
 ### Added
 - `update` prints the tool site's notice after its own output: it GETs `<site>/notice.txt` (ungated, 1 second timeout) and prints the trimmed text, cut to 2 KB, to stderr. No notice, an error or an empty body prints nothing and never fails the update. `App.PrintNotice` does the same for a tool that replaces `update`.
+- `pageserve` does what casebook's own shell did, each as a hook or field a tool sets (a tool that sets none behaves as before):
+  - `StatusError.ErrCode`: the JSON body's `code` (`"unknown_session"`), so two answers with one status can be told apart.
+  - `Spec.PresenceBody(Identity)`: the body the channel posts to `/api/agent/presence`; `Identity.PID` is the harness's pid (the channel's parent); `Channel.Announce(ctx, client)` posts it, for a tool call that re-registers.
+  - `Spec.OnServe(ctx, ch, entry)`: runs in the wait loop when the serve it reaches is a new process (a tool tells the agent what the restart interrupted), and the loop registers presence with it.
+  - `Options.Stream`: answers `GET /api/events` instead of the `Events` log, for a page that streams from the tool's own event bus.
+  - `Options.Busy`: while it answers true, serve stays up past `Idle` (for a page whose open tab should keep its serve alive).
+  - `Options.Entry(*Entry)`: edits the entry before it is written (the server's own `StartedAt`); `Entry.Reopened` (`reopened`, omitted when false).
+  - `Client.Passive()`: a copy of a client that never starts serve.
 
 ### Fixed
 - `<tool> <command> -h` and the man page name the command when its `Synopsis` gives only the arguments: `Usage: diazo skills install [--agent NAME]…`, not `Usage: diazo install [--agent NAME]…`. A `Synopsis` that already starts with the command's name prints as before. Every pageserve command, and `login`, had lost its name.
 
 ### Changed
 - An ungated binary whose site refuses `/dl/<tool>/latest` with 403 or 404 (a gated `/dl` refusing an unsigned request) says the site refused it with that status and, in case the site now needs a signed-in machine, names https://subaud.tools/account/ and the site's install command (`curl -fsSL https://<site>/install.sh | sh`), and `update` exits 1. A gated binary's errors are unchanged.
+- A page tool's channel no longer restarts a page server that stopped after being idle; the next tool call starts it. The channel's wait loop, its reports, `<tool> watch` and `<tool> report` never start serve, so serve's idle exit (8 hours in cull and sift) now happens, and while no serve runs the loop logs nothing.
 
 ## 0.31.1
 

@@ -1,10 +1,11 @@
 package pageserve
 
 // The channel: the MCP server each agent session starts (Claude Code through
-// the tool's plugin, pi through channels.tools). It starts serve when it
-// isn't running, gives the agent the tool's tools and, under pi, registers
-// the session's presence, holds a long poll open for the human's Sends and
-// injects each one as a notifications/claude/channel event. Under Claude Code
+// the tool's plugin, pi through channels.tools). It gives the agent the
+// tool's tools, and a tool call starts serve when it isn't running. Under pi
+// it registers the session's presence, holds a long poll open for the human's
+// Sends and injects each one as a notifications/claude/channel event; that
+// loop never starts serve. Under Claude Code
 // `<tool> watch` runs that loop instead and prints each Send as a JSON line
 // for the plugin's mod. Moved from cull's internal/cull/channel/channel.go.
 //
@@ -52,6 +53,17 @@ type Spec struct {
 	// NoPresence: serve has no POST /api/agent/presence (diazo's), so the
 	// loop only waits.
 	NoPresence bool
+	// PresenceBody is the body of POST /api/agent/presence for id (nil:
+	// {session, harness, label, root}, root left out when the tool has no
+	// project).
+	PresenceBody func(id Identity) any
+	// OnServe runs in the wait loop when the serve it reaches is a new
+	// process (its entry's StartedAt changed since the loop last looked),
+	// not for the first serve the loop finds; the loop then registers
+	// presence with the new serve. A tool that tells the agent what a restart
+	// interrupted asks serve here, through ch.Client.Passive(), and pushes
+	// with ch.Push. nil: the loop doesn't watch for a new serve.
+	OnServe func(ctx context.Context, ch *Channel, e Entry)
 }
 
 // Identity is the session a channel serves.
@@ -60,13 +72,17 @@ type Identity struct {
 	Harness string // "claude" or "pi"
 	Label   string
 	CWD     string
+	// PID is the harness's process (the channel's parent: Claude Code and
+	// pi's channels.tools start the channel directly). Sessions in one pi
+	// process share it, which tells a pi-subagents worker from a fork.
+	PID int
 }
 
 // FromEnv resolves the session by the family rule (tools-common harness).
 // Session is "" outside a harness.
 func FromEnv() Identity {
 	c := harness.FromEnv()
-	id := Identity{Session: c.SessionID, CWD: c.CWD, Harness: "pi"}
+	id := Identity{Session: c.SessionID, CWD: c.CWD, Harness: "pi", PID: os.Getppid()}
 	if c.IsClaude() {
 		id.Harness = "claude"
 	}
@@ -196,14 +212,16 @@ func (ch *Channel) Run(ctx context.Context, r io.Reader, w io.Writer) error {
 }
 
 // postReports posts each report the harness sent to serve, in the order
-// sent, until ctx ends. A failed post is logged, not retried.
+// sent, until ctx ends. It never starts serve. A failed post is logged, not
+// retried.
 func (ch *Channel) postReports(ctx context.Context) {
+	c := ch.Client.Passive()
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case r := <-ch.reports:
-			if err := ch.Client.Report(ctx, ch.ID.Session, r.event, r.token); err != nil && ctx.Err() == nil {
+			if err := c.Report(ctx, ch.ID.Session, r.event, r.token); err != nil && ctx.Err() == nil {
 				ch.logf("report %s: %v", r.event, err)
 			}
 		}
@@ -227,32 +245,55 @@ func (ch *Channel) ready() error {
 	return ch.rootErr
 }
 
-func (ch *Channel) presence(ctx context.Context) error {
-	body := map[string]any{"session": ch.ID.Session, "harness": ch.ID.Harness, "label": ch.ID.Label}
-	if root := ch.scope(); root != "" {
-		body["root"] = root
+// Announce registers the session's presence with serve through c: the
+// loop's passive client, or a tool call's, which starts serve (a tool that
+// re-registers when serve answers that it doesn't know the session).
+func (ch *Channel) Announce(ctx context.Context, c *Client) error {
+	var body any
+	if ch.Spec.PresenceBody != nil {
+		body = ch.Spec.PresenceBody(ch.ID)
+	} else {
+		b := map[string]any{"session": ch.ID.Session, "harness": ch.ID.Harness, "label": ch.ID.Label}
+		if root := ch.scope(); root != "" {
+			b["root"] = root
+		}
+		body = b
 	}
-	_, err := ch.Client.Do(ctx, http.MethodPost, "/api/agent/presence", body, nil)
+	_, err := c.Do(ctx, http.MethodPost, "/api/agent/presence", body, nil)
 	return err
 }
 
-// loop starts serve if needed, keeps presence fresh and long-polls for sends,
-// emitting each claimed send as one channel event. The next poll is armed as
-// soon as an event is queued (Notify only queues), so nothing sent meanwhile
-// is missed. serve claims a send for exactly one caller, so an event is never
-// duplicated.
+// loop keeps presence fresh and long-polls for sends, emitting each claimed
+// send as one channel event. The next poll is armed as soon as an event is
+// queued (Notify only queues), so nothing sent meanwhile is missed. serve
+// claims a send for exactly one caller, so an event is never duplicated. It
+// never starts serve (only a tool call does), so serve's idle exit can
+// happen, and while no serve runs it logs nothing.
 func (ch *Channel) loop(ctx context.Context) {
+	c := ch.Client.Passive()
 	var lastPresence time.Time
 	var lastErr string
+	var seen time.Time // StartedAt of the serve the loop last reached (with OnServe)
 	logOnce := func(err error) {
+		if errors.Is(err, ErrNoServe) {
+			return
+		}
 		if msg := err.Error(); msg != lastErr {
 			ch.logf("%s", msg)
 			lastErr = msg
 		}
 	}
 	for ctx.Err() == nil {
+		if ch.Spec.OnServe != nil {
+			if e, err := c.Find(); err == nil && !e.StartedAt.Equal(seen) {
+				if !seen.IsZero() {
+					ch.Spec.OnServe(ctx, ch, e)
+				}
+				seen, lastPresence = e.StartedAt, time.Time{}
+			}
+		}
 		if !ch.Spec.NoPresence && time.Since(lastPresence) > ch.Presence {
-			if err := ch.presence(ctx); err != nil {
+			if err := ch.Announce(ctx, c); err != nil {
 				if ctx.Err() != nil {
 					return
 				}
@@ -263,7 +304,7 @@ func (ch *Channel) loop(ctx context.Context) {
 			lastPresence, lastErr = time.Now(), ""
 		}
 		var got json.RawMessage
-		code, err := ch.Client.Do(ctx, http.MethodGet, "/api/agent/wait?"+Query(
+		code, err := c.Do(ctx, http.MethodGet, "/api/agent/wait?"+Query(
 			"session", ch.ID.Session, "root", ch.scope(), "timeout", strconv.Itoa(max(int(ch.Poll.Seconds()), 1))), nil, &got)
 		switch {
 		case err != nil:

@@ -40,12 +40,27 @@ type Options struct {
 	// starts in the background must end with ctx.
 	OnStart func(ctx context.Context, url string)
 	Ready   func(url string)
+	// Stream, when set, answers GET /api/events instead of Events.Stream:
+	// a tool whose page streams from its own event bus (casebook's).
+	// GET /api/poll stays Events'.
+	Stream http.HandlerFunc
+	// Busy, when set, keeps serve up past Idle while it answers true: a tool
+	// whose open page should keep its serve alive (casebook counts its tabs)
+	// says so here, and the idle clock starts again from the last busy check.
+	// It runs on the idle goroutine, so it must be a fast, concurrency-safe
+	// read that never blocks or panics (an atomic count). nil: only API
+	// requests count as activity.
+	Busy func() bool
+	// Entry, when set, edits the entry just before it is written: the
+	// server's own start time as StartedAt, Reopened. The edited entry must
+	// still validate, or Run fails.
+	Entry func(*Entry)
 }
 
 // Run serves until ctx ends, POST /api/stop, or the idle limit. It writes the
 // tool's one entry (Live.Advertise) while running and removes it on the way
-// out. Besides the tool's API it answers GET /api/events, GET /api/poll and
-// POST /api/stop.
+// out. Besides the tool's API it answers GET /api/events (Options.Stream, else
+// Events.Stream), GET /api/poll and POST /api/stop.
 func Run(ctx context.Context, o Options) error {
 	if o.Log == nil {
 		o.Log = io.Discard
@@ -82,7 +97,11 @@ func Run(ctx context.Context, o Options) error {
 	var activity atomic.Int64 // unix ms of the last API request
 	activity.Store(time.Now().UnixMilli())
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /api/events", o.Events.Stream)
+	stream := o.Events.Stream
+	if o.Stream != nil {
+		stream = o.Stream
+	}
+	mux.HandleFunc("GET /api/events", stream)
 	mux.HandleFunc("GET /api/poll", o.Events.Poll)
 	mux.HandleFunc("POST /api/stop", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
@@ -106,6 +125,9 @@ func Run(ctx context.Context, o Options) error {
 		o.OnStart(ctx, srv.URL)
 	}
 	e := Entry{URL: srv.URL, Base: "http://" + srv.Addr(), Token: srv.Token, PID: os.Getpid(), Version: o.Version, StartedAt: time.Now().UTC()}
+	if o.Entry != nil {
+		o.Entry(&e)
+	}
 	if err := o.Live.Advertise(e); err != nil {
 		cancel()
 		_ = srv.Wait()
@@ -116,7 +138,7 @@ func Run(ctx context.Context, o Options) error {
 	_, _ = fmt.Fprintf(o.Log, "%s serve: started %s (pid %d)\n", tool, e.Base, e.PID)
 	defer func() { _, _ = fmt.Fprintf(o.Log, "%s serve: stopped (pid %d)\n", tool, e.PID) }()
 	if o.Idle > 0 {
-		go idle(ctx, o.Idle, &activity, cancel)
+		go idle(ctx, o.Idle, &activity, o.Busy, cancel)
 	}
 	if o.Ready != nil {
 		o.Ready(srv.URL)
@@ -127,7 +149,7 @@ func Run(ctx context.Context, o Options) error {
 	return err
 }
 
-func idle(ctx context.Context, limit time.Duration, activity *atomic.Int64, stop context.CancelFunc) {
+func idle(ctx context.Context, limit time.Duration, activity *atomic.Int64, busy func() bool, stop context.CancelFunc) {
 	every := min(max(limit/4, 5*time.Millisecond), time.Minute)
 	t := time.NewTicker(every)
 	defer t.Stop()
@@ -136,6 +158,10 @@ func idle(ctx context.Context, limit time.Duration, activity *atomic.Int64, stop
 		case <-ctx.Done():
 			return
 		case <-t.C:
+			if busy != nil && busy() {
+				activity.Store(time.Now().UnixMilli())
+				continue
+			}
 			if time.Since(time.UnixMilli(activity.Load())) > limit {
 				stop()
 				return
