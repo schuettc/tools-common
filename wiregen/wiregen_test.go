@@ -1,6 +1,8 @@
 package wiregen
 
 import (
+	"encoding/json"
+	"net/netip"
 	"os"
 	"path/filepath"
 	"strings"
@@ -193,6 +195,102 @@ func TestAFieldWithNoShapeIsRefusedUnlessAllowed(t *testing.T) {
 	}
 	if strings.Contains(out, "any") {
 		t.Errorf("the wire carries any:\n%s", out)
+	}
+}
+
+// level writes itself as text from a value receiver, version from a pointer
+// receiver (encoding/json uses it when the field is addressable).
+type level int
+
+func (level) MarshalText() ([]byte, error) { return []byte("info"), nil }
+
+type version struct{ Major, Minor int }
+
+func (*version) MarshalText() ([]byte, error) { return []byte("1.2"), nil }
+
+// money and cents write their own JSON, which wiregen cannot see.
+type money struct{ Units int }
+
+func (money) MarshalJSON() ([]byte, error) { return []byte(`"1.00"`), nil }
+
+type cents struct{ N int }
+
+func (*cents) MarshalJSON() ([]byte, error) { return []byte("100"), nil }
+
+type blob []byte
+
+// encoding/json writes []byte as a base64 string, a TextMarshaler as its
+// text, and a json.RawMessage as whatever JSON it holds.
+func TestTypesThatEncodingJSONWritesThemselves(t *testing.T) {
+	type view struct {
+		Bytes   []byte          `json:"bytes"`
+		Blob    blob            `json:"blob,omitempty"`
+		Array   [2]byte         `json:"array"`
+		Level   level           `json:"level"`
+		Version version         `json:"version"`
+		VerPtr  *version        `json:"ver_ptr"`
+		Addr    netip.Addr      `json:"addr"`
+		ByLevel map[level]int   `json:"by_level,omitempty"`
+		Raw     json.RawMessage `json:"raw"`
+	}
+	_, err := Generate([]any{view{}}, Options{})
+	if err == nil || !strings.Contains(err.Error(), "View.raw") {
+		t.Fatalf("json.RawMessage: want an error naming View.raw, got %v", err)
+	}
+	out, err := Generate([]any{view{}}, Options{AllowUnknown: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		"  bytes: string | null;\n",
+		"  blob?: string;\n",
+		"  array: number[];\n",
+		"  level: string;\n",
+		"  version: string;\n",
+		"  ver_ptr: string | null;\n",
+		"  addr: string;\n",
+		"  by_level?: Record<string, number>;\n",
+		"  raw: unknown | null;\n",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("missing %q in:\n%s", want, out)
+		}
+	}
+	for _, never := range []string{"interface Version", "interface Addr", "number[] | null"} {
+		if strings.Contains(out, never) {
+			t.Errorf("%q in:\n%s", never, out)
+		}
+	}
+}
+
+// A type with its own MarshalJSON has a shape only its code knows: refused,
+// naming the type, unless unknown is allowed.
+func TestAJSONMarshalerIsRefusedUnlessAllowed(t *testing.T) {
+	type view struct {
+		Price money  `json:"price"`
+		Cost  cents  `json:"cost"`
+		Tip   *money `json:"tip,omitempty"`
+	}
+	_, err := Generate([]any{view{}}, Options{})
+	if err == nil {
+		t.Fatal("want an error")
+	}
+	for _, want := range []string{"View.price", "wiregen.money", "View.cost", "wiregen.cents", "View.tip", "json.Marshaler"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("error %q does not name %s", err, want)
+		}
+	}
+	out, err := Generate([]any{view{}}, Options{AllowUnknown: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"  price: unknown;\n", "  cost: unknown;\n", "  tip?: unknown;\n"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("missing %q in:\n%s", want, out)
+		}
+	}
+	if strings.Contains(out, "interface Money") || strings.Contains(out, "interface Cents") {
+		t.Errorf("a marshaler's fields were declared:\n%s", out)
 	}
 }
 

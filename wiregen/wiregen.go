@@ -11,7 +11,11 @@
 //     untagged embedded struct's fields are promoted into its parent;
 //   - `x?: T` when the field has omitempty or omitzero (absent when zero);
 //     `x: T | null` for a slice, map, pointer or interface without them;
-//   - a time.Time is a string;
+//   - a time.Time is a string, and so is a []byte (base64) and any type
+//     with a MarshalText method (on the value or its pointer);
+//   - a json.RawMessage is unknown, and so is any other type with its own
+//     MarshalJSON, since only its code knows the shape: Generate refuses
+//     both unless Options.AllowUnknown is set;
 //   - a named string type with a `Values() []string` method is an enum,
 //     declared as a union of its values (tools-common's msgstate.State is
 //     MessageState, the name every family page knows it by);
@@ -23,6 +27,8 @@
 package wiregen
 
 import (
+	"encoding"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -43,8 +49,9 @@ type Options struct {
 	// "just wire". Empty names `go test -update`.
 	Regenerate string
 	// AllowUnknown lets a field whose type has no TypeScript shape (an
-	// interface, a func, an anonymous struct) be declared as unknown. Off, it
-	// is an error naming the field.
+	// interface, a func, an anonymous struct, a json.RawMessage, a type with
+	// its own MarshalJSON) be declared as unknown. Off, it is an error naming
+	// the field (and the type, for a json.Marshaler).
 	AllowUnknown bool
 }
 
@@ -205,19 +212,42 @@ func nullable(t reflect.Type) bool {
 	return false
 }
 
-var timeType = reflect.TypeOf(time.Time{})
+var (
+	timeType          = reflect.TypeOf(time.Time{})
+	rawMessageType    = reflect.TypeOf(json.RawMessage(nil))
+	jsonMarshalerType = reflect.TypeOf((*json.Marshaler)(nil)).Elem()
+	textMarshalerType = reflect.TypeOf((*encoding.TextMarshaler)(nil)).Elem()
+)
+
+// implements is whether t or *t has the method set of iface: encoding/json
+// calls a pointer-receiver method on an addressable value.
+func implements(t, iface reflect.Type) bool {
+	return t.Implements(iface) || reflect.PointerTo(t).Implements(iface)
+}
 
 func (g *gen) tsType(t reflect.Type, field string) string {
+	if t.Kind() == reflect.Pointer {
+		return g.tsType(t.Elem(), field)
+	}
 	if t == timeType {
 		return "string"
+	}
+	if t == rawMessageType {
+		g.unknown = append(g.unknown, g.current+"."+field+" (json.RawMessage)")
+		return "unknown"
 	}
 	if _, ok := enumValues(t); ok {
 		g.found(t)
 		return tsName(t)
 	}
+	if implements(t, jsonMarshalerType) {
+		g.unknown = append(g.unknown, fmt.Sprintf("%s.%s (%s implements json.Marshaler)", g.current, field, t))
+		return "unknown"
+	}
+	if implements(t, textMarshalerType) {
+		return "string"
+	}
 	switch t.Kind() {
-	case reflect.Pointer:
-		return g.tsType(t.Elem(), field)
 	case reflect.String:
 		return "string"
 	case reflect.Bool:
@@ -227,6 +257,10 @@ func (g *gen) tsType(t reflect.Type, field string) string {
 		reflect.Float32, reflect.Float64:
 		return "number"
 	case reflect.Slice, reflect.Array:
+		if e := t.Elem(); t.Kind() == reflect.Slice && e.Kind() == reflect.Uint8 &&
+			!implements(e, jsonMarshalerType) && !implements(e, textMarshalerType) {
+			return "string" // base64, as encoding/json writes []byte
+		}
 		return g.tsType(t.Elem(), field) + "[]"
 	case reflect.Map:
 		k, v := g.tsType(t.Key(), field), g.tsType(t.Elem(), field)
