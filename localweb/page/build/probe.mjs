@@ -14,14 +14,18 @@
 //   });
 //
 // KIT_BROWSER=required turns a missing chromium into a failure (CI's browser
-// job); otherwise the probe says it skipped and passes. playwright-core is the
-// tool's own devDependency.
+// job); otherwise the probe says it skipped and passes. A tool with its own
+// rule passes it: launchOrSkip({ required: required || !!process.env.CI }).
+// A tool with a floor on its checks checks it in run's after hook:
+//   run(main, { after: () => check('a full run', counts().passes >= 90) }).
+// playwright-core is the tool's own devDependency.
 
 import pkg from 'playwright-core';
 
 const { chromium } = pkg;
 
-/** KIT_BROWSER=required: a missing browser fails instead of skipping. */
+/** KIT_BROWSER=required: a missing browser fails instead of skipping.
+ * launchOrSkip's default. */
 export const required = process.env.KIT_BROWSER === 'required';
 
 let passes = 0;
@@ -38,11 +42,14 @@ export function check(label, ok, detail = '') {
   }
 }
 
+/** How many checks have passed and failed so far. */
+export const counts = () => ({ passes, fails });
+
 export const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 /** fn's first truthy answer within ms, polled every 50 ms; false if none.
  * A throw counts as not yet. */
-export async function until(fn, ms = 3000) {
+export async function until(fn, ms = 4000) {
   const end = Date.now() + ms;
   for (;;) {
     let v;
@@ -60,8 +67,10 @@ export async function until(fn, ms = 3000) {
 const cleanups = [];
 let cleaning = null;
 
-/** Run fn at cleanup (the end of run, or SIGINT/SIGTERM), last added first.
- * A cleanup that throws is ignored: what it closes may already be gone. */
+/** Run fn at cleanup (the end of run, or SIGINT/SIGTERM), in the order added:
+ * the browser, added at launch, closes before the serve fixture added after
+ * it stops, as every tool's own cleanup did. A cleanup that throws is
+ * ignored: what it closes may already be gone. */
 export function onCleanup(fn) {
   cleanups.push(fn);
 }
@@ -71,7 +80,7 @@ export function cleanup() {
   cleaning ??= (async () => {
     while (cleanups.length) {
       try {
-        await cleanups.pop()();
+        await cleanups.shift()();
       } catch {
         // already gone
       }
@@ -82,15 +91,19 @@ export function cleanup() {
 process.on('SIGINT', () => cleanup().finally(() => process.exit(130)));
 process.on('SIGTERM', () => cleanup().finally(() => process.exit(143)));
 
-/** A headless chromium, closed at cleanup; null when none is installed,
- * unless KIT_BROWSER=required, when it throws. */
-export async function launchOrSkip(options = { headless: true }) {
+/** A chromium (headless unless launch says otherwise), closed at cleanup;
+ * null when none is installed, unless required (by default KIT_BROWSER=
+ * required), when it throws. The other options go to chromium.launch. */
+export async function launchOrSkip({
+  required: mustLaunch = required,
+  ...launch
+} = {}) {
   let browser;
   try {
-    browser = await chromium.launch(options);
+    browser = await chromium.launch({ headless: true, ...launch });
   } catch (err) {
-    if (required)
-      throw new Error(`probe: no chromium (KIT_BROWSER=required): ${err}`);
+    if (mustLaunch)
+      throw new Error(`probe: no chromium, and one is required: ${err}`);
     console.log('probe: no chromium; skipped');
     return null;
   }
@@ -98,9 +111,10 @@ export async function launchOrSkip(options = { headless: true }) {
   return browser;
 }
 
-/** Run main, then cleanup, print the count and exit: 1 if a check failed or
- * main threw. */
-export function run(main) {
+/** Run main, then cleanup, then after (whose checks count, and which may
+ * read counts()), print the count and exit: 1 if a check failed or main or
+ * after threw. */
+export function run(main, { after } = {}) {
   return Promise.resolve()
     .then(main)
     .catch((err) => {
@@ -109,6 +123,12 @@ export function run(main) {
     })
     .finally(async () => {
       await cleanup();
+      try {
+        await after?.();
+      } catch (err) {
+        console.error(err);
+        fails++;
+      }
       console.log(`\nprobe: ${passes} passed, ${fails} failed`);
       process.exit(fails ? 1 : 0);
     });

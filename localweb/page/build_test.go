@@ -134,15 +134,46 @@ try { base(); } catch (e) { console.log(e.message); }`
 
 	t.Run("probe skips with no chromium", func(t *testing.T) {
 		out, err := runIn(t, dir, none, "node", "probe.mjs")
-		if err != nil || !strings.Contains(out, "probe: no chromium; skipped") || !strings.Contains(out, "probe: 8 passed, 0 failed") {
-			t.Fatalf("probe: %v, want exit 0, skipped, 8 passed\n%s", err, out)
+		if err != nil || !strings.Contains(out, "probe: no chromium; skipped") || !strings.Contains(out, "probe: 10 passed, 0 failed") {
+			t.Fatalf("probe: %v, want exit 0, skipped, 10 passed\n%s", err, out)
+		}
+		if !strings.Contains(out, "✓ cleanups ran in the order added") {
+			t.Fatalf("the after hook did not check the cleanup order\n%s", out)
 		}
 	})
 
 	t.Run("probe fails with no chromium under KIT_BROWSER=required", func(t *testing.T) {
 		out, err := runIn(t, dir, append(none, "KIT_BROWSER=required"), "node", "probe.mjs")
-		if exitCode(err) != 1 || !strings.Contains(out, "no chromium (KIT_BROWSER=required)") || !strings.Contains(out, "1 failed") {
-			t.Fatalf("probe: %v, want exit 1 naming KIT_BROWSER=required\n%s", err, out)
+		if exitCode(err) != 1 || !strings.Contains(out, "probe: no chromium, and one is required") || !strings.Contains(out, "1 failed") {
+			t.Fatalf("probe: %v, want exit 1 saying a chromium is required\n%s", err, out)
+		}
+	})
+
+	// casebook's rule: CI requires a browser too, passed as required.
+	t.Run("probe fails with no chromium when the tool requires one", func(t *testing.T) {
+		out, err := runIn(t, dir, append(none, "SCRATCH_CI=1"), "node", "probe.mjs")
+		if exitCode(err) != 1 || !strings.Contains(out, "probe: no chromium, and one is required") {
+			t.Fatalf("probe: %v, want exit 1 saying a chromium is required\n%s", err, out)
+		}
+	})
+
+	// casebook's floor: the after hook adds a failure the exit code carries.
+	t.Run("the after hook can fail a run", func(t *testing.T) {
+		out, err := runIn(t, dir, append(none, "PROBE_MIN_CHECKS=999"), "node", "probe.mjs")
+		if exitCode(err) != 1 || !strings.Contains(out, "✗ at least 999 checks passed — 10") || !strings.Contains(out, "probe: 10 passed, 1 failed") {
+			t.Fatalf("probe: %v, want exit 1 with the floor failed\n%s", err, out)
+		}
+	})
+
+	// With a chromium on the default path: the browser closes before the
+	// serve fixture stops. Skipped where playwright has none installed.
+	t.Run("probe with chromium", func(t *testing.T) {
+		out, err := runIn(t, dir, nil, "node", "probe.mjs")
+		if strings.Contains(out, "probe: no chromium; skipped") {
+			t.Skip("no chromium on playwright's default path")
+		}
+		if err != nil || !strings.Contains(out, "✓ a page draws in chromium") || !strings.Contains(out, "✓ cleanups ran in the order added") || !strings.Contains(out, "0 failed") {
+			t.Fatalf("probe: %v\n%s", err, out)
 		}
 	})
 }
