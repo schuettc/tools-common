@@ -4,6 +4,11 @@ Root module releases are tagged `vX.Y.Z`; the separate `sqlitedb` module is
 tagged `sqlitedb/vX.Y.Z`. Releases before this file are described by their
 tags and PRs.
 
+## 0.33.0 (unreleased)
+
+### Added
+- `wiregen`: writes a page tool's `wire.d.ts` from its Go view structs and checks the committed file, the generator galley, diazo and casebook each carried in their `wire_test.go`. `Generate(roots, Options)` and `CheckCommitted(path, roots, Options, update)` (the drift test: an error naming the first differing line, or with `update` the file rewritten); `Options` holds the tool's `Header`, the `Regenerate` command its errors name, and `AllowUnknown`. It is the union of the three: a named string type with `Values()` is a union (wrapped one value per line past 80 columns, as prettier writes it), untagged embedded structs are promoted (pointer or not), `omitzero` is optional, references are followed across packages, maps are `Record<K, V>` unless the file declares a type named `Record` (then `{ [key: K]: V }`), and two Go types with one TypeScript name, or a field it can only call `unknown`, are refused.
+
 ## 0.32.1
 
 ### Fixed
