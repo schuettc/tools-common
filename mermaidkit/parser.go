@@ -47,8 +47,23 @@ type Parser struct {
 	err   error // the bundle failed to load: every Check returns it
 }
 
-// NewParser is a Parser over b.
-func NewParser(b Bundle) *Parser { return &Parser{bundle: b} }
+// NewParser is a Parser over b. It refuses a bundle with no Global, the name
+// that must match the tool's esbuild --global-name.
+func NewParser(b Bundle) (*Parser, error) {
+	if err := b.check(); err != nil {
+		return nil, err
+	}
+	return &Parser{bundle: b}, nil
+}
+
+// check refuses a Bundle with no Global: the page and the parser look the
+// bundle up by it, and with none no diagram is ever drawn or checked.
+func (b Bundle) check() error {
+	if b.Global == "" {
+		return errors.New("mermaidkit: Bundle.Global is empty: set it to the --global-name the tool's esbuild built mermaid.js with")
+	}
+	return nil
+}
 
 // Check is nil when mermaid parses text, or mermaid's reason (its first two
 // lines) when it does not.

@@ -18,7 +18,16 @@ func fake(t *testing.T) *Parser {
 	if err != nil {
 		t.Fatal(err)
 	}
-	return NewParser(Bundle{JS: b, Global: "fakeMermaid"})
+	return newParser(t, Bundle{JS: b, Global: "fakeMermaid"})
+}
+
+func newParser(t *testing.T, b Bundle) *Parser {
+	t.Helper()
+	p, err := NewParser(b)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return p
 }
 
 // checkBroken is diazo's check: mermaid's reason, cut to its first two
@@ -50,7 +59,7 @@ func TestCheckWithARealBundle(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	checkBroken(t, NewParser(Bundle{JS: b, Global: os.Getenv("MERMAIDKIT_GLOBAL")}))
+	checkBroken(t, newParser(t, Bundle{JS: b, Global: os.Getenv("MERMAIDKIT_GLOBAL")}))
 }
 
 func TestCheckReasonFromAThrow(t *testing.T) {
@@ -73,12 +82,22 @@ func TestABundleWithoutTheGlobalFailsEveryCheck(t *testing.T) {
 		{"var m = {default: {}};", "m", "has no m.default.parse"},
 		{"syntax error (", "m", "loading the bundle"},
 	} {
-		p := NewParser(Bundle{JS: []byte(tc.js), Global: tc.global})
+		p := newParser(t, Bundle{JS: []byte(tc.js), Global: tc.global})
 		for range 2 {
 			if err := p.Check("graph TD"); err == nil || !strings.Contains(err.Error(), tc.want) {
 				t.Fatalf("%s: got %v, want %q", tc.global, err, tc.want)
 			}
 		}
+	}
+}
+
+// The global is the one name the tool's esbuild flag and its Go code must
+// agree on: left out, nothing could ever be checked.
+func TestNewParserRefusesABundleWithNoGlobal(t *testing.T) {
+	b, _ := os.ReadFile("testdata/fake-mermaid.js")
+	p, err := NewParser(Bundle{JS: b})
+	if err == nil || p != nil || !strings.Contains(err.Error(), "Bundle.Global") || !strings.Contains(err.Error(), "--global-name") {
+		t.Fatalf("got %v, %v; want an error naming Bundle.Global and --global-name", p, err)
 	}
 }
 

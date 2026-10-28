@@ -59,8 +59,12 @@ type pageData struct {
 // md is rendered as given: a tool removes first what the page must not show
 // (galley: review instructions and front matter). Nothing in the page is
 // fetched from anywhere, except a remote image: an image by relative path is
-// read from docDir and embedded as a data: URL.
+// read from docDir and embedded as a data: URL. A bundle with no Global is
+// refused, with or without a diagram in md: the page would draw none.
 func Render(md []byte, t Theme, mermaid Bundle, docDir string) ([]byte, error) {
+	if err := mermaid.check(); err != nil {
+		return nil, err
+	}
 	src := md
 	imgs := newImageRenderer(docDir)
 	defer imgs.close()

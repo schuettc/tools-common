@@ -73,6 +73,16 @@ func TestRenderNoMermaidNoScript(t *testing.T) {
 
 // The page draws its diagrams with the global the bundle was built with,
 // and an inlined bundle cannot close its own <script>.
+// With no global the page would show every diagram's source and draw none.
+func TestRenderRefusesABundleWithNoGlobal(t *testing.T) {
+	for _, md := range []string{"```mermaid\ngraph TD\n```\n", "# no diagram\n"} {
+		out, err := Render([]byte(md), BaseTheme(), Bundle{JS: fakeBundle.JS}, "")
+		if err == nil || out != nil || !strings.Contains(err.Error(), "Bundle.Global") {
+			t.Fatalf("%q: got %v; want an error naming Bundle.Global", md, err)
+		}
+	}
+}
+
 func TestRenderDrawsWithTheBundlesGlobal(t *testing.T) {
 	b := Bundle{JS: []byte("var x = '</script>';"), Global: "toolMermaid"}
 	out, err := Render([]byte("```mermaid\ngraph TD\n```\n"), BaseTheme(), b, "")
