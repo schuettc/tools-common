@@ -14,6 +14,7 @@ import (
 	"os/signal"
 	"strings"
 	"syscall"
+	"time"
 
 	tools "github.com/subaud-tools/tools-common"
 	"github.com/subaud-tools/tools-common/channelmcp"
@@ -40,6 +41,10 @@ type Commands struct {
 	// Skill reads the tool's skill as this binary was built with it; the
 	// channel refreshes each installed copy that differs. nil: none.
 	Skill func() ([]byte, error)
+	// Open opens the page for `<tool> serve` instead of the system browser
+	// opener, so a tool's own switch (casebook's CASEBOOK_NO_BROWSER) covers
+	// it. nil: the system opener.
+	Open func(url string) error
 }
 
 // Help is a command's help: the argument shape after its name, its one-line
@@ -143,7 +148,11 @@ func (c Commands) ServeCommand(h Help) tools.Command {
 			_, _ = fmt.Fprintln(out, note)
 		}
 		if !boolFlag(fs, "no-open") {
-			_ = openBrowser(e.URL + fragment)
+			open := openBrowser
+			if c.Open != nil {
+				open = c.Open
+			}
+			_ = open(e.URL + fragment)
 		}
 		return nil
 	}
@@ -239,9 +248,16 @@ func (c Commands) Watch(ctx context.Context, out, errw io.Writer, client *Client
 // logs; it is not retried.
 func (c Commands) ReportCommand() tools.Command {
 	return channelmcp.ReportCommand(func(session string, event channelmcp.ReportEvent, token string) error {
-		return c.client().Passive().Report(context.Background(), session, event, token)
+		ctx, cancel := context.WithTimeout(context.Background(), ReportTimeout)
+		defer cancel()
+		return c.client().Passive().Report(ctx, session, event, token)
 	})
 }
+
+// ReportTimeout bounds `<tool> report`: the Claude Code plugin's hook runs
+// it and waits, so a serve that takes the connection and never answers must
+// not hold the hook for the client's long-poll timeout.
+var ReportTimeout = 5 * time.Second
 
 type agents []string
 

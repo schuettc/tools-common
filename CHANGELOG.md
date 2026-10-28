@@ -4,6 +4,14 @@ Root module releases are tagged `vX.Y.Z`; the separate `sqlitedb` module is
 tagged `sqlitedb/vX.Y.Z`. Releases before this file are described by their
 tags and PRs.
 
+## 0.32.1
+
+### Fixed
+- `<tool> report` gives up after 5 seconds (`pageserve.ReportTimeout`). It ran on the client's 90-second long-poll timeout, so a serve that took the connection and never answered held the Claude Code plugin's hook that long.
+
+### Added
+- `Commands.Open`: opens the page for `<tool> serve` instead of the system opener, so a tool's own switch to keep the browser closed covers it.
+
 ## 0.32.0
 
 ### Added
