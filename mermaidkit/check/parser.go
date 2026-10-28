@@ -1,15 +1,11 @@
-// Package mermaidkit is what the family's page tools do with mermaid: check a
-// diagram's syntax on the server (Parser, mermaid's own parser run in goja, so
-// nothing at runtime needs node), and render a markdown document as one
-// themed, self-contained HTML page whose diagrams the browser draws (Render).
+// Package check checks a mermaid diagram's syntax on the server: Parser runs
+// mermaid's own parser in goja, so nothing at runtime needs node, and Check
+// returns mermaid's reason for a diagram it will not parse.
 //
-// Each tool builds its own mermaid bundle from the shared entry,
-// localweb/page/build/mermaid-entry.ts, with esbuild's --format=iife and a
-// --global-name of its own, and hands the bytes and that name in as a Bundle.
-//
-// It is its own module (tagged mermaidkit/vX.Y.Z) so that the root
-// tools-common module stays free of goja and goldmark.
-package mermaidkit
+// It is apart from mermaidkit's renderer so that a tool that only checks
+// diagrams (diazo) never links goldmark, and one that only renders (galley)
+// never links goja.
+package check
 
 import (
 	"errors"
@@ -18,15 +14,15 @@ import (
 	"sync"
 
 	"github.com/dop251/goja"
+	"github.com/subaud-tools/tools-common/mermaidkit/internal/bundle"
 )
 
-// Bundle is a tool's mermaid bundle: the IIFE esbuild built from
-// mermaid-entry.ts, and the --global-name it was built with, the window
-// property whose default export is mermaid.
-type Bundle struct {
-	JS     []byte
-	Global string
-}
+// Bundle is a tool's mermaid bundle: the IIFE esbuild built from the shared
+// entry, localweb/page/build/mermaid-entry.ts, with --format=iife (JS), and
+// the --global-name it was built with (Global), the window property whose
+// default export is mermaid. It is mermaidkit.Bundle: one type, so a tool
+// that both renders and checks builds it once.
+type Bundle = bundle.Bundle
 
 // globals are what the bundle's IIFE reaches for outside a browser. Its
 // timers run at once, so parse's promise settles before RunString returns.
@@ -50,19 +46,10 @@ type Parser struct {
 // NewParser is a Parser over b. It refuses a bundle with no Global, the name
 // that must match the tool's esbuild --global-name.
 func NewParser(b Bundle) (*Parser, error) {
-	if err := b.check(); err != nil {
+	if err := bundle.Validate(b); err != nil {
 		return nil, err
 	}
 	return &Parser{bundle: b}, nil
-}
-
-// check refuses a Bundle with no Global: the page and the parser look the
-// bundle up by it, and with none no diagram is ever drawn or checked.
-func (b Bundle) check() error {
-	if b.Global == "" {
-		return errors.New("mermaidkit: Bundle.Global is empty: set it to the --global-name the tool's esbuild built mermaid.js with")
-	}
-	return nil
 }
 
 // Check is nil when mermaid parses text, or mermaid's reason (its first two

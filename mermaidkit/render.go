@@ -1,3 +1,14 @@
+// Package mermaidkit renders a markdown document as one themed,
+// self-contained HTML page whose mermaid diagrams the browser draws (Render).
+// Checking a diagram's syntax on the server is the check package beside it
+// (mermaidkit/check), apart so that a tool that only renders never links goja.
+//
+// Each tool builds its own mermaid bundle from the shared entry,
+// localweb/page/build/mermaid-entry.ts, with esbuild's --format=iife and a
+// --global-name of its own, and hands the bytes and that name in as a Bundle.
+//
+// It is its own module (tagged mermaidkit/vX.Y.Z) so that the root
+// tools-common module stays free of goja and goldmark.
 package mermaidkit
 
 import (
@@ -16,6 +27,7 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/subaud-tools/tools-common/mermaidkit/internal/bundle"
 	"github.com/yuin/goldmark"
 	"github.com/yuin/goldmark/ast"
 	"github.com/yuin/goldmark/extension"
@@ -33,6 +45,12 @@ var pageTmpl string
 var pageCSS string
 
 var page = template.Must(template.New("page").Parse(pageTmpl))
+
+// Bundle is a tool's mermaid bundle: the IIFE esbuild built from
+// mermaid-entry.ts (JS), and the --global-name it was built with (Global),
+// the window property whose default export is mermaid. It is check.Bundle:
+// one type, so a tool that both renders and checks builds it once.
+type Bundle = bundle.Bundle
 
 // heading is one sidebar entry.
 type heading struct {
@@ -62,7 +80,7 @@ type pageData struct {
 // read from docDir and embedded as a data: URL. A bundle with no Global is
 // refused, with or without a diagram in md: the page would draw none.
 func Render(md []byte, t Theme, mermaid Bundle, docDir string) ([]byte, error) {
-	if err := mermaid.check(); err != nil {
+	if err := bundle.Validate(mermaid); err != nil {
 		return nil, err
 	}
 	src := md
