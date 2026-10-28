@@ -54,7 +54,7 @@ var openBrowser = localweb.OpenBrowser
 func (c Commands) tool() string { return c.Spec.Tool }
 
 // client is the channel's client: it finds serve, else starts it from this
-// binary.
+// binary. The wait loop, watch and report use its Passive copy.
 func (c Commands) client() *Client {
 	return NewClient(c.Process.Live, func() (Entry, error) { return c.Process.Ensure(Executable()) })
 }
@@ -213,7 +213,7 @@ func (c Commands) WatchCommand(h Help) tools.Command {
 		}
 		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 		defer stop()
-		return c.Watch(ctx, out, errw, c.client())
+		return c.Watch(ctx, out, errw, c.client().Passive())
 	}
 	return tools.Command{Name: "watch", Group: c.Group, Synopsis: h.Synopsis, Summary: h.Summary, NewFlags: nf, Run: run}
 }
@@ -234,12 +234,12 @@ func (c Commands) Watch(ctx context.Context, out, errw io.Writer, client *Client
 }
 
 // ReportCommand is `<tool> report`, which the Claude Code plugin's mod runs:
-// it posts the report to serve through the client `<tool> watch` uses,
-// starting serve if needed. A failed post is the command's error, which the
-// mod logs; it is not retried.
+// it posts the report to serve through the client `<tool> watch` uses, which
+// never starts serve. A failed post is the command's error, which the mod
+// logs; it is not retried.
 func (c Commands) ReportCommand() tools.Command {
 	return channelmcp.ReportCommand(func(session string, event channelmcp.ReportEvent, token string) error {
-		return c.client().Report(context.Background(), session, event, token)
+		return c.client().Passive().Report(context.Background(), session, event, token)
 	})
 }
 

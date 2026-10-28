@@ -40,12 +40,20 @@ type Options struct {
 	// starts in the background must end with ctx.
 	OnStart func(ctx context.Context, url string)
 	Ready   func(url string)
+	// Stream, when set, answers GET /api/events instead of Events.Stream:
+	// a tool whose page streams from its own event bus (casebook's).
+	// GET /api/poll stays Events'.
+	Stream http.HandlerFunc
+	// Entry, when set, edits the entry just before it is written: the
+	// server's own start time as StartedAt, Reopened. The edited entry must
+	// still validate, or Run fails.
+	Entry func(*Entry)
 }
 
 // Run serves until ctx ends, POST /api/stop, or the idle limit. It writes the
 // tool's one entry (Live.Advertise) while running and removes it on the way
-// out. Besides the tool's API it answers GET /api/events, GET /api/poll and
-// POST /api/stop.
+// out. Besides the tool's API it answers GET /api/events (Options.Stream, else
+// Events.Stream), GET /api/poll and POST /api/stop.
 func Run(ctx context.Context, o Options) error {
 	if o.Log == nil {
 		o.Log = io.Discard
@@ -82,7 +90,11 @@ func Run(ctx context.Context, o Options) error {
 	var activity atomic.Int64 // unix ms of the last API request
 	activity.Store(time.Now().UnixMilli())
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /api/events", o.Events.Stream)
+	stream := o.Events.Stream
+	if o.Stream != nil {
+		stream = o.Stream
+	}
+	mux.HandleFunc("GET /api/events", stream)
 	mux.HandleFunc("GET /api/poll", o.Events.Poll)
 	mux.HandleFunc("POST /api/stop", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
@@ -106,6 +118,9 @@ func Run(ctx context.Context, o Options) error {
 		o.OnStart(ctx, srv.URL)
 	}
 	e := Entry{URL: srv.URL, Base: "http://" + srv.Addr(), Token: srv.Token, PID: os.Getpid(), Version: o.Version, StartedAt: time.Now().UTC()}
+	if o.Entry != nil {
+		o.Entry(&e)
+	}
 	if err := o.Live.Advertise(e); err != nil {
 		cancel()
 		_ = srv.Wait()
