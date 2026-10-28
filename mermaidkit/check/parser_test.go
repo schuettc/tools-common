@@ -1,4 +1,4 @@
-package mermaidkit
+package check
 
 import (
 	"os"

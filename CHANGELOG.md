@@ -1,8 +1,14 @@
 # Changelog
 
-Root module releases are tagged `vX.Y.Z`; the separate `sqlitedb` module is
-tagged `sqlitedb/vX.Y.Z`. Releases before this file are described by their
+Root module releases are tagged `vX.Y.Z`; the separate `sqlitedb` and
+`mermaidkit` modules are tagged `sqlitedb/vX.Y.Z` and `mermaidkit/vX.Y.Z`. Releases before this file are described by their
 tags and PRs.
+
+## mermaidkit 0.2.0
+
+### Changed
+- The diagram check moved to its own package, `github.com/subaud-tools/tools-common/mermaidkit/check`: `check.NewParser(check.Bundle{...})` and `(*Parser).Check(text)`, otherwise as in 0.1.0. A tool that checks diagrams changes its import path (diazo); one that renders keeps `mermaidkit.Render` as it was (galley). `mermaidkit.Bundle` and `check.Bundle` are one type, so a tool that does both builds it once.
+- Why: in one package, a tool that only renders carried mermaid's whole JavaScript parser too, and one that only checks carried the markdown renderer. Now each links only what it uses. A program that only calls `Render` builds 5.1 MB stripped on darwin/arm64, down from 12.2 MB with 0.1.0 (galley's binary had grown by 6.7 MB, 32%, when it took up 0.1.0), and one that only checks drops goldmark.
 
 ## 0.33.0
 

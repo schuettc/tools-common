@@ -30,10 +30,13 @@ package above never pulls them in.
 
 - `github.com/subaud-tools/tools-common/sqlitedb` (`sqlitedb/vX.Y.Z`) needs the
   SQLite driver (`modernc.org/sqlite`). See [SQLite databases](#sqlite-databases-sqlitedb).
-- `github.com/subaud-tools/tools-common/mermaidkit` (`mermaidkit/vX.Y.Z`) needs
-  goja and goldmark: `NewParser(Bundle).Check` checks a mermaid diagram's syntax
-  on the server (diazo), and `Render(md, Theme, Bundle, dir)` turns markdown into
-  a themed, self-contained page whose diagrams the browser draws (galley).
+- `github.com/subaud-tools/tools-common/mermaidkit` (`mermaidkit/vX.Y.Z`) has two
+  packages, each linking only its own dependency: `mermaidkit` (goldmark),
+  where `Render(md, Theme, Bundle, dir)` turns markdown into a themed,
+  self-contained page whose diagrams the browser draws (galley), and
+  `mermaidkit/check` (goja), where `NewParser(Bundle).Check` checks a mermaid
+  diagram's syntax on the server (diazo). `mermaidkit.Bundle` and
+  `check.Bundle` are one type.
 
 ## Usage
 
