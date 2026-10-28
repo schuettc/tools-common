@@ -4,7 +4,7 @@ Root module releases are tagged `vX.Y.Z`; the separate `sqlitedb` module is
 tagged `sqlitedb/vX.Y.Z`. Releases before this file are described by their
 tags and PRs.
 
-## 0.32.0 (unreleased)
+## 0.32.0
 
 ### Added
 - `update` prints the tool site's notice after its own output: it GETs `<site>/notice.txt` (ungated, 1 second timeout) and prints the trimmed text, cut to 2 KB, to stderr. No notice, an error or an empty body prints nothing and never fails the update. `App.PrintNotice` does the same for a tool that replaces `update`.
