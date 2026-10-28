@@ -43,8 +43,9 @@ hooks:
 prepare:
 
 # Slow checks CI runs as their own job: the localweb/page kit's JS suites, run
-# in headless Chrome (KIT_BROWSER=required fails if no browser is found). The
-# root gate's `go test` skips them without a browser.
+# in headless Chrome (KIT_BROWSER=required fails if no browser is found), and
+# localweb/page/build's files in a scratch tool (npm ci, eslint, its probe).
+# The root gate's `go test` skips them.
 verify-slow:
     cd localweb/page && KIT_BROWSER=required go test ./...
 
