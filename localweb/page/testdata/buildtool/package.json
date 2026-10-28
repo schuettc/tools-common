@@ -1,0 +1,17 @@
+{
+  "name": "buildtool",
+  "private": true,
+  "description": "A scratch page tool: build_test.go copies localweb/page/build/ into build/ as a tool's build does, then lints it and runs its probe.",
+  "type": "module",
+  "scripts": {
+    "lint": "eslint . --max-warnings 0",
+    "probe": "node probe.mjs"
+  },
+  "devDependencies": {
+    "eslint": "9.39.5",
+    "globals": "17.11.0",
+    "playwright-core": "1.56.1",
+    "typescript": "5.9.3",
+    "typescript-eslint": "8.67.0"
+  }
+}

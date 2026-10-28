@@ -43,23 +43,29 @@ hooks:
 prepare:
 
 # Slow checks CI runs as their own job: the localweb/page kit's JS suites, run
-# in headless Chrome (KIT_BROWSER=required fails if no browser is found). The
-# root gate's `go test` skips them without a browser.
+# in headless Chrome (KIT_BROWSER=required fails if no browser is found), and
+# localweb/page/build's files in a scratch tool (npm ci, eslint, its probe).
+# The root gate's `go test` skips them.
 verify-slow:
     cd localweb/page && KIT_BROWSER=required go test ./...
 
 # Checks beyond the root Go gate (CI runs this too): the root module must stay
-# stdlib-only, and the separate sqlitedb module (own go.mod and sqlitedb/vX.Y.Z
-# tags, so the gate's ./... never reaches it) gets the family gate's Go checks.
+# stdlib-only, and the separate sqlitedb and mermaidkit modules (own go.mod and
+# <module>/vX.Y.Z tags, so the gate's ./... never reaches them) get the family
+# gate's Go checks.
 verify-extra:
     #!/usr/bin/env bash
     set -euo pipefail
     # A tool that imports tools-common must never pull in a third-party module.
     deps="$(go list -m all | tail -n +2)"
     if [ -n "$deps" ]; then echo "root module gained dependencies:"; echo "$deps"; exit 1; fi
-    # sqlitedb is its own module: gofmt, vet, race tests, build.
-    cd sqlitedb
-    test -z "$(gofmt -l .)" || { gofmt -l .; echo "gofmt needed in sqlitedb; run just fmt"; exit 1; }
-    go vet ./...
-    go test -race ./...
-    go build ./...
+    # sqlitedb and mermaidkit are their own modules: gofmt, vet, race tests, build.
+    for m in sqlitedb mermaidkit; do
+        (
+            cd "$m"
+            test -z "$(gofmt -l .)" || { gofmt -l .; echo "gofmt needed in $m; run just fmt"; exit 1; }
+            go vet ./...
+            go test -race ./...
+            go build ./...
+        )
+    done

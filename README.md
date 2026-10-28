@@ -21,11 +21,19 @@ imports only the root, and `localweb/page` imports nothing from the module.
 | `tools-common/localweb` | loopback local-page server: per-launch token, rebinding/CSRF guards, remembered port, `OpenBrowser`, `CanShare`/`PutFile` (a file on the macOS clipboard) |
 | `tools-common/localweb/page` | the galley-style page kit: tokens, bar, list panel, reading-column components, keyboard layer, API and live clients, served under `/_kit/` |
 | `tools-common/pageserve` | the server behind a tool's page, found and driven by its channel: `Live` entries (one JSON file per open page, with `Claim` by an owner session, session presence, `Inspect`'s problems; a one-page tool's `serve.json` through `Running`/`Advertise`/`Withdraw`), the `Events` log behind `/api/events` and `/api/poll`, `Run` (the serve process, `/api/stop`, idle exit), `Process.Start`/`Ensure` and `Stop`, the channel's `Client` and `Channel` (presence, long poll, reports) from a tool's `Spec`, and the `serve`, `channel`, `watch`, `report` and `skills` commands |
+| `tools-common/wiregen` | the Go↔TypeScript wire contract: `Generate` writes a `.d.ts` from a tool's Go view types (a named string type with `Values()` becomes a union; two types with one TypeScript name are refused), and `CheckCommitted` is the drift test that fails when the committed file is stale |
+| `localweb/page/build` | files a page tool's build copies from the pinned module, with a check that fails on drift: `eslint.base.mjs` (the family's lint rules), `probe.mjs` (a browser probe's scaffolding: `check`, `until`, `launchOrSkip`, cleanup, geometry helpers) and `mermaid-entry.ts` (the mermaid bundle's entry) |
 
-**Separate module:** `github.com/subaud-tools/tools-common/sqlitedb` has its own
-`go.mod` and `sqlitedb/vX.Y.Z` tags, because it needs the SQLite driver
-(`modernc.org/sqlite`). Importing the root or any package above never pulls it
-in. See [SQLite databases](#sqlite-databases-sqlitedb).
+**Separate modules:** two packages have their own `go.mod` and tags, because
+they need dependencies the root module doesn't take. Importing the root or any
+package above never pulls them in.
+
+- `github.com/subaud-tools/tools-common/sqlitedb` (`sqlitedb/vX.Y.Z`) needs the
+  SQLite driver (`modernc.org/sqlite`). See [SQLite databases](#sqlite-databases-sqlitedb).
+- `github.com/subaud-tools/tools-common/mermaidkit` (`mermaidkit/vX.Y.Z`) needs
+  goja and goldmark: `NewParser(Bundle).Check` checks a mermaid diagram's syntax
+  on the server (diazo), and `Render(md, Theme, Bundle, dir)` turns markdown into
+  a themed, self-contained page whose diagrams the browser draws (galley).
 
 ## Usage
 
