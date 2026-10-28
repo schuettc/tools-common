@@ -46,7 +46,10 @@ type Options struct {
 	Stream http.HandlerFunc
 	// Busy, when set, keeps serve up past Idle while it answers true: a tool
 	// whose open page should keep its serve alive (casebook counts its tabs)
-	// says so here. nil: only API requests count as activity.
+	// says so here, and the idle clock starts again from the last busy check.
+	// It runs on the idle goroutine, so it must be a fast, concurrency-safe
+	// read that never blocks or panics (an atomic count). nil: only API
+	// requests count as activity.
 	Busy func() bool
 	// Entry, when set, edits the entry just before it is written: the
 	// server's own start time as StartedAt, Reopened. The edited entry must

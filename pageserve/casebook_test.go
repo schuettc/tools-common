@@ -267,5 +267,12 @@ func TestBusyKeepsServeUpPastTheIdleLimit(t *testing.T) {
 	case <-time.After(600 * time.Millisecond):
 	}
 	busy.Store(false)
-	wait(t, r) // no longer busy and past the limit: it stops
+	// The idle clock starts again from the last busy check, so serve is
+	// still up for most of a limit after busy ends, then stops.
+	select {
+	case err := <-r.done:
+		t.Fatalf("serve stopped %v after busy ended, before a full idle limit: %v", 100*time.Millisecond, err)
+	case <-time.After(100 * time.Millisecond):
+	}
+	wait(t, r)
 }
