@@ -162,6 +162,36 @@ test('dom: reading column pieces', () => {
   assert(bs.classList.contains('kit-btns') && bs.firstChild.classList.contains('danger') && bs.lastChild.disabled);
 });
 
+test('dom: the card header is one line at a fixed height', () => {
+  const fx = fixture();
+  const crumb = t => h('span', { class: 'kit-card-crumb' }, t);
+  const key = () => h('span', { class: 'kit-card-key' }, 'schuettc/tools-workspace/DCSN12');
+  const pill = () => h('span', { class: 'kit-pill', dataset: { state: 'with_agent' } }, 'with agent');
+  const withPill = card({ edge: 'agent', head: [crumb('plan · task 3'), pill(), key()], body: 'b' });
+  const plain = card({ edge: 'signal', head: [crumb('plan · task 3'), key()], body: 'b' });
+  const tight = card({ head: [crumb('plan · task 3'), pill(), key()], body: 'b' });
+  const long = card({ head: [crumb('plan · ' + 'a very long breadcrumb that cannot fit '.repeat(6)), pill(), key()], body: 'b' });
+  const text = card({ head: 'a plain string head '.repeat(8), body: 'b' });
+  for (const c of [tight, long, text]) c.style.width = '260px';
+  fx.append(withPill, plain, tight, long, text);
+  const hd = c => c.querySelector('.kit-card-head');
+  const box = (c, sel) => c.querySelector(sel).getBoundingClientRect();
+  const cut = el => el.scrollWidth > el.clientWidth;
+  eq([withPill, plain, tight, long, text].map(c => hd(c).getBoundingClientRect().height), [18, 18, 18, 18, 18], 'every header is one 18px line');
+  const hr = hd(withPill).getBoundingClientRect(), pr = box(withPill, '.kit-pill');
+  assert(pr.top >= hr.top && pr.bottom <= hr.bottom, `the pill fits the line (${pr.height}px)`);
+  // Crumb and pill fit, the key doesn't: only the key gives way.
+  assert(cut(tight.querySelector('.kit-card-key')), 'the key gives way');
+  assert(!cut(tight.querySelector('.kit-card-crumb')), 'the crumb stays whole while the key gives way');
+  // Nothing fits: the crumb gives way too, and the pill stays inside the header.
+  assert(cut(long.querySelector('.kit-card-crumb')), 'the long crumb is cut off');
+  assert(box(long, '.kit-pill').right <= hd(long).getBoundingClientRect().right, 'the pill stays in view');
+  eq(cs(long.querySelector('.kit-card-crumb')).textOverflow, 'ellipsis', 'the crumb ends in an ellipsis');
+  // A string head is its crumb.
+  const tc = text.querySelector('.kit-card-head > .kit-card-crumb');
+  assert(tc && cut(tc), 'a string head is a crumb, cut off with an ellipsis');
+});
+
 test('dom: codeBlock line counts', () => {
   const lines = el => el.querySelector('.kit-gutter').textContent.split('\n').length;
   eq(lines(codeBlock('a\r\nb\n')), 2, 'CRLF and trailing newline');
