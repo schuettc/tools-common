@@ -162,6 +162,25 @@ test('dom: reading column pieces', () => {
   assert(bs.classList.contains('kit-btns') && bs.firstChild.classList.contains('danger') && bs.lastChild.disabled);
 });
 
+test('dom: the card header is one line at a fixed height', () => {
+  const fx = fixture();
+  const key = () => h('span', { class: 'kit-card-key' }, 'DCSN12');
+  const withPill = card({ edge: 'agent', head: ['plan · task 3', h('span', { class: 'kit-pill', dataset: { state: 'with_agent' } }, 'with agent'), key()], body: 'b' });
+  const plain = card({ edge: 'signal', head: ['plan · task 3', key()], body: 'b' });
+  const long = card({ head: ['plan · ' + 'a very long breadcrumb that cannot fit '.repeat(6), h('span', { class: 'kit-pill' }, 'open'), key()], body: 'b' });
+  long.style.width = '220px';
+  fx.append(withPill, plain, long);
+  const height = c => c.querySelector('.kit-card-head').getBoundingClientRect().height;
+  eq([height(withPill), height(plain), height(long)], [18, 18, 18], 'every header is one 18px line');
+  const hr = withPill.querySelector('.kit-card-head').getBoundingClientRect();
+  const pr = withPill.querySelector('.kit-pill').getBoundingClientRect();
+  assert(pr.top >= hr.top && pr.bottom <= hr.bottom, `the pill fits the line (${pr.height}px)`);
+  const head = long.querySelector('.kit-card-head');
+  assert(head.scrollWidth > head.clientWidth, 'the long header is cut off, not wrapped');
+  const k = long.querySelector('.kit-card-key');
+  eq(cs(k).textOverflow, 'ellipsis', 'the key gives way with an ellipsis');
+});
+
 test('dom: codeBlock line counts', () => {
   const lines = el => el.querySelector('.kit-gutter').textContent.split('\n').length;
   eq(lines(codeBlock('a\r\nb\n')), 2, 'CRLF and trailing newline');
