@@ -24,7 +24,7 @@ func TestPiThemeContract(t *testing.T) {
 	for _, h := range Hue("").Values() {
 		for _, s := range Shade("").Values() {
 			t.Run(string(h)+"-"+string(s), func(t *testing.T) {
-				p, err := Resolve(Assignment{h, s})
+				p, err := Resolve(Assignment{Hue(h), Shade(s)})
 				if err != nil {
 					t.Fatal(err)
 				}

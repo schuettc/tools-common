@@ -19,11 +19,11 @@ func TestResolveCollection(t *testing.T) {
 	for _, h := range hues {
 		for _, s := range shades {
 			t.Run(string(h)+"-"+string(s), func(t *testing.T) {
-				p, err := Resolve(Assignment{h, s})
+				p, err := Resolve(Assignment{Hue(h), Shade(s)})
 				if err != nil {
 					t.Fatal(err)
 				}
-				again, err := Resolve(Assignment{h, s})
+				again, err := Resolve(Assignment{Hue(h), Shade(s)})
 				if err != nil || p != again {
 					t.Fatal("resolution is not deterministic")
 				}

@@ -10,16 +10,36 @@ import (
 // Hue is the window-owned color family.
 type Hue string
 
-// Values returns the canonical allocation order in a fresh slice.
-func (Hue) Values() []Hue {
-	return []Hue{"blue", "teal", "green", "olive", "amber", "rust", "rose", "purple"}
+// hueCatalog is the single authored source of allocation order and base colors.
+var hueCatalog = [...]struct {
+	hue                            Hue
+	background, foreground, accent string
+}{
+	{"blue", "#14283f", "#dfebfa", "#94c4ff"},
+	{"teal", "#12332f", "#dcefe9", "#8bdfcb"},
+	{"green", "#22341e", "#e4efdc", "#b9de94"},
+	{"olive", "#34351b", "#eeefd9", "#dce08b"},
+	{"amber", "#3d2c18", "#f5ead5", "#efc276"},
+	{"rust", "#3e231d", "#f5e3da", "#efb08e"},
+	{"rose", "#3b2030", "#f3e1ed", "#edacd3"},
+	{"purple", "#2c2042", "#eee2fb", "#d1b0ff"},
+}
+
+// Values returns the canonical allocation order in a fresh slice, using the
+// family's enum interface so wiregen can retain the vocabulary in consumers.
+func (Hue) Values() []string {
+	values := make([]string, len(hueCatalog))
+	for i, base := range hueCatalog {
+		values[i] = string(base.hue)
+	}
+	return values
 }
 
 // Shade is a session-owned slot within a window's hue.
 type Shade string
 
 // Values returns the canonical shade allocation order in a fresh slice.
-func (Shade) Values() []Shade { return []Shade{"midnight", "deep", "muted", "bright"} }
+func (Shade) Values() []string { return []string{"midnight", "deep", "muted", "bright"} }
 
 // Assignment retains the window hue and session shade independently.
 type Assignment struct {
@@ -57,18 +77,16 @@ func HeaderFor(p Palette) Header { return Header{p.Background, p.Foreground, p.A
 
 // Resolve returns a deterministic palette, rejecting unknown vocabulary.
 func Resolve(a Assignment) (Palette, error) {
-	bases := map[Hue][3]string{
-		"blue":   {"#14283f", "#dfebfa", "#94c4ff"},
-		"teal":   {"#12332f", "#dcefe9", "#8bdfcb"},
-		"green":  {"#22341e", "#e4efdc", "#b9de94"},
-		"olive":  {"#34351b", "#eeefd9", "#dce08b"},
-		"amber":  {"#3d2c18", "#f5ead5", "#efc276"},
-		"rust":   {"#3e231d", "#f5e3da", "#efb08e"},
-		"rose":   {"#3b2030", "#f3e1ed", "#edacd3"},
-		"purple": {"#2c2042", "#eee2fb", "#d1b0ff"},
+	var base [3]string
+	found := false
+	for _, entry := range hueCatalog {
+		if entry.hue == a.Hue {
+			base = [3]string{entry.background, entry.foreground, entry.accent}
+			found = true
+			break
+		}
 	}
-	base, ok := bases[a.Hue]
-	if !ok {
+	if !found {
 		return Palette{}, fmt.Errorf("unknown theme hue %q", a.Hue)
 	}
 	bg := base[0]

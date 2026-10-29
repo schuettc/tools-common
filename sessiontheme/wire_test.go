@@ -3,10 +3,25 @@ package sessiontheme
 import (
 	"encoding/json"
 	"reflect"
+	"strings"
 	"testing"
+
+	"github.com/subaud-tools/tools-common/wiregen"
 )
 
 func TestQueryJSON(t *testing.T) {
+	out, err := wiregen.Generate([]any{Query{}}, wiregen.Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, union := range []string{
+		"export type Hue =\n  | 'blue'\n  | 'teal'\n  | 'green'\n  | 'olive'\n  | 'amber'\n  | 'rust'\n  | 'rose'\n  | 'purple';",
+		"export type Shade = 'midnight' | 'deep' | 'muted' | 'bright';",
+	} {
+		if !strings.Contains(out, union) {
+			t.Errorf("session theme wire contract missing enum union:\n%s\ngenerated:\n%s", union, out)
+		}
+	}
 	data, err := json.Marshal(Query{Assigned: false})
 	if err != nil {
 		t.Fatal(err)
