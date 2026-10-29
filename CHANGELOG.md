@@ -4,6 +4,11 @@ Root module releases are tagged `vX.Y.Z`; the separate `sqlitedb` and
 `mermaidkit` modules are tagged `sqlitedb/vX.Y.Z` and `mermaidkit/vX.Y.Z`. Releases before this file are described by their
 tags and PRs.
 
+## 0.35.0
+
+### Changed
+- The page kit's card header (`.kit-card-head`) is one line at a fixed 18 px, with or without a state pill: a `.kit-pill` in it is sized to the line, so moving between cards never shifts what is under the header. Nothing wraps; the key (`.kit-card-key`, pushed right) gives way first, then the crumb (`.kit-card-crumb`), each with an ellipsis. `card()` makes a string head its crumb. Headers that were about 13 px grow to 18 px.
+
 ## 0.34.0
 
 ### Added
