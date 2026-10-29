@@ -334,10 +334,12 @@ export function buttons(bs) {
 }
 
 // card is a colour-edged card that holds its own actions. edge: signal (needs
-// you), agent (the agent's), wait (queued / draft).
+// you), agent (the agent's), wait (queued / draft). A head that is a string is
+// its crumb, so it gets the header's ellipsis when it doesn't fit.
 export function card(o) {
+  const head = typeof o.head === 'string' ? h('span', { class: 'kit-card-crumb' }, o.head) : o.head;
   return h('div', { class: 'kit-card' + (o.edge ? ' edge-' + o.edge : '') },
-    o.head ? h('div', { class: 'kit-card-head' }, o.head) : null,
+    head ? h('div', { class: 'kit-card-head' }, head) : null,
     o.body !== undefined ? h('div', { class: 'kit-card-body' }, o.body) : null,
     o.actions && o.actions.length ? buttons(o.actions) : null);
 }

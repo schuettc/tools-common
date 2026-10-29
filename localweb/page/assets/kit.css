@@ -269,7 +269,8 @@ a.kit-brand:hover, a.kit-brand:focus-visible { text-decoration: underline; }
 .kit-card.edge-agent { border-left: 3px solid var(--kit-agent); }
 .kit-card.edge-wait { border-left: 3px solid var(--kit-wait); }
 /* the header is one line at a fixed height, with or without a pill: its parts
-   sit centred on it, nothing wraps, and the key (pushed right) gives way first */
+   sit centred on it and nothing wraps. The key (pushed right) gives way first,
+   then the crumb, each with an ellipsis; a pill never shrinks. */
 .kit-card-head {
   font: 10.5px var(--kit-mono); letter-spacing: .06em; text-transform: uppercase;
   color: var(--kit-muted); margin-bottom: 6px;
@@ -277,10 +278,11 @@ a.kit-brand:hover, a.kit-brand:focus-visible { text-decoration: underline; }
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .kit-card-head > * { flex-shrink: 0; }
-.kit-card-head > .kit-card-key {
-  margin-left: auto; flex-shrink: 1; min-width: 0;
-  overflow: hidden; text-overflow: ellipsis;
+.kit-card-head > .kit-card-crumb, .kit-card-head > .kit-card-key {
+  min-width: 0; overflow: hidden; text-overflow: ellipsis;
 }
+.kit-card-head > .kit-card-crumb { flex-shrink: 1; }
+.kit-card-head > .kit-card-key { margin-left: auto; flex-shrink: 1000; }
 .kit-card-head .kit-pill { line-height: 14px; padding-top: 1px; padding-bottom: 1px; }
 .kit-card.edge-signal .kit-card-head { color: var(--kit-signal); }
 .kit-card.edge-agent .kit-card-head { color: var(--kit-agent); }

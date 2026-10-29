@@ -164,21 +164,32 @@ test('dom: reading column pieces', () => {
 
 test('dom: the card header is one line at a fixed height', () => {
   const fx = fixture();
-  const key = () => h('span', { class: 'kit-card-key' }, 'DCSN12');
-  const withPill = card({ edge: 'agent', head: ['plan · task 3', h('span', { class: 'kit-pill', dataset: { state: 'with_agent' } }, 'with agent'), key()], body: 'b' });
-  const plain = card({ edge: 'signal', head: ['plan · task 3', key()], body: 'b' });
-  const long = card({ head: ['plan · ' + 'a very long breadcrumb that cannot fit '.repeat(6), h('span', { class: 'kit-pill' }, 'open'), key()], body: 'b' });
-  long.style.width = '220px';
-  fx.append(withPill, plain, long);
-  const height = c => c.querySelector('.kit-card-head').getBoundingClientRect().height;
-  eq([height(withPill), height(plain), height(long)], [18, 18, 18], 'every header is one 18px line');
-  const hr = withPill.querySelector('.kit-card-head').getBoundingClientRect();
-  const pr = withPill.querySelector('.kit-pill').getBoundingClientRect();
+  const crumb = t => h('span', { class: 'kit-card-crumb' }, t);
+  const key = () => h('span', { class: 'kit-card-key' }, 'schuettc/tools-workspace/DCSN12');
+  const pill = () => h('span', { class: 'kit-pill', dataset: { state: 'with_agent' } }, 'with agent');
+  const withPill = card({ edge: 'agent', head: [crumb('plan · task 3'), pill(), key()], body: 'b' });
+  const plain = card({ edge: 'signal', head: [crumb('plan · task 3'), key()], body: 'b' });
+  const tight = card({ head: [crumb('plan · task 3'), pill(), key()], body: 'b' });
+  const long = card({ head: [crumb('plan · ' + 'a very long breadcrumb that cannot fit '.repeat(6)), pill(), key()], body: 'b' });
+  const text = card({ head: 'a plain string head '.repeat(8), body: 'b' });
+  for (const c of [tight, long, text]) c.style.width = '260px';
+  fx.append(withPill, plain, tight, long, text);
+  const hd = c => c.querySelector('.kit-card-head');
+  const box = (c, sel) => c.querySelector(sel).getBoundingClientRect();
+  const cut = el => el.scrollWidth > el.clientWidth;
+  eq([withPill, plain, tight, long, text].map(c => hd(c).getBoundingClientRect().height), [18, 18, 18, 18, 18], 'every header is one 18px line');
+  const hr = hd(withPill).getBoundingClientRect(), pr = box(withPill, '.kit-pill');
   assert(pr.top >= hr.top && pr.bottom <= hr.bottom, `the pill fits the line (${pr.height}px)`);
-  const head = long.querySelector('.kit-card-head');
-  assert(head.scrollWidth > head.clientWidth, 'the long header is cut off, not wrapped');
-  const k = long.querySelector('.kit-card-key');
-  eq(cs(k).textOverflow, 'ellipsis', 'the key gives way with an ellipsis');
+  // Crumb and pill fit, the key doesn't: only the key gives way.
+  assert(cut(tight.querySelector('.kit-card-key')), 'the key gives way');
+  assert(!cut(tight.querySelector('.kit-card-crumb')), 'the crumb stays whole while the key gives way');
+  // Nothing fits: the crumb gives way too, and the pill stays inside the header.
+  assert(cut(long.querySelector('.kit-card-crumb')), 'the long crumb is cut off');
+  assert(box(long, '.kit-pill').right <= hd(long).getBoundingClientRect().right, 'the pill stays in view');
+  eq(cs(long.querySelector('.kit-card-crumb')).textOverflow, 'ellipsis', 'the crumb ends in an ellipsis');
+  // A string head is its crumb.
+  const tc = text.querySelector('.kit-card-head > .kit-card-crumb');
+  assert(tc && cut(tc), 'a string head is a crumb, cut off with an ellipsis');
 });
 
 test('dom: codeBlock line counts', () => {
