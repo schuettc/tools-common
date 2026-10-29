@@ -4,7 +4,7 @@ Root module releases are tagged `vX.Y.Z`; the separate `sqlitedb` and
 `mermaidkit` modules are tagged `sqlitedb/vX.Y.Z` and `mermaidkit/vX.Y.Z`. Releases before this file are described by their
 tags and PRs.
 
-## Unreleased
+## 0.34.0
 
 ### Added
 - `sessiontheme`: shared window hues and persistent session shade slots, deterministic dark terminal palettes, pi 1.4 theme JSON rendering, and the typed resolved-theme query/header contract. The root module remains stdlib-only.
