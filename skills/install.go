@@ -271,6 +271,14 @@ func (s *skill) write(body []byte) error {
 	return nil
 }
 
+// Owns reports whether b, a SKILL.md, is the named skill's own: its front
+// matter's name: is name, the rule Install and Refresh apply before they
+// replace one. It is for readers that only inspect, such as a setup tool
+// deciding whether an installed skill is the tool's to update.
+func Owns(name string, b []byte) bool {
+	return oneComponent(name) == nil && skillName(b) == name
+}
+
 // skillName is the name in a skill's front matter ("" for none).
 func skillName(b []byte) string {
 	sc := bufio.NewScanner(bytes.NewReader(b))
