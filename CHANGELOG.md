@@ -4,7 +4,7 @@ Root module releases are tagged `vX.Y.Z`; the separate `sqlitedb` and
 `mermaidkit` modules are tagged `sqlitedb/vX.Y.Z` and `mermaidkit/vX.Y.Z`. Releases before this file are described by their
 tags and PRs.
 
-## Unreleased
+## 0.36.0
 
 ### Added
 - `setupbundle`: a tool release's setup bundle, `<tool>_setup.tar.gz`, published beside its binaries. `Build(tool, version, manifest, files)` writes `setup.json` (`format: 1`, tool, version), `setup.toml` and each regular file of `files` under `files/`, with the same bytes for the same input; `Read` returns a `Bundle` (`Tool`, `Version`, `Manifest`, `Files`) and refuses another `setup.json` format, a symlink or other non-regular member, and any path outside `files/`. The root module remains stdlib-only.
