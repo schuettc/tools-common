@@ -4,6 +4,11 @@ Root module releases are tagged `vX.Y.Z`; the separate `sqlitedb` and
 `mermaidkit` modules are tagged `sqlitedb/vX.Y.Z` and `mermaidkit/vX.Y.Z`. Releases before this file are described by their
 tags and PRs.
 
+## 0.37.0
+
+### Added
+- `skills.Owns(name, body)` exposes the existing skill installer's ownership check so declarative setup can recognize a tool-installed skill without copying its frontmatter parser.
+
 ## 0.36.0
 
 ### Added
