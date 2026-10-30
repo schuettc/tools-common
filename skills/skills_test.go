@@ -326,3 +326,22 @@ func TestNameIsOneComponent(t *testing.T) {
 		}
 	}
 }
+
+// Owns is the ownership rule Install and Refresh apply, for a reader that
+// only inspects: a SKILL.md is the named skill's own when its front matter's
+// name: is that name.
+func TestOwns(t *testing.T) {
+	own := []byte("---\nname: proj\ndescription: d\n---\nbody\n")
+	if !skills.Owns("proj", own) {
+		t.Error("Owns(proj, proj's skill) = false")
+	}
+	if skills.Owns("diazo", own) {
+		t.Error("Owns(diazo, proj's skill) = true")
+	}
+	if skills.Owns("proj", []byte("no front matter\n")) {
+		t.Error("Owns(proj, no front matter) = true")
+	}
+	if skills.Owns("", []byte("---\ndescription: d\n---\n")) {
+		t.Error("Owns(\"\", nameless skill) = true")
+	}
+}
