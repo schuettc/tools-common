@@ -521,3 +521,19 @@ a.kit-brand:hover, a.kit-brand:focus-visible { text-decoration: underline; }
 .kit-agent-slot { height: 28px; margin: 8px 0 0; display: flex; align-items: center; min-width: 0; }
 .kit-agent-slot .kit-working { margin: 0; max-width: 100%; min-width: 0; }
 .kit-agent-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+
+/* a draft's box (drafts.js): it grows with its text */
+.kit-draft { width: 100%; resize: vertical; font: 14px var(--kit-sans); }
+textarea.kit-draft { min-height: 72px; field-sizing: content; max-height: 360px; }
+.kit-draft.attn { border-color: var(--kit-signal); outline: 1px solid var(--kit-signal); }
+.kit-draft-box { flex: 1; min-width: 0; width: 100%; }
+.kit-note-line .kit-draft { flex: 1; }
+
+/* the bar at the foot of a page of drafts */
+.kit-sendbar {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 12px 16px;
+  border: 1px solid var(--kit-line); border-radius: 8px; background: var(--kit-card);
+}
+.kit-sendbar-count { font: 12px var(--kit-mono); white-space: nowrap; margin-right: auto; }
+.kit-sendbar-hint { color: var(--kit-muted); font-size: 13px; flex: 1 1 100%; order: 3; }
+.kit-sendbar .kit-btns { flex: 0 1 auto; gap: 8px; }

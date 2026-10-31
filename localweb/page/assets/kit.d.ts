@@ -559,3 +559,54 @@ export interface WorkingLineOptions {
 /** The agent's one line with a pulsing dot. */
 export function workingLine(o: WorkingLineOptions & { slot: true }): HTMLElement;
 export function workingLine(o: WorkingLineOptions): HTMLElement | null;
+
+// ---- drafts.js
+
+/** The three questions a card can always be asked, in the page's words. */
+export const QUESTIONS: { explain: string; smaller: string; breaks: string };
+
+/** A button for buttons(): once asked it reads "✓ Sent: <label>" and stays off until the agent answers. */
+export function questionButton(o: { label: string; asked: boolean; run(): void }): Button;
+
+export interface DraftBox {
+  /** What holds the box; put this in the page. */
+  el: HTMLElement;
+  box: HTMLTextAreaElement;
+}
+
+export interface Drafts {
+  /** The reader's choices until Send, by what they answer. The caller redraws after changing it. */
+  picks: Map<string, string>;
+  /** A text box for key; drawn again, it holds what was typed. */
+  box(key: string, placeholder: string, rows?: number): DraftBox;
+  get(key: string): string;
+  keys(): IterableIterator<string>;
+  /** Returns the text, forgets it and empties every box drawn for key. */
+  take(key: string): string;
+  /** Puts text back in a box after a refused send. */
+  restore(key: string, text: string): void;
+  /** The drafts whose key starts with prefix, by what follows it. */
+  notes(prefix: string): Map<string, string>;
+  /** Any pick, or any text that is more than space: a reload would lose it. */
+  dirty(): boolean;
+  /** Clears the picks and the drafts whose key starts with prefix. */
+  discard(prefix: string): void;
+}
+
+/** Keeps drafts apart from the page, so they survive a redraw. wrap holds the box in something of the tool's own. */
+export function createDrafts(o?: { wrap?(box: HTMLTextAreaElement, key: string): HTMLElement }): Drafts;
+
+export interface SendBarOptions {
+  /** Where the page stands: "1 of 2 answered". */
+  count: string;
+  /** How many go on Send; none leaves Discard and Send off. */
+  sends: number;
+  hint: string;
+  discard(): void;
+  send(): void;
+  /** Buttons before Discard. */
+  extra?: Button[];
+}
+
+/** The bar at the foot of a page of drafts. */
+export function sendBar(o: SendBarOptions): HTMLElement;
