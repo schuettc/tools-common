@@ -67,6 +67,33 @@ test('share: an outside click, Escape and a resize close it', () => {
   assert(!menu.el.isConnected, 'destroy removes the menu');
 });
 
+test('share: a heading is a label over its items, not pressable and out of the keyboard', () => {
+  const picked = [];
+  const button = document.createElement('button');
+  fixture().append(button);
+  const menu = shareMenu(button, [
+    { label: 'This page', heading: true },
+    { label: 'Download Markdown', act: 'md' },
+    { label: 'Everything', heading: true },
+    { label: 'Download HTML', act: 'html' },
+  ], (act) => picked.push(act));
+  try {
+    button.click();
+    eq([...menu.el.children].map(c => c.textContent), ['This page', 'Download Markdown', 'Everything', 'Download HTML']);
+    const rows = [...menu.el.querySelectorAll('[role="menuitem"]')];
+    eq(rows.map(b => b.textContent), ['Download Markdown', 'Download HTML']);
+    const heading = menu.el.children[0];
+    assert(heading.matches('.kit-share-heading'), `heading is ${heading.outerHTML}`);
+    eq(heading.tagName, 'DIV');
+    eq(heading.tabIndex, -1);
+    heading.click();
+    assert(!menu.el.hidden, 'pressing a heading leaves the menu open');
+    eq(picked, []);
+    rows[1].click();
+    eq(picked, ['html']);
+  } finally { menu.destroy(); }
+});
+
 test('share: sharedLine names the file copied', () => {
   eq(sharedLine('/Users/x/docs/plan.html'), 'plan.html copied · paste to attach');
   eq(SHARE_REPLY_MS, 5000);

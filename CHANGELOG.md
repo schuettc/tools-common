@@ -4,6 +4,11 @@ Root module releases are tagged `vX.Y.Z`; the separate `sqlitedb` and
 `mermaidkit` modules are tagged `sqlitedb/vX.Y.Z` and `mermaidkit/vX.Y.Z`. Releases before this file are described by their
 tags and PRs.
 
+## 0.45.0
+
+### Added
+- The page kit's `shareMenu` takes a `ShareItem` with `heading: true`: a label over the items after it, styled as the kit's section labels, that is not a menuitem, cannot be pressed and is not in the tab order. A page without `kit.css` can set its colour with `--share-muted`.
+
 ## 0.44.0
 
 ### Added
