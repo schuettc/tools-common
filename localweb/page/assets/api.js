@@ -10,9 +10,10 @@
 //
 // Every API response carries the serve's build (pageserve's X-Tool-Build).
 // onNewBuild (if given) is called once, when one differs from the first this
-// page saw, so the page can offer a reload. newBuild() reaches the same
-// callback, for what says so another way: pass it as live()'s onNewBuild, so a
-// stale event (a new install, this serve still running the old code) counts.
+// page saw, so the page can offer a reload. live()'s onNewBuild hears a stale
+// event instead, which comes while this serve still runs the old code: say a
+// newer build is installed, but don't reload then, since the same page comes
+// back. newBuild() calls onNewBuild, for a page that has heard it another way.
 
 export class ApiError extends Error {
   constructor(status, message) {

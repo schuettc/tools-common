@@ -35,6 +35,9 @@ package above never pulls them in.
 
 - `github.com/subaud-tools/tools-common/sqlitedb` (`sqlitedb/vX.Y.Z`) needs the
   SQLite driver (`modernc.org/sqlite`). See [SQLite databases](#sqlite-databases-sqlitedb).
+- `github.com/subaud-tools/tools-common/threadstore` (`threadstore/vX.Y.Z`) is the
+  conversation store a page's server keeps its threads, Sends and deliveries in,
+  on `sqlitedb`; see `PAGE-STANDARD.md`.
 - `github.com/subaud-tools/tools-common/mermaidkit` (`mermaidkit/vX.Y.Z`) has two
   packages, each linking only its own dependency: `mermaidkit` (goldmark),
   where `Render(md, Theme, Bundle, dir)` turns markdown into a themed,
