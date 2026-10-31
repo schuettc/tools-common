@@ -63,6 +63,8 @@ func serve(ctx context.Context, broke string) error {
 		if err := os.Mkdir(filepath.Join(state, "tabs.json"), 0o700); err != nil {
 			return err
 		}
+	case "stop": // a tool whose own server takes the stop with the cookie
+		return cookieStop(ctx, o)
 	case "build": // a tool route that answers without the header
 		o.API = http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 			w.Header().Del(pageserve.BuildHeader)
@@ -70,6 +72,28 @@ func serve(ctx context.Context, broke string) error {
 		})
 	}
 	return pageserve.Run(ctx, o)
+}
+
+// cookieStop serves and advertises itself with a stop route anything signed in
+// can reach.
+func cookieStop(ctx context.Context, o pageserve.Options) error {
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	mux := http.NewServeMux()
+	mux.HandleFunc("POST /api/stop", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+		go cancel()
+	})
+	srv, err := localweb.Start(ctx, localweb.Config{Tool: tool, Assets: o.Assets, API: mux})
+	if err != nil {
+		return err
+	}
+	e := pageserve.Entry{URL: srv.URL, Base: "http://" + srv.Addr(), Token: srv.Token, PID: os.Getpid()}
+	if err := o.Live.Advertise(e); err != nil {
+		return err
+	}
+	defer o.Live.Withdraw(e.PID)
+	return srv.Wait()
 }
 
 // handRolled serves and advertises itself without pageserve.Run.

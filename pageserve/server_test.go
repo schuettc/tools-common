@@ -167,6 +167,50 @@ func TestStopRequiresToken(t *testing.T) {
 	wait(t, r)
 }
 
+// A page served by a tool holds the cookie: it must not be able to stop its
+// server. The Origin is the page's own, so localweb's cross-origin guard lets
+// the request through and only the stop route can refuse it.
+func TestStopRefusesTheCookieAlone(t *testing.T) {
+	r := startRun(t, Options{})
+	live := LiveFor("cull")
+	e, _ := live.Running()
+	resp, err := (&http.Client{CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}).Get(e.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = resp.Body.Close()
+	cookies := resp.Cookies()
+	if len(cookies) != 1 {
+		t.Fatalf("cookies %v", cookies)
+	}
+	for _, header := range []string{"", "not-the-token"} {
+		req, _ := http.NewRequest(http.MethodPost, e.Base+"/api/stop", strings.NewReader("{}"))
+		req.AddCookie(cookies[0])
+		req.Header.Set("Origin", e.Base)
+		if header != "" {
+			req.Header.Set(localweb.TokenHeader, header)
+		}
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_ = resp.Body.Close()
+		if resp.StatusCode != http.StatusForbidden {
+			t.Fatalf("stop with the cookie and header %q: %d", header, resp.StatusCode)
+		}
+	}
+	time.Sleep(200 * time.Millisecond)
+	select {
+	case err := <-r.done:
+		t.Fatalf("the cookie stopped the server: %v", err)
+	default:
+	}
+	if err := Stop(context.Background(), live); err != nil {
+		t.Fatal(err)
+	}
+	wait(t, r)
+}
+
 func TestAPIRequiresToken(t *testing.T) {
 	r := startRun(t, Options{})
 	e, _ := LiveFor("cull").Running()

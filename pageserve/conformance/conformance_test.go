@@ -33,6 +33,7 @@ func TestEachRuleFailsOnAServerThatBreaksIt(t *testing.T) {
 		{"tabs", "tabs.json"},
 		{"build", "X-Tool-Build"},
 		{"skills", "skills install"},
+		{"stop", "cookie alone"},
 	} {
 		t.Run(tc.rule, func(t *testing.T) {
 			broken := s

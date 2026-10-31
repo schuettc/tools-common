@@ -68,6 +68,7 @@ var rules = []struct {
 	{"tabs", keepsTabs},
 	{"build", saysBuild},
 	{"skills", shipsSkill},
+	{"stop", stopTakesHeader},
 }
 
 // Check asserts every server rule against s, one subtest per rule.
@@ -397,6 +398,47 @@ func saysBuild(_ *testing.T, c *scratch) error {
 		if !buildForm.MatchString(got.build) {
 			return fmt.Errorf("%s: %s is %q, want <version>+<hash>", path, pageserve.BuildHeader, got.build)
 		}
+	}
+	return c.stop()
+}
+
+// stopTakesHeader: POST /api/stop takes the token header only, so a page served
+// by the tool, which holds the cookie, can't stop its server. It sends the
+// page's own Origin, past localweb's cross-origin guard.
+func stopTakesHeader(_ *testing.T, c *scratch) error {
+	e, err := c.start()
+	if err != nil {
+		return err
+	}
+	noFollow := &http.Client{CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+	first, err := noFollow.Get(e.URL)
+	if err != nil {
+		return err
+	}
+	_ = first.Body.Close()
+	if len(first.Cookies()) == 0 {
+		return errors.New("the page's URL set no cookie to try the stop with")
+	}
+	req, err := http.NewRequest(http.MethodPost, e.Base+"/api/stop", strings.NewReader("{}"))
+	if err != nil {
+		return err
+	}
+	for _, ck := range first.Cookies() {
+		req.AddCookie(ck)
+	}
+	req.Header.Set("Origin", e.Base)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return err
+	}
+	_ = resp.Body.Close()
+	if resp.StatusCode < 300 {
+		return fmt.Errorf("POST /api/stop with the cookie alone got %d: a page could stop its server", resp.StatusCode)
+	}
+	select {
+	case <-c.proc.exited:
+		return errors.New("POST /api/stop with the cookie alone stopped the server")
+	case <-time.After(300 * time.Millisecond):
 	}
 	return c.stop()
 }
