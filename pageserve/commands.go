@@ -41,6 +41,9 @@ type Commands struct {
 	// Skill reads the tool's skill as this binary was built with it; the
 	// channel refreshes each installed copy that differs. nil: none.
 	Skill func() ([]byte, error)
+	// SkillName names the skill when it isn't named after the tool (galley's is
+	// reviewing-a-document). "": the tool's name.
+	SkillName string
 	// Open opens the page for `<tool> serve` instead of the system browser
 	// opener, so a tool's own switch (casebook's CASEBOOK_NO_BROWSER) covers
 	// it. nil: the system opener.
@@ -60,6 +63,13 @@ type Help struct {
 var openBrowser = localweb.OpenBrowser
 
 func (c Commands) tool() string { return c.Spec.Tool }
+
+func (c Commands) skillName() string {
+	if c.SkillName != "" {
+		return c.SkillName
+	}
+	return c.tool()
+}
 
 // client is the channel's client: it finds serve, else starts it from this
 // binary. The wait loop, watch and report use its Passive copy.
@@ -204,17 +214,17 @@ func (c Commands) refreshSkill(errw io.Writer) {
 	if c.Skill == nil {
 		return
 	}
-	tool := c.tool()
+	tool, name := c.tool(), c.skillName()
 	body, err := c.Skill()
 	if err == nil {
 		var paths []string
-		paths, err = skills.Refresh(tool, body)
+		paths, err = skills.Refresh(name, body)
 		for _, p := range paths {
-			_, _ = fmt.Fprintf(errw, "%s channel: refreshed the %s skill at %s\n", tool, tool, p)
+			_, _ = fmt.Fprintf(errw, "%s channel: refreshed the %s skill at %s\n", tool, name, p)
 		}
 	}
 	if err != nil {
-		_, _ = fmt.Fprintf(errw, "%s channel: refreshing the %s skill: %v\n", tool, tool, err)
+		_, _ = fmt.Fprintf(errw, "%s channel: refreshing the %s skill: %v\n", tool, name, err)
 	}
 }
 
@@ -280,13 +290,22 @@ func (a *agents) Set(v string) error { *a = append(*a, v); return nil }
 // SkillsCommand is `<tool> skills install [--agent NAME]…`: it installs the
 // tool's skill as skill reads it, for each agent harness found or named.
 func SkillsCommand(tool string, skill func() ([]byte, error)) tools.Command {
+	return skillsCommand(tool, tool, skill)
+}
+
+// SkillsCommand is the skills command for c's Skill, installed under SkillName.
+func (c Commands) SkillsCommand() tools.Command {
+	return skillsCommand(c.tool(), c.skillName(), c.Skill)
+}
+
+func skillsCommand(tool, name string, skill func() ([]byte, error)) tools.Command {
 	usage := tool + " skills install [--agent NAME]…"
 	nf := newFlags("skills", usage,
-		"Installs the "+tool+" skill this binary was built with, as <skills dir>/"+tool+"/SKILL.md, for\n"+
+		"Installs the "+name+" skill this binary was built with, as <skills dir>/"+name+"/SKILL.md, for\n"+
 			"each agent harness found (Claude Code, Codex, pi: by their home directories), or for each\n"+
 			"--agent named (claude-code, codex, pi). The skills directory may be a symlink; nothing\n"+
 			"beneath it may be. An existing SKILL.md there is replaced only when it is "+tool+"'s own\n"+
-			"(name: "+tool+"). Run it again after each update to keep the skill in step with the binary.",
+			"(name: "+name+"). Run it again after each update to keep the skill in step with the binary.",
 		func(fs *flag.FlagSet) {
 			fs.Var(new(agents), "agent", "a harness to install for (repeatable): claude-code, codex or pi")
 		})
@@ -303,11 +322,11 @@ func SkillsCommand(tool string, skill func() ([]byte, error)) tools.Command {
 		if err != nil {
 			return tools.Exitf(2, "%v", err)
 		}
-		return skills.Install(tool, body, *fs.Lookup("agent").Value.(*agents), out, errw)
+		return skills.Install(name, body, *fs.Lookup("agent").Value.(*agents), out, errw)
 	}
 	return tools.Command{
 		Name: "skills", Group: "setup", Synopsis: "install [--agent NAME]…", Subcommands: []string{"install"},
-		Summary:  "install the " + tool + " skill for each agent harness, the version this binary was built with",
+		Summary:  "install the " + name + " skill for each agent harness, the version this binary was built with",
 		NewFlags: nf, Run: run,
 	}
 }

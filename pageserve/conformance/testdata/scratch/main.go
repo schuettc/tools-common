@@ -33,8 +33,14 @@ func main() {
 		defer stop()
 		err = serve(ctx, broke)
 	case len(os.Args) > 1 && os.Args[1] == "skills" && broke != "skills":
-		skill := func() ([]byte, error) { return []byte("---\nname: scratch\n---\nA skill.\n"), nil }
-		err = pageserve.SkillsCommand(tool, skill).Run(os.Args[2:], os.Stdout, os.Stderr)
+		// SCRATCH_SKILL names the skill apart from the tool.
+		name := os.Getenv("SCRATCH_SKILL")
+		if name == "" {
+			name = tool
+		}
+		skill := func() ([]byte, error) { return []byte("---\nname: " + name + "\n---\nA skill.\n"), nil }
+		c := pageserve.Commands{Spec: pageserve.Spec{Tool: tool}, Skill: skill, SkillName: name}
+		err = c.SkillsCommand().Run(os.Args[2:], os.Stdout, os.Stderr)
 	default:
 		err = fmt.Errorf("unknown command: %v", os.Args[1:])
 	}

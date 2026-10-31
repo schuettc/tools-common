@@ -45,6 +45,8 @@ type Server struct {
 	Env    []string // added to the serve's environment: a tool's own short test clock
 	// Channel: the tool has a channel, so it must ship a skill.
 	Channel bool
+	// SkillName names the skill when it isn't named after the tool. "": Tool.
+	SkillName string
 	// Quiet is how long serve must stay up with no request at all (0: 3s).
 	// Nothing in pageserve exits for being idle: a tool that adds a timer of its
 	// own is caught only when Env shortens it to under this.
@@ -453,15 +455,19 @@ func shipsSkill(_ *testing.T, c *scratch) error {
 	if out, err := cmd.CombinedOutput(); err != nil {
 		return fmt.Errorf("`%s skills install --agent pi`: %w\n%s", c.s.Tool, err, out)
 	}
+	name := c.s.SkillName
+	if name == "" {
+		name = c.s.Tool
+	}
 	found := false
 	_ = filepath.WalkDir(c.home, func(path string, d fs.DirEntry, err error) error {
-		if err == nil && !d.IsDir() && strings.HasSuffix(path, filepath.Join(c.s.Tool, "SKILL.md")) {
+		if err == nil && !d.IsDir() && strings.HasSuffix(path, filepath.Join(name, "SKILL.md")) {
 			found = true
 		}
 		return nil
 	})
 	if !found {
-		return fmt.Errorf("`%s skills install` wrote no %s/SKILL.md", c.s.Tool, c.s.Tool)
+		return fmt.Errorf("`%s skills install` wrote no %s/SKILL.md", c.s.Tool, name)
 	}
 	return nil
 }
