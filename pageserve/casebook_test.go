@@ -36,8 +36,7 @@ func waitFor(d time.Duration, cond func() bool) bool {
 	return cond()
 }
 
-// The wait loop never starts serve, so serve's idle exit can happen: only a
-// tool call does.
+// The wait loop never starts serve: only a tool call does.
 func TestTheLoopNeverStartsServe(t *testing.T) {
 	var starts atomic.Int32
 	cl := NewClient(Live{Tool: "cull", Dir: t.TempDir()}, func() (Entry, error) {
@@ -253,26 +252,4 @@ func TestRunEntryHook(t *testing.T) {
 	if raw["reopened"] != true {
 		t.Fatalf("serve.json %s", b)
 	}
-}
-
-// Busy keeps serve up while it answers true, whatever the idle limit says:
-// casebook's open page keeps its serve alive (its own stream counts tabs).
-func TestBusyKeepsServeUpPastTheIdleLimit(t *testing.T) {
-	var busy atomic.Bool
-	busy.Store(true)
-	r := startRun(t, Options{Idle: 150 * time.Millisecond, Busy: busy.Load})
-	select {
-	case err := <-r.done:
-		t.Fatalf("serve stopped while busy: %v", err)
-	case <-time.After(600 * time.Millisecond):
-	}
-	busy.Store(false)
-	// The idle clock starts again from the last busy check, so serve is
-	// still up for most of a limit after busy ends, then stops.
-	select {
-	case err := <-r.done:
-		t.Fatalf("serve stopped %v after busy ended, before a full idle limit: %v", 100*time.Millisecond, err)
-	case <-time.After(100 * time.Millisecond):
-	}
-	wait(t, r)
 }

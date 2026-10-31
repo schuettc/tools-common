@@ -70,10 +70,12 @@ export interface Api {
   post<T = unknown>(path: string, body?: unknown): Promise<T>;
   put<T = unknown>(path: string, body?: unknown): Promise<T>;
   del<T = unknown>(path: string): Promise<T>;
+  /** Calls onNewBuild, if it has not run yet: live()'s onNewBuild takes this. */
+  newBuild(): void;
 }
 
-/** JSON over the tool's /api/. 204 or an empty body resolves null; non-2xx throws ApiError. onStale runs once, on the first 401. */
-export function createApi(opts?: { base?: string; token?: string; fetch?: typeof fetch; onStale?(err: ApiError): void }): Api;
+/** JSON over the tool's /api/. 204 or an empty body resolves null; non-2xx throws ApiError. onStale runs once, on the first 401. onNewBuild runs once, when a response's X-Tool-Build differs from the first this page saw, or on api.newBuild(). */
+export function createApi(opts?: { base?: string; token?: string; fetch?: typeof fetch; onStale?(err: ApiError): void; onNewBuild?(): void }): Api;
 
 // ---- live.js
 
@@ -94,6 +96,8 @@ export interface LiveOptions {
   /** Every event except show events, which go to onShow. */
   onEvent(e: LiveEvent): void;
   onStatus?(s: LiveStatus): void;
+  /** A stale event arrived (a new install; this serve runs the old code). Pass createApi's newBuild, so it and a changed X-Tool-Build make one notice. */
+  onNewBuild?(): void;
   /** What this tab shows, in the tool's words, sent as page on every request; default "" (the front page). */
   page?: string;
   /** A {type: "show", data: {tab, page}} event naming this tab arrived: show page (e.g. navigate to it). */

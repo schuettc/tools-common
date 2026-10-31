@@ -7,6 +7,12 @@
 // A 401 means the server restarted and this page's token is gone: the error's
 // isStale is true, and onStale (if given) is called once, so the page can show
 // the tool's stale message.
+//
+// Every API response carries the serve's build (pageserve's X-Tool-Build).
+// onNewBuild (if given) is called once, when one differs from the first this
+// page saw, so the page can offer a reload. newBuild() reaches the same
+// callback, for what says so another way: pass it as live()'s onNewBuild, so a
+// stale event (a new install, this serve still running the old code) counts.
 
 export class ApiError extends Error {
   constructor(status, message) {
@@ -25,6 +31,14 @@ export function createApi(opts = {}) {
   const base = opts.base ?? '/api';
   const doFetch = opts.fetch || ((...a) => fetch(...a));
   let staleSeen = false;
+  let firstBuild = null;
+  let newBuildSeen = false;
+
+  function newBuild() {
+    if (newBuildSeen) return;
+    newBuildSeen = true;
+    if (opts.onNewBuild) opts.onNewBuild();
+  }
 
   async function request(method, path, body, query) {
     let url = base + path;
@@ -40,6 +54,11 @@ export function createApi(opts = {}) {
       init.body = JSON.stringify(body);
     }
     const res = await doFetch(url, init);
+    const build = res.headers?.get('X-Tool-Build');
+    if (build) {
+      firstBuild ??= build;
+      if (build !== firstBuild) newBuild();
+    }
     const text = res.status === 204 ? '' : await res.text();
     if (!res.ok) {
       let message = text.trim();
@@ -64,5 +83,6 @@ export function createApi(opts = {}) {
     post: (path, body) => request('POST', path, body),
     put: (path, body) => request('PUT', path, body),
     del: path => request('DELETE', path),
+    newBuild,
   };
 }

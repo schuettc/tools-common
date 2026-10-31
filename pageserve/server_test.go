@@ -9,6 +9,8 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -16,7 +18,9 @@ import (
 	"testing/fstest"
 	"time"
 
+	tools "github.com/subaud-tools/tools-common"
 	"github.com/subaud-tools/tools-common/localweb"
+	"github.com/subaud-tools/tools-common/localweb/page"
 )
 
 type running struct {
@@ -38,14 +42,23 @@ func testAPI() http.Handler {
 func startRun(t *testing.T, o Options) *running {
 	t.Helper()
 	t.Setenv("CULL_HOME", t.TempDir())
+	return runHere(t, o)
+}
+
+// runHere is startRun in the state directory already set, so a test can
+// restart a serve over the same state.
+func runHere(t *testing.T, o Options) *running {
+	t.Helper()
 	ctx, cancel := context.WithCancel(context.Background())
-	t.Cleanup(cancel)
+	stopped := make(chan struct{})
+	// Serve writes its state as it stops, so the test's folder outlives it.
+	t.Cleanup(func() { cancel(); <-stopped })
 	r := &running{done: make(chan error, 1), url: make(chan string, 1), log: &strings.Builder{}, started: make(chan string, 1)}
 	o.Live, o.Assets, o.API = LiveFor("cull"), testPage, testAPI()
 	o.Log = &lockedWriter{w: r.log}
 	o.OnStart = func(_ context.Context, u string) { r.started <- u }
 	o.Ready = func(u string) { r.url <- u }
-	go func() { r.done <- Run(ctx, o) }()
+	go func() { r.done <- Run(ctx, o); close(stopped) }()
 	select {
 	case <-r.url:
 	case err := <-r.done:
@@ -129,14 +142,6 @@ func TestAdvertPrivateAndRemovedOnExit(t *testing.T) {
 	}
 }
 
-func TestIdleExit(t *testing.T) {
-	r := startRun(t, Options{Idle: 200 * time.Millisecond})
-	wait(t, r)
-	if _, err := LiveFor("cull").Running(); !errors.Is(err, ErrNotRunning) {
-		t.Fatalf("%v", err)
-	}
-}
-
 func TestStopRequiresToken(t *testing.T) {
 	r := startRun(t, Options{})
 	live := LiveFor("cull")
@@ -160,14 +165,6 @@ func TestStopRequiresToken(t *testing.T) {
 	}
 	_ = Stop(context.Background(), live)
 	wait(t, r)
-}
-
-func TestIdleExitWithIdleStreamOpen(t *testing.T) {
-	r := startRun(t, Options{Idle: 300 * time.Millisecond})
-	e, _ := LiveFor("cull").Running()
-	resp := get(t, e, "/api/events")
-	defer func() { _ = resp.Body.Close() }()
-	wait(t, r) // an open but idle tab doesn't keep the server alive
 }
 
 func TestAPIRequiresToken(t *testing.T) {
@@ -194,4 +191,130 @@ func TestAPIRequiresToken(t *testing.T) {
 	_ = resp.Body.Close()
 	_ = Stop(context.Background(), LiveFor("cull"))
 	wait(t, r)
+}
+
+// The list reaches the tool before the server can answer, a poll that names its
+// tab checks it in there, and it outlives a restart: the next page open reuses
+// the tab, which only checks in once a minute when hidden.
+func TestTabsAreTheToolsAndSurviveARestart(t *testing.T) {
+	t.Setenv("CULL_HOME", t.TempDir())
+	live := LiveFor("cull")
+	var tabs *localweb.Tabs
+	var atStart *localweb.Tabs
+	o := Options{Tabs: func(l *localweb.Tabs) { tabs = l }}
+	r := runHere(t, o)
+	atStart = tabs
+	if atStart == nil {
+		t.Fatal("Options.Tabs was not called")
+	}
+	e, err := live.Running()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c := tabs.Pick("plan"); c.Kind != localweb.TabNone {
+		t.Fatalf("before a check-in: %+v", c)
+	}
+	_ = get(t, e, "/api/poll?tab=t1&page=plan").Body.Close()
+	if c := tabs.Pick("plan"); c.Kind != localweb.TabHere || c.Tab != "t1" {
+		t.Fatalf("after a check-in: %+v", c)
+	}
+	if err := Stop(context.Background(), live); err != nil {
+		t.Fatal(err)
+	}
+	wait(t, r)
+
+	r = runHere(t, o)
+	if tabs == atStart {
+		t.Fatal("the restart kept the old list")
+	}
+	if c := tabs.Pick("plan"); c.Kind != localweb.TabHere || c.Tab != "t1" {
+		t.Fatalf("after a restart: %+v", c)
+	}
+	if err := Stop(context.Background(), live); err != nil {
+		t.Fatal(err)
+	}
+	wait(t, r)
+}
+
+// With no callback the tabs are still kept: a tool gets the rule for nothing.
+func TestTabsAreKeptWithNoCodeInTheTool(t *testing.T) {
+	r := startRun(t, Options{})
+	e, _ := LiveFor("cull").Running()
+	_ = get(t, e, "/api/poll?tab=t1&page=plan").Body.Close()
+	b, err := os.ReadFile(filepath.Join(tools.StateDir("cull"), "tabs.json"))
+	if err != nil || !strings.Contains(string(b), `"t1"`) {
+		t.Fatalf("%s %v", b, err)
+	}
+	_ = Stop(context.Background(), LiveFor("cull"))
+	wait(t, r)
+}
+
+// A list the tool already put on its Events is the one kept, so a tool with its
+// own clock in a test, or not yet moved off its own list, isn't handed a second.
+func TestTabsAlreadyOnTheEventsAreKept(t *testing.T) {
+	own := localweb.NewTabs(nil)
+	evs := NewEvents()
+	evs.Tabs = own
+	var got *localweb.Tabs
+	r := startRun(t, Options{Events: evs, Tabs: func(l *localweb.Tabs) { got = l }})
+	if got != own {
+		t.Fatal("Run replaced the list on the Events")
+	}
+	_ = Stop(context.Background(), LiveFor("cull"))
+	wait(t, r)
+	if _, err := os.Stat(filepath.Join(tools.StateDir("cull"), "tabs.json")); err != nil {
+		t.Fatalf("not kept: %v", err)
+	}
+}
+
+// Every answer of the API says which build is serving: the tool's routes, the
+// shared ones and a route that isn't there.
+func TestEveryAPIResponseCarriesTheBuild(t *testing.T) {
+	r := startRun(t, Options{Version: "1.2.3"})
+	e, _ := LiveFor("cull").Running()
+	want := buildOf("1.2.3", testPage)
+	if !regexp.MustCompile(`^1\.2\.3\+[0-9a-f]{12}$`).MatchString(want) {
+		t.Fatalf("build %q", want)
+	}
+	for _, path := range []string{"/api/ping", "/api/poll", "/api/nothing"} {
+		resp := get(t, e, path)
+		_ = resp.Body.Close()
+		if got := resp.Header.Get(BuildHeader); got != want {
+			t.Fatalf("%s: %s %q, want %q", path, BuildHeader, got, want)
+		}
+	}
+	_ = Stop(context.Background(), LiveFor("cull"))
+	wait(t, r)
+}
+
+// The build changes with the version and with any asset, wherever it is, the
+// kit's included: a rebuild with one version still counts as a change.
+func TestTheBuildHashesEveryAsset(t *testing.T) {
+	tree := func(body string) fstest.MapFS {
+		return fstest.MapFS{"index.html": {Data: []byte("page")}, "deep/in/app.js": {Data: []byte(body)}}
+	}
+	base := buildOf("1", tree("a"))
+	if got := buildOf("1", tree("a")); got != base {
+		t.Fatalf("not stable: %q, %q", base, got)
+	}
+	if got := buildOf("2", tree("a")); got == base {
+		t.Fatal("the version doesn't count")
+	}
+	if got := buildOf("1", tree("b")); got == base {
+		t.Fatal("a nested asset doesn't count")
+	}
+	moved := fstest.MapFS{"index.html": {Data: []byte("page")}, "deep/app.js": {Data: []byte("a")}}
+	if got := buildOf("1", moved); got == base {
+		t.Fatal("a file's name doesn't count")
+	}
+	joined := fstest.MapFS{"a": {Data: []byte("bc")}}
+	if buildOf("1", joined) == buildOf("1", fstest.MapFS{"a": {Data: []byte("b")}, "c": {Data: nil}}) {
+		t.Fatal("a file's bounds don't count")
+	}
+	if withKit := buildOf("1", page.With(tree("a"))); withKit == base {
+		t.Fatal("the kit's files aren't walked")
+	}
+	if !strings.HasPrefix(buildOf("1", nil), "1+") {
+		t.Fatal("no assets")
+	}
 }

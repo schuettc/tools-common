@@ -158,6 +158,11 @@ func New(spec Spec, id Identity, c *Client) *Channel {
 			if ctx == nil {
 				ctx = context.Background()
 			}
+			// A tool call is where a stale serve gets replaced (the wait loop
+			// never does it), so no tool has to ask.
+			if err := c.Fresh(ctx); err != nil {
+				return "", err
+			}
 			return spec.Call(ctx, ch, name, args)
 		},
 		// Run's read loop hands each report over and goes on: posting it
@@ -272,8 +277,8 @@ func (ch *Channel) Announce(ctx context.Context, c *Client) error {
 // claims a send for exactly one caller, so an event is never duplicated. A
 // delivery the tool's Wake refuses is logged with its first 200 bytes, so a
 // lost one leaves a trace. It
-// never starts serve (only a tool call does), so serve's idle exit can
-// happen, and while no serve runs it logs nothing.
+// never starts serve (only a tool call does), and while no serve runs it logs
+// nothing.
 func (ch *Channel) loop(ctx context.Context) {
 	c := ch.Client.Passive()
 	var lastPresence time.Time

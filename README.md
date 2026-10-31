@@ -11,6 +11,8 @@ its own. Subpackages never import each other, except `pageserve`, which is the
 shell built on `channelmcp`, `harness`, `localweb` and `skills`; `localweb`
 imports only the root, and `localweb/page` imports nothing from the module.
 
+A tool's server and page follow [`PAGE-STANDARD.md`](PAGE-STANDARD.md): each rule, the part that delivers it, and where each server stands.
+
 | Import | What |
 |---|---|
 | `tools-common` (package `tools`) | CLI foundation (`App`, `Command`, help/man/`commands --json`, `ExitError`, version, self-update); `WriteFileAtomic`, `PIDAlive`, `ConfigDir`/`StateDir`/`CacheDir`/`DataDir`/`EnsureDir` |
@@ -20,7 +22,7 @@ imports only the root, and `localweb/page` imports nothing from the module.
 | `tools-common/claudeplugin` | renders a tool's Claude Code plugin (manifest, `.mcp.json`, the mod that runs `<tool> watch` and reports back with `<tool> report`) from one template; `AssertCurrent` keeps a repo's copy equal to it |
 | `tools-common/localweb` | loopback local-page server: per-launch token, rebinding/CSRF guards, remembered port, `OpenBrowser`, `CanShare`/`PutFile` (a file on the macOS clipboard) |
 | `tools-common/localweb/page` | the galley-style page kit: tokens, bar, list panel, reading-column components, keyboard layer, API and live clients, served under `/_kit/` |
-| `tools-common/pageserve` | the server behind a tool's page, found and driven by its channel: `Live` entries (one JSON file per open page, with `Claim` by an owner session, session presence, `Inspect`'s problems; a one-page tool's `serve.json` through `Running`/`Advertise`/`Withdraw`), the `Events` log behind `/api/events` and `/api/poll`, `Run` (the serve process, `/api/stop`, idle exit), `Process.Start`/`Ensure` and `Stop`, the channel's `Client` and `Channel` (presence, long poll, reports) from a tool's `Spec`, and the `serve`, `channel`, `watch`, `report` and `skills` commands |
+| `tools-common/pageserve` | the server behind a tool's page, found and driven by its channel: `Live` entries (one JSON file per open page, with `Claim` by an owner session, session presence, `Inspect`'s problems; a one-page tool's `serve.json` through `Running`/`Advertise`/`Withdraw`), the `Events` log behind `/api/events` and `/api/poll`, `Run` (the serve process, `/api/stop`, the server defaults), `Process.Start`/`Ensure` and `Stop`, the channel's `Client` and `Channel` (presence, long poll, reports) from a tool's `Spec`, and the `serve`, `channel`, `watch`, `report` and `skills` commands. `pageserve/conformance` is the test a tool's CI runs against its server |
 | `tools-common/hookconfig` | exact owned Claude command-hook reconciliation: `Removal{Event, Matcher, Commands}`, `Remove(document, rules)` and read-only `Count(document, rule)`; no shell/path normalization |
 | `tools-common/skills` | shared skill installation and ownership: `Owns(name, body)` and `OwnsWithMarkers(name, body, markers)` for exact additional frontmatter string markers (for muda, `muda-owned: <skill name>`); adoption checks both current and desired assets |
 | `tools-common/setupbundle` | a release's setup bundle, `<tool>_setup.tar.gz`: `Build` writes `setup.json` (format, tool, version), `setup.toml` and the files it references under `files/`, deterministically; `Read` validates one and returns its `Bundle` |
@@ -192,10 +194,14 @@ srv, err := localweb.Start(ctx, localweb.Config{
   registration. While a text field has focus, only `Esc` and `inField` keys fire.
 - **API** (`api.js`): `createApi()` sends JSON with the page's cookie. Pass
   `{token}` to send `X-Local-Token` instead (non-browser callers).
-- **Stale session:** when the tool's server restarts, the page's token is
-  gone and every call returns 401. `ApiError.isStale` is true, `createApi({onStale})`
+- **Stale session:** when the tool's server no longer knows the page's token
+  (a `pageserve` server keeps it across restarts, so only its file going does
+  this), every call returns 401. `ApiError.isStale` is true, `createApi({onStale})`
   runs once, and `live()` reports `stale` and stops. Show the tool's own words
   with `bar({staleText})` and `setLive('stale')`.
+- **New build:** every API response carries `X-Tool-Build` (`pageserve`). `createApi({onNewBuild})`
+  runs once when it differs from the first this page saw. Pass `api.newBuild` as `live()`'s
+  `onNewBuild`, so the `stale` event after a new install reaches the same callback.
 - **Layout:** `.kit-app` is the page grid: the bar across the top, then
   `.kit-list` | `.kit-read` | an optional `.kit-rail` (360px, the tool's own
   dock). `.kit-page` + `.kit-main` is the same without a rail. It is a desktop layout:

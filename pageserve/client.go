@@ -13,9 +13,12 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"os"
+	"path/filepath"
 	"sync"
 	"time"
 
+	tools "github.com/subaud-tools/tools-common"
 	"github.com/subaud-tools/tools-common/channelmcp"
 	"github.com/subaud-tools/tools-common/localweb"
 )
@@ -30,6 +33,9 @@ type Client struct {
 	Start func() (Entry, error)
 	// Stop stops the live serve; tests replace it.
 	Stop func(context.Context) error
+	// Lock serializes replacing a stale serve across every channel on the
+	// machine; nil: within this client only.
+	Lock func() (unlock func(), err error)
 
 	// startMu serializes "find, else start" so one channel never launches two
 	// serves; Process.Ensure serializes it across every channel on the machine.
@@ -40,14 +46,21 @@ type Client struct {
 // start is not nil, starts it if it isn't running.
 func NewClient(l Live, start func() (Entry, error)) *Client {
 	return &Client{Tool: l.Tool, HTTP: &http.Client{Timeout: 90 * time.Second}, Find: l.Running, Start: start,
-		Stop: func(ctx context.Context) error { return Stop(ctx, l) }}
+		Stop: func(ctx context.Context) error { return Stop(ctx, l) },
+		Lock: func() (func(), error) {
+			state := tools.StateDir(l.Tool)
+			if err := os.MkdirAll(state, 0o700); err != nil {
+				return nil, err
+			}
+			return lockFile(filepath.Join(state, "fresh.lock"))
+		}}
 }
 
 // Passive is a copy of c that never starts serve: the client the channel's
-// wait loop, its reports, `<tool> watch` and `<tool> report` use, so that
-// serve's idle exit can happen. Only a tool call starts serve.
+// wait loop, its reports, `<tool> watch` and `<tool> report` use. Only a tool
+// call starts serve.
 func (c *Client) Passive() *Client {
-	return &Client{Tool: c.Tool, HTTP: c.HTTP, Find: c.Find, Stop: c.Stop}
+	return &Client{Tool: c.Tool, HTTP: c.HTTP, Find: c.Find, Stop: c.Stop, Lock: c.Lock}
 }
 
 // errStart is a failed start, wrapped as "starting cull serve: ...".
@@ -66,10 +79,10 @@ func (c *Client) ensure() (Entry, error) {
 }
 
 // Fresh replaces a serve that marked itself stale (a newer binary was
-// installed since it started) with one running the installed binary. Call it
-// only when the agent is about to open a page anyway, never in the middle of
-// a wait: serve keeps its token, so open tabs reconnect, but each reloads for
-// the new page (or asks to).
+// installed since it started) with one running the installed binary. The
+// channel calls it before each tool call, never in the middle of a wait: serve
+// keeps its token, so open tabs reconnect, but each reloads for the new page
+// (or asks to).
 func (c *Client) Fresh(ctx context.Context) error {
 	if c.Start == nil {
 		return nil
@@ -85,7 +98,28 @@ func (c *Client) Fresh(ctx context.Context) error {
 	case !e.Stale:
 		return nil
 	}
-	if err := c.Stop(ctx); err != nil {
+	// Channels finding it stale at once replace it once: holding the lock, look
+	// again, because the serve there now may be the one another just started.
+	if c.Lock != nil {
+		unlock, err := c.Lock()
+		if err != nil {
+			return err
+		}
+		defer unlock()
+	}
+	c.startMu.Lock()
+	e, err = c.Find()
+	c.startMu.Unlock()
+	switch {
+	case errors.Is(err, ErrNotRunning): // another channel stopped it: start one
+		_, err = c.ensure()
+		return err
+	case err != nil:
+		return err
+	case !e.Stale:
+		return nil
+	}
+	if err := c.Stop(ctx); err != nil && !errors.Is(err, ErrNotRunning) {
 		return fmt.Errorf("restarting %s serve for the newer install: %w", c.Tool, err)
 	}
 	_, err = c.ensure()

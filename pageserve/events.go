@@ -38,8 +38,9 @@ type Events struct {
 	// WriteTimeout bounds each frame a stream writes (0: 10s), so a client
 	// that stopped reading ends its stream instead of pinning it.
 	WriteTimeout time.Duration
-	// Tabs, when set, hears from the page's tabs: a poll that names its tab
-	// is a check-in, and a tab counts as open while its stream is.
+	// Tabs hears from the page's tabs: a poll that names its tab is a
+	// check-in, and a tab counts as open while its stream is. Run sets it when
+	// nil (see Options.Tabs).
 	Tabs *localweb.Tabs
 
 	boot   string
@@ -258,8 +259,6 @@ func (l *Events) Stream(w http.ResponseWriter, r *http.Request) {
 			return
 		case <-wait:
 		case <-beat.C:
-			// The heartbeat is not activity: an open but idle tab must not
-			// keep the server alive.
 			if !write(": hb\n\n") {
 				return
 			}

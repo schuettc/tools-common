@@ -23,6 +23,11 @@
 // tab it names runs onShow(page); every other tab ignores it. Show events
 // never reach onEvent.
 //
+// A {type: "stale"} event says a new binary was installed and this serve still
+// runs the old one (pageserve emits it once): it reaches onNewBuild, if given,
+// as well as onEvent. Pass createApi's newBuild, so it and a changed
+// X-Tool-Build make one notice.
+//
 // A 401 from the poll means the server restarted and the token is gone:
 // status becomes "stale" and the client stops for good (no stream, no polls).
 //
@@ -70,6 +75,13 @@ export function live(opts) {
   // deliver never lets a page handler's exception stop the stream or polling.
   function deliver(type, data, c) {
     cursor = c;
+    if (type === 'stale' && opts.onNewBuild) {
+      try {
+        opts.onNewBuild();
+      } catch (err) {
+        console.error('live: onNewBuild threw', err);
+      }
+    }
     try {
       if (type !== 'show') opts.onEvent({ type, data, cursor: c });
       else if (data && data.tab === tab && opts.onShow) opts.onShow(data.page);
