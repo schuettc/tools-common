@@ -618,3 +618,8 @@ export interface SendBarOptions {
 
 /** The bar at the foot of a page of drafts. */
 export function sendBar(o: SendBarOptions): HTMLElement;
+
+// ---- elsewhere.js
+
+/** The call to make whenever the bar's "also open" list may have changed. Each runs read() for the items and sets the bar only when they changed (their onClick aside), so an open list stays open. A call during a read reads once more after it, never twice at once; a failed read leaves the list as it was. */
+export function keepElsewhere(bar: Pick<BarHandle, 'setElsewhere'>, read: () => Promise<ElsewhereItem[]> | ElsewhereItem[]): () => Promise<void>;

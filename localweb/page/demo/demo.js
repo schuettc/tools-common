@@ -1,4 +1,4 @@
-import { h, bar, list, facts, card, buttons, codeBlock, fold, noteField, messagePill, MESSAGE_STATES, createKeys, initTheme, frame, lineTip, wireTip, indexRow, indexSection, thread, stageTrack, workingLine, waitBadges, createDrafts, questionButton, QUESTIONS, sendBar } from '/_kit/kit.js';
+import { h, bar, list, facts, card, buttons, codeBlock, fold, noteField, messagePill, MESSAGE_STATES, createKeys, initTheme, frame, lineTip, wireTip, indexRow, indexSection, thread, stageTrack, workingLine, waitBadges, createDrafts, questionButton, QUESTIONS, sendBar, keepElsewhere } from '/_kit/kit.js';
 
 const MARK = `<svg viewBox="0 0 64 64"><rect width="64" height="64" rx="14" fill="#14161d"/><path d="M13 22H28M13 32H26M13 42H28" stroke="#9aa0ab" stroke-width="3.6" stroke-linecap="round"/><path d="M13 22H28" stroke="#d98f66" stroke-width="3.6" stroke-linecap="round"/><path d="M33 17V47" stroke="#d98f66" stroke-width="2.4"/><rect x="38" y="18" width="14" height="28" rx="3" fill="none" stroke="#d98f66" stroke-width="2.4"/></svg>`;
 const mark = () => {
@@ -234,11 +234,12 @@ const forced = new URLSearchParams(location.search).get('theme');
 if (forced) theme.set(forced); // screenshots: ?theme=light|dark
 b.setLive('live');
 // The "also open" button: other work a click away, listed when pressed.
-b.setElsewhere([
+// keepElsewhere calls this whenever the list may have changed.
+keepElsewhere(b, () => [
   { label: 'muster: unanswered requests', detail: 'needs you · Decisions', tone: 'you', onClick() {} },
   { label: 'Claude Code mods for channels', detail: 'working · Spec', tone: 'working', onClick() {} },
   { label: 'casebook triage', detail: 'idle · Plan', onClick() {} },
-]);
+])();
 if (view === 'parts') {
   // The three columns: ?view=parts.
   app.className = 'kit-app';
