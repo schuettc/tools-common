@@ -48,9 +48,14 @@ func buildOf(version string, assets fs.FS) string {
 	return version + "+" + hex.EncodeToString(h.Sum(nil))[:12]
 }
 
-// onStopWait is how long OnStop's context lasts: less than the 5s Stop waits for
-// the entry to go, so a shutdown that honours it never reads as a failed restart.
-const onStopWait = 4 * time.Second
+// Counted from the server's context ending, which includes the wait for running
+// requests: onStopWait is when OnStop's context ends, and onStopGrace how long
+// after that Run gives it to return. Together they are less than the 5s Stop
+// waits for the entry to go, so no shutdown reads as a failed restart.
+const (
+	onStopWait  = 4 * time.Second
+	onStopGrace = 500 * time.Millisecond
+)
 
 // Options configures Run.
 type Options struct {
@@ -74,11 +79,13 @@ type Options struct {
 	OnStart func(ctx context.Context, url string)
 	Ready   func(url string)
 	// OnStop runs the tool's own shutdown once the server has stopped taking
-	// requests and before its entry is withdrawn, so whoever waits for the entry
-	// to go (Stop, Client.Fresh) starts the next serve only after the writing is
-	// done. Its ctx ends after onStopWait, inside the time Stop waits; Run waits
-	// for it to return all the same. It runs only for a serve that wrote its
-	// entry.
+	// requests and the requests it was answering have finished (or their wait
+	// ran out, which is logged), and before its entry is withdrawn, so whoever
+	// waits for the entry to go (Stop, Client.Fresh) starts the next serve only
+	// after the writing is done. Its ctx ends inside the time Stop waits. One
+	// that has not returned soon after is logged and left behind: Run withdraws
+	// and returns, and the process exiting ends it. It runs only for a serve that
+	// wrote its entry.
 	OnStop func(ctx context.Context)
 	// Stream, when set, answers GET /api/events instead of Events.Stream:
 	// a tool whose page streams from its own event bus (casebook's).
@@ -209,8 +216,13 @@ func Run(ctx context.Context, o Options) error {
 	if o.Ready != nil {
 		o.Ready(srv.URL)
 	}
+	ended := make(chan time.Time, 1)
+	go func() { <-ctx.Done(); ended <- time.Now() }()
 	err = srv.Wait()
 	cancel()
+	if srv.Stuck() {
+		_, _ = fmt.Fprintf(o.Log, "%s serve: requests still running as it stops\n", tool)
+	}
 	o.Events.wait() // streams end with ctx
 	// Saved as serve stops, so the list a restart reads is not already old.
 	if err := o.Events.Tabs.Save(); err != nil {
@@ -218,10 +230,22 @@ func Run(ctx context.Context, o Options) error {
 	}
 	<-watched // a last tick must not write the entry after it is withdrawn
 	if o.OnStop != nil {
-		// ctx has ended: the tool's shutdown gets its own.
-		stopCtx, stopped := context.WithTimeout(context.Background(), onStopWait)
-		defer stopped()
-		o.OnStop(stopCtx)
+		runOnStop(o, <-ended)
 	}
 	return err
+}
+
+// runOnStop calls OnStop and waits for it, up to its bound from ended, when the
+// server's context ended.
+func runOnStop(o Options, ended time.Time) {
+	// That context has ended: the tool's shutdown gets its own.
+	ctx, stopped := context.WithDeadline(context.Background(), ended.Add(onStopWait))
+	defer stopped()
+	returned := make(chan struct{})
+	go func() { defer close(returned); o.OnStop(ctx) }()
+	select {
+	case <-returned:
+	case <-time.After(time.Until(ended.Add(onStopWait + onStopGrace))):
+		_, _ = fmt.Fprintf(o.Log, "%s serve: OnStop overran; going on without it\n", o.Live.Tool)
+	}
 }

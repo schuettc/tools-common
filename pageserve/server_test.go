@@ -14,6 +14,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"testing/fstest"
 	"time"
@@ -54,7 +55,10 @@ func runHere(t *testing.T, o Options) *running {
 	// Serve writes its state as it stops, so the test's folder outlives it.
 	t.Cleanup(func() { cancel(); <-stopped })
 	r := &running{done: make(chan error, 1), url: make(chan string, 1), log: &strings.Builder{}, started: make(chan string, 1)}
-	o.Live, o.Assets, o.API = LiveFor("cull"), testPage, testAPI()
+	o.Live, o.Assets = LiveFor("cull"), testPage
+	if o.API == nil {
+		o.API = testAPI()
+	}
 	o.Log = &lockedWriter{w: r.log}
 	o.OnStart = func(_ context.Context, u string) { r.started <- u }
 	o.Ready = func(u string) { r.url <- u }
@@ -209,6 +213,86 @@ func TestStopRefusesTheCookieAlone(t *testing.T) {
 		t.Fatal(err)
 	}
 	wait(t, r)
+}
+
+// sendToAPI makes a call to the running serve's API in the background, so a test
+// can hold its handler open.
+func sendToAPI(t *testing.T, live Live) {
+	t.Helper()
+	e, err := live.Running()
+	if err != nil {
+		t.Fatal(err)
+	}
+	req, _ := http.NewRequest(http.MethodPost, e.Base+"/api/write", strings.NewReader("{}"))
+	req.Header.Set(localweb.TokenHeader, e.Token)
+	go func() {
+		if resp, err := http.DefaultClient.Do(req); err == nil {
+			_ = resp.Body.Close()
+		}
+	}()
+}
+
+// A handler still writing holds the entry and OnStop back, so a restart can't
+// start beside it.
+func TestStopWaitsForAHandlerStillWriting(t *testing.T) {
+	t.Setenv("CULL_HOME", t.TempDir())
+	live := LiveFor("cull")
+	entered, finish := make(chan struct{}), make(chan struct{})
+	var returned atomic.Bool
+	var returnedAtOnStop bool
+	r := runHere(t, Options{
+		API: http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+			close(entered)
+			<-finish
+			returned.Store(true)
+		}),
+		OnStop: func(context.Context) { returnedAtOnStop = returned.Load() },
+	})
+	sendToAPI(t, live)
+	<-entered
+	stopped := make(chan error, 1)
+	go func() { stopped <- Stop(context.Background(), live) }()
+	time.Sleep(500 * time.Millisecond)
+	_, err := live.Running()
+	close(finish)
+	if err != nil {
+		t.Errorf("the entry went while a handler was writing: %v", err)
+	}
+	if err := <-stopped; err != nil {
+		t.Fatal(err)
+	}
+	wait(t, r)
+	if !returnedAtOnStop {
+		t.Error("OnStop ran while a handler was writing")
+	}
+}
+
+// A handler that never returns and an OnStop that ignores its context cost the
+// wait and a line in the log, and still leave inside the time Stop waits.
+func TestStopIsBoundedWhenShutdownWillNotEnd(t *testing.T) {
+	t.Setenv("CULL_HOME", t.TempDir())
+	live := LiveFor("cull")
+	entered, finish := make(chan struct{}), make(chan struct{})
+	defer close(finish)
+	r := runHere(t, Options{
+		API: http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+			close(entered)
+			<-finish
+		}),
+		OnStop: func(context.Context) { <-finish },
+	})
+	sendToAPI(t, live)
+	<-entered
+	if err := Stop(context.Background(), live); err != nil {
+		t.Fatal(err)
+	}
+	wait(t, r)
+	log := r.log.String()
+	for _, want := range []string{"requests still running", "OnStop overran"} {
+		if !strings.Contains(log, want) {
+			t.Errorf("log has no %q: %s", want, log)
+		}
+	}
 }
 
 // A restart can't overlap the old serve's shutdown: while OnStop runs the server
