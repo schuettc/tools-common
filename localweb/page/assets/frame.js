@@ -3,32 +3,7 @@
 // per tool and panel. The columns go straight into a .kit-app grid, after its
 // bar.
 import { h } from './dom.js';
-
-// remembered reaches localStorage, where a throw means nothing is remembered: a
-// frame sandboxed without allow-same-origin can't reach it at all.
-const remembered = {
-  get(key) {
-    try {
-      return localStorage.getItem(key);
-    } catch {
-      return null;
-    }
-  },
-  set(key, value) {
-    try {
-      localStorage.setItem(key, value);
-    } catch {
-      // not remembered, still applied
-    }
-  },
-  remove(key) {
-    try {
-      localStorage.removeItem(key);
-    } catch {
-      // nothing to forget
-    }
-  },
-};
+import { remembered } from './remembered.js';
 
 // collapsible puts a toggle and body in col. side says which way it folds and
 // name (the tool's) and panel make the key it is remembered under,

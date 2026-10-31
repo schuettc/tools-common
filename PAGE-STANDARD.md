@@ -37,6 +37,7 @@ Every page takes these from the kit, `localweb/page`. Page shape has no test: it
 | The fixed card header. | `card`, through its `head` | already released |
 | The stage track, whose stages are the tool's own. | `stageTrack` | needs adopting from 0.41.0 |
 | Drafts that go out together on Send. | `sendBar`, with the drafts held by `createDrafts`, or by the tool's own store where a draft lives in the content (galley's instructions anchored in the document) | needs adopting from 0.41.0 |
+| A right column with more than the thread shows it as tabs with counts, one open at a time; the reader's choice is remembered, a tool's switch isn't. Drafts listed there show their quoted item, edit in place and delete, and keep the reader's typing through a redraw. | `railTabs`, `draftList` (mount its `el` once and call `redraw`) | 0.47.0 |
 | A switcher in the top bar lists the tool's other pages, kept current. | `bar`'s `setElsewhere`, kept by `keepElsewhere(bar, read)` | 0.44.0 |
 | A front page lists the tool's pages with filters, status pills and folding groups. | `filterRow`, `statusPills`, `groupList` | 0.44.0 |
 | The message states. | `msgstate`, in Go and in the kit | already released |

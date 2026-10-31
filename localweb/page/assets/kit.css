@@ -447,6 +447,34 @@ a.kit-brand:hover, a.kit-brand:focus-visible { text-decoration: underline; }
 .kit-thread-ref { font-family: var(--kit-mono); font-size: 13px; }
 .kit-thread .kit-note-line { flex-direction: column; align-items: stretch; }
 
+/* tabs in the right column (tabs.js): the row sits under the fold toggle's line */
+.kit-rail-tabs { padding-top: 41px; }
+.kit-rail-tabrow { display: flex; flex-wrap: wrap; gap: 8px; padding: 0 16px 14px; }
+.kit-rail-panel { padding: 0 16px 16px; }
+.kit-right-col > .kit-col-body .kit-rail-panel .kit-thread { padding: 0; }
+
+/* the drafts list (draftlist.js): the words read as text until they're edited */
+.kit-draft-rows { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.kit-draft-row {
+  display: flex; flex-direction: column; gap: 4px; padding: 8px 12px; cursor: pointer;
+  border: 1px solid var(--kit-line); border-left: 3px solid var(--kit-wait); border-radius: 8px;
+}
+.kit-draft-row.on { border-color: var(--kit-signal); }
+.kit-draft-quote {
+  background: none; border: 0; padding: 0; cursor: pointer; text-align: left; color: var(--kit-fg);
+  font: 600 14px var(--kit-sans); overflow-wrap: anywhere;
+}
+.kit-draft-quote:hover { color: var(--kit-signal); }
+.kit-draft-words {
+  box-sizing: border-box; resize: none; field-sizing: content; max-height: 360px;
+  margin: 0 -5px; width: calc(100% + 10px); padding: 2px 4px;
+  background: none; border: 1px solid transparent; border-radius: 4px; color: var(--kit-fg);
+  font: 14px var(--kit-sans);
+}
+.kit-draft-words:hover { border-color: var(--kit-line); }
+.kit-draft-words:focus { border-color: var(--kit-signal); background: var(--kit-card); outline: none; }
+.kit-draft-row > .kit-meta { font: 11.5px var(--kit-mono); color: var(--kit-muted); }
+
 /* the stage track (track.js): where it stands, and who it waits on */
 @keyframes kit-pulse { 50% { opacity: .25; } }
 .kit-stages {
