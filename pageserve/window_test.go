@@ -277,3 +277,13 @@ func TestWhereInto(t *testing.T) {
 		t.Fatalf("%v", body)
 	}
 }
+
+// A location missing its socket or pane opens no window: proj isn't run.
+func TestWindowOutsideTmuxRunsNoProj(t *testing.T) {
+	calls := withTerminal(t, `{}`)
+	for _, w := range []Where{{}, {Socket: "/tmp/s"}, {Pane: "%3"}} {
+		if err := Window(w, "http://x/", false); err == nil || len(*calls) != 0 {
+			t.Fatalf("%+v: %v, %d calls", w, err, len(*calls))
+		}
+	}
+}

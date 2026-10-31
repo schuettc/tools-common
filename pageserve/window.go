@@ -104,7 +104,7 @@ func TerminalOf(w Where) (*Terminal, error) { return terminal(w, false) }
 func TerminalGo(w Where) (*Terminal, error) { return terminal(w, true) }
 
 func terminal(w Where, goTo bool) (*Terminal, error) {
-	if w.Socket == "" || w.Pane == "" {
+	if !w.Known() {
 		return nil, nil
 	}
 	limit := terminalRead
@@ -132,11 +132,22 @@ func terminal(w Where, goTo bool) (*Terminal, error) {
 	return &t, nil
 }
 
+// ErrNotInTmux is Window's answer for a session whose socket or pane isn't
+// known: it isn't in tmux, so it has no window.
+var ErrNotInTmux = errors.New("the session isn't in tmux")
+
+// Known says both the socket and the pane are set: a session outside tmux, or
+// one whose location was only half recorded, has no window.
+func (w Where) Known() bool { return w.Socket != "" && w.Pane != "" }
+
 // Window runs proj window for the session at w, which opens the session's Chrome
 // window or brings it forward, with url on its right half; with keepView a
 // terminal showing the session elsewhere keeps it. An error carries what proj
 // said.
 func Window(w Where, url string, keepView bool) error {
+	if !w.Known() {
+		return ErrNotInTmux
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), terminalGo)
 	defer cancel()
 	args := []string{"window", "--socket", w.Socket, "--pane", w.Pane, "--right", url}
