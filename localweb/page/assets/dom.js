@@ -115,6 +115,9 @@ export function bar(o) {
         else el.removeAttribute('aria-current');
       }
     },
+    setSectionsShown(shown) {
+      for (const el of ctls.values()) el.hidden = !shown;
+    },
     setCount(id, n) {
       const el = ctls.get(id);
       if (!el) return;

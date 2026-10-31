@@ -38,6 +38,11 @@ test('dom: bar', () => {
   eq(section, 'eval');
   b.setSection('eval');
   assert(!ctl.classList.contains('on') && el.querySelector('[data-id="eval"]').classList.contains('on'), 'setSection moves on');
+  b.setSectionsShown(false);
+  assert(ctl.hidden && el.querySelector('[data-id="eval"]').hidden, 'sections hidden');
+  assert(!el.querySelector('.kit-brand').hidden, 'only the sections hide');
+  b.setSectionsShown(true);
+  assert(!ctl.hidden && !el.querySelector('[data-id="eval"]').hidden, 'sections shown');
   eq(el.querySelectorAll('.kit-primary').length, 1);
   el.querySelector('.kit-primary').click();
   eq(pressed, 1);

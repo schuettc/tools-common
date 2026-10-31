@@ -153,6 +153,7 @@ a.kit-brand:hover, a.kit-brand:focus-visible { text-decoration: underline; }
   font: 13px var(--kit-mono); color: var(--kit-fg); background: transparent;
   border: 1px solid var(--kit-line); border-radius: 6px; padding: 4px 14px; cursor: pointer;
 }
+.kit-ctl[hidden] { display: none; }
 .kit-ctl.on { background: var(--kit-card); border-color: var(--kit-muted); }
 .kit-ctl .kit-n { color: var(--kit-muted); margin-left: 6px; }
 .kit-status { color: var(--kit-muted); margin-left: 6px; }
