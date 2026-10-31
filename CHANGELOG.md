@@ -4,7 +4,7 @@ Root module releases are tagged `vX.Y.Z`; the separate `sqlitedb` and
 `mermaidkit` modules are tagged `sqlitedb/vX.Y.Z` and `mermaidkit/vX.Y.Z`. Releases before this file are described by their
 tags and PRs.
 
-## Unreleased
+## 0.39.0
 
 ### Added
 - `hookconfig.Remove` removes only declared exact command-hook spellings under their event and matcher, preserving unrelated siblings and group fields. `Count` inspects those same identities without mutation for attributable duplicate-registration checks.
