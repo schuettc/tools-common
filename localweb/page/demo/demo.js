@@ -1,4 +1,4 @@
-import { h, bar, list, facts, card, buttons, codeBlock, fold, noteField, messagePill, MESSAGE_STATES, createKeys, initTheme } from '/_kit/kit.js';
+import { h, bar, list, facts, card, buttons, codeBlock, fold, noteField, messagePill, MESSAGE_STATES, createKeys, initTheme, frame, lineTip, wireTip, indexRow, indexSection, thread, stageTrack, workingLine, waitBadges, createDrafts, questionButton, QUESTIONS, sendBar } from '/_kit/kit.js';
 
 const MARK = `<svg viewBox="0 0 64 64"><rect width="64" height="64" rx="14" fill="#14161d"/><path d="M13 22H28M13 32H26M13 42H28" stroke="#9aa0ab" stroke-width="3.6" stroke-linecap="round"/><path d="M13 22H28" stroke="#d98f66" stroke-width="3.6" stroke-linecap="round"/><path d="M33 17V47" stroke="#d98f66" stroke-width="2.4"/><rect x="38" y="18" width="14" height="28" rx="3" fill="none" stroke="#d98f66" stroke-width="2.4"/></svg>`;
 const mark = () => {
@@ -147,6 +147,70 @@ function labelView(b) {
   return [l.el, read];
 }
 
+// ----------------------------------------------- the parts tools share (diazo's)
+function parts() {
+  const f = frame({
+    name: 'kitdemo',
+    left: { panel: 'index', label: 'The index' },
+    centre: { label: 'The centre' },
+    right: { panel: 'thread', label: 'Thread' },
+  });
+  const more = h('button', { class: 'kit-ctl', type: 'button' }, 'a tip');
+  const tip = lineTip('Opens on hover, focus or a tap, and no column clips it.');
+  const box = h('span', { class: 'kit-tip-at' }, more, tip);
+  wireTip(box, more, tip);
+  f.centre.append(h('div', { class: 'kit-label' }, 'frame and tip'), box);
+  f.centre.append(
+    h('div', { class: 'kit-label' }, 'stage track'),
+    workingLine({ text: 'Reading the last ten builds', slot: true }),
+    stageTrack({
+      label: 'Where this job stands',
+      open() {},
+      stages: [
+        { key: 'baseline', label: 'Baseline', state: 'done', opens: 'baseline' },
+        { key: 'findings', label: 'Findings', count: '3 of 5', state: 'now', live: true, opens: 'findings', detail: {
+          title: 'Open',
+          rows: [{ id: 'F1', text: 'Cache misses on every build', meta: 'needs you' }, { id: 'F4', text: 'Waiting on another finding', meta: 'waiting' }],
+          note: 'Answer them in place.',
+        } },
+        { key: 'plan', label: 'Fix plan', state: 'flagged', opens: 'plan' },
+        { key: 'verify', label: 'Verify', state: '' },
+      ],
+      after: waitBadges([{ text: 'waiting on you · 2', who: 'you' }, { text: 'waiting on Alex · 1', who: 'Alex' }]),
+    }));
+  const drafts = createDrafts();
+  const note = drafts.box('thread:F2', 'A note on this', 3);
+  f.rightBody.append(thread({
+    id: 'F2',
+    name: 'The row in front of you',
+    key: 'demo/project/F2',
+    messages: [
+      { id: 1, from: 'agent', at: '2026-10-30T12:00:00Z', text: 'Measured on the last ten builds.' },
+      { id: 2, from: 'court', at: '2026-10-30T12:05:00Z', words: 'your note', text: 'Which ten?', state: 'working', stateLine: 'reading the runs' },
+    ],
+    note: { el: note.el, box: note.box, send() {} },
+  }));
+  f.centre.append(
+    h('div', { class: 'kit-label' }, 'questions, drafts and Send'),
+    buttons([
+      questionButton({ label: QUESTIONS.explain, asked: false, run() {} }),
+      questionButton({ label: QUESTIONS.smaller, asked: true, run() {} }),
+      questionButton({ label: QUESTIONS.breaks, asked: false, run() {} }),
+    ]),
+    drafts.box('note:F1', 'A note on F1: it goes with your choice, or on its own.', 3).el,
+    sendBar({ count: '1 of 2 answered', sends: 1, hint: 'Unanswered ones stay open.', discard() {}, send() {} }));
+  const select = id => f.centre.dataset.open = id;
+  f.leftBody.append(
+    indexSection({ name: 'Findings', open() {}, empty: '', rows: [
+      indexRow({ id: 'F1', title: 'Cache misses on every build', meta: 'needs you', attention: true, select }),
+      indexRow({ id: 'F2', title: 'The row in front of you', meta: 'measured', on: true, select }),
+      indexRow({ id: 'F3', title: 'A draft waits for Send', meta: 'draft · A', draft: true, select }),
+      indexRow({ id: 'F4', title: 'Waiting on another finding', meta: 'waiting on F1', waits: true, select }),
+    ] }),
+    indexSection({ name: 'Later', rows: [], empty: 'Nothing for later.' }));
+  return f;
+}
+
 // ------------------------------------------------------------------- the page
 const b = bar({
   brand: { name: view === 'label' ? 'cull' : 'casebook', mark: mark() },
@@ -168,7 +232,12 @@ b.setElsewhere([
   { label: 'Claude Code mods for channels', detail: 'working · Spec', tone: 'working', onClick() {} },
   { label: 'casebook triage', detail: 'idle · Plan', onClick() {} },
 ]);
-if (view === 'label') {
+if (view === 'parts') {
+  // The three columns: ?view=parts.
+  app.className = 'kit-app';
+  const f = parts();
+  app.append(b.el, f.left, f.centre, f.right);
+} else if (view === 'label') {
   app.append(b.el, h('div', { class: 'kit-main' }, ...labelView(b)));
 } else {
   // The app grid with a rail: the tool's own dock goes here (casebook's agent).

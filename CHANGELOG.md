@@ -4,6 +4,11 @@ Root module releases are tagged `vX.Y.Z`; the separate `sqlitedb` and
 `mermaidkit` modules are tagged `sqlitedb/vX.Y.Z` and `mermaidkit/vX.Y.Z`. Releases before this file are described by their
 tags and PRs.
 
+## 0.41.0
+
+### Added
+- The page kit takes diazo's general page parts, so other tools can build diazo-shaped pages: `frame` and `collapsible` (three columns whose sides fold and are remembered per tool), `lineTip` and `wireTip` (the page's one pop-out), `indexRow`, `indexSection` and `attentionDot` (the left index), `thread` and `threadMessage` (a card's thread with its note box), `stageTrack`, `stagePill`, `workingLine` and `waitBadges` (the band), and `questionButton`, `QUESTIONS`, `createDrafts` and `sendBar` (drafts sent together). They take plain values and callbacks and know nothing of any one tool. Their classes are `kit-` classes in kit.css; the demo shows them at `?view=parts`.
+
 ## 0.40.0
 
 ### Added

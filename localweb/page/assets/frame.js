@@ -1,0 +1,42 @@
+// frame.js: the page's three columns, the index, the centre and the thread.
+// Each side folds to a thin strip with its toggle, and the page remembers it
+// per tool and panel. The columns go straight into a .kit-app grid, after its
+// bar.
+import { h } from './dom.js';
+
+// collapsible puts a toggle and body in col. side says which way it folds and
+// name (the tool's) and panel make the key it is remembered under,
+// <name>.collapsed.<panel>; folded starts it folded whatever the page remembers.
+export function collapsible({ col, body, panel, side, name, folded }) {
+  const key = `${name}.collapsed.${panel}`;
+  const toggle = h('button', { class: 'kit-col-toggle', type: 'button', 'data-panel': panel });
+  const set = (on, keep = true) => {
+    col.classList.toggle('kit-collapsed', on);
+    toggle.textContent = on === (side === 'left') ? '›' : '‹';
+    toggle.title = on ? `Show the ${panel}` : `Hide the ${panel}`;
+    toggle.setAttribute('aria-expanded', String(!on));
+    if (keep) localStorage.setItem(key, on ? '1' : '');
+  };
+  toggle.addEventListener('click', () => set(!col.classList.contains('kit-collapsed')));
+  col.append(toggle, body);
+  if (folded) set(true, false);
+  else set(localStorage.getItem(key) === '1');
+}
+
+function side(name, which, cls, o) {
+  if (!o) return [null, null];
+  const col = h('aside', { class: `${cls} kit-col kit-${which}-col`, 'aria-label': o.label });
+  const body = h('div', { class: 'kit-col-body' });
+  collapsible({ col, body, panel: o.panel, side: which, name, folded: o.folded });
+  return [col, body];
+}
+
+// frame builds the columns. left and right are { panel, label, folded }, each
+// optional; centre is { label }. The caller draws into leftBody, centre and
+// rightBody, and appends left, centre and right to its grid.
+export function frame({ name, left, centre, right }) {
+  const [l, leftBody] = side(name, 'left', 'kit-list', left);
+  const [r, rightBody] = side(name, 'right', 'kit-rail', right);
+  const mid = h('main', { class: 'kit-read kit-col kit-mid', 'aria-label': centre.label });
+  return { left: l, leftBody, centre: mid, right: r, rightBody };
+}

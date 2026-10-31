@@ -343,3 +343,197 @@ a.kit-brand:hover, a.kit-brand:focus-visible { text-decoration: underline; }
   border: 1px solid var(--kit-line); border-radius: 6px; padding: 6px 10px;
 }
 .kit-note:focus-visible { outline: 1px solid var(--kit-signal); outline-offset: 0; }
+
+/* the frame: index | centre | thread in the app grid; each side folds to a
+   thin strip (frame.js). The toggle stays pinned while its column scrolls, and
+   the left body rises under it. */
+.kit-col { overflow: auto; scrollbar-gutter: stable; }
+.kit-left-col { width: 288px; padding: 0 0 32px; }
+.kit-right-col { width: 384px; }
+.kit-left-col, .kit-right-col { position: relative; transition: width .15s; }
+.kit-mid { padding: 24px 24px 32px; }
+.kit-col-toggle {
+  position: sticky; top: 8px; z-index: 3; display: block;
+  margin: 8px 12px 0 auto; width: 25px; min-height: 25px; padding: 0;
+  border: 1px solid var(--kit-line); border-radius: 6px;
+  background: var(--kit-card); color: var(--kit-muted);
+  font: 14px/1 var(--kit-mono); cursor: pointer;
+}
+.kit-right-col .kit-col-toggle { margin: 8px auto 0 12px; }
+.kit-left-col > .kit-col-body { margin-top: -33px; }
+.kit-col-toggle:hover { color: var(--kit-signal); border-color: var(--kit-signal); }
+.kit-col.kit-collapsed { width: 40px; overflow: hidden; }
+.kit-col.kit-collapsed > .kit-col-body { display: none; }
+.kit-col.kit-collapsed > .kit-col-toggle { margin: 8px auto; }
+
+/* the page's one pop-out (tip.js): fixed, so nothing that scrolls clips it */
+.kit-tip-at { display: inline-flex; }
+.kit-tip {
+  display: none; position: fixed; z-index: 40; pointer-events: none;
+  width: max-content; max-width: min(420px, calc(100vw - 16px));
+  padding: 8px 12px; border-radius: 8px;
+  background: var(--kit-panel); color: var(--kit-fg); border: 1px solid var(--kit-line);
+  box-shadow: 0 6px 20px rgb(0 0 0 / 15%);
+  font: 13px/1.5 var(--kit-sans); white-space: normal;
+}
+.kit-tip-at:hover > .kit-tip, .kit-tip-at.show > .kit-tip { display: block; }
+
+/* words where something has nothing to show yet */
+.kit-empty { color: var(--kit-muted); font-size: 13px; margin: 4px 0 8px; }
+/* a label, or a key, that does something when pressed */
+.kit-label-link { background: none; border: 0; padding: 0; cursor: pointer; color: var(--kit-signal); }
+
+/* the left index (index.js): a row is its button, then the dot. Draft is the
+   wait colour, the row in front of you the signal. */
+.kit-index-section { padding: 4px 12px 8px; }
+.kit-index-section > .kit-label { margin: 12px 8px 8px; }
+.kit-index-section > .kit-empty { margin: 0 8px; }
+.kit-index-rows { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.kit-index-row {
+  display: flex; align-items: flex-start; gap: 4px;
+  border-radius: 6px; border-left: 3px solid transparent;
+}
+.kit-index-row.on { background: color-mix(in srgb, var(--kit-signal) 14%, var(--kit-card)); }
+.kit-index-row.on .kit-index-title { color: var(--kit-signal); }
+.kit-index-row.on .kit-index-main:hover { background: none; }
+.kit-index-main {
+  flex: 1; min-width: 0; display: grid; grid-template-columns: 1fr; text-align: left;
+  background: none; border: 0; padding: 8px; cursor: pointer; color: var(--kit-fg); font: inherit;
+}
+.kit-index-main:hover { background: var(--kit-card); border-radius: 6px; }
+.kit-index-title {
+  font-size: 14px; line-height: 1.4; overflow-wrap: anywhere;
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden;
+}
+.kit-index-row .kit-meta { grid-column: 1; font: 11.5px var(--kit-mono); color: var(--kit-muted); }
+.kit-index-row.attn .kit-meta { color: var(--kit-signal); font-weight: 700; }
+.kit-index-row.waits .kit-meta { color: var(--kit-wait); }
+.kit-index-row.draft { border-left-color: var(--kit-wait); }
+.kit-index-row.draft .kit-meta { color: var(--kit-wait); font-weight: 700; }
+.kit-attn-at { flex: none; align-self: center; }
+.kit-attn-dot {
+  box-sizing: content-box; width: 7px; height: 7px; margin: 0 4px;
+  border: 4px solid transparent; border-radius: 50%; background: var(--kit-signal) padding-box;
+}
+
+/* a key: a card's address, in mono and never shouted */
+.kit-key {
+  overflow-wrap: anywhere; font: 11.5px var(--kit-mono); color: var(--kit-muted);
+  text-transform: none; letter-spacing: 0; font-weight: 400;
+}
+
+/* a note box and its button */
+.kit-note-line { display: flex; gap: 8px; align-items: flex-start; margin-top: 12px; }
+.kit-note-line .kit-btns { flex: none; }
+
+/* the thread column (thread.js): each message edged by who wrote it */
+.kit-thread { padding: 16px; }
+.kit-right-col > .kit-col-body .kit-thread { padding-top: 0; }
+.kit-thread > .kit-label { margin-bottom: 4px; }
+.kit-thread-name {
+  font-weight: 600; margin: 0 0 12px;
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden;
+}
+.kit-thread-key { margin: -8px 0 12px; }
+.kit-thread-key .kit-label-link { font: inherit; color: inherit; text-align: left; }
+.kit-thread-key .kit-label-link:hover { color: var(--kit-signal); }
+.kit-thread-msgs { list-style: none; margin: 0 0 12px; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.kit-thread-msg { border: 1px solid var(--kit-line); border-radius: 8px; padding: 8px 12px; font-size: 14px; }
+.kit-thread-msg.agent { border-left: 3px solid var(--kit-agent); }
+.kit-thread-msg.court { border-left: 3px solid var(--kit-signal); }
+.kit-thread-msg-head { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+.kit-thread-msg-head .kit-meta { font: 11px var(--kit-mono); color: var(--kit-muted); }
+.kit-thread-msg-text { margin: 4px 0 0; white-space: pre-wrap; }
+.kit-thread-ref { font-family: var(--kit-mono); font-size: 13px; }
+.kit-thread .kit-note-line { flex-direction: column; align-items: stretch; }
+
+/* the stage track (track.js): where it stands, and who it waits on */
+@keyframes kit-pulse { 50% { opacity: .25; } }
+.kit-stages {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  margin-top: 12px; font: 12px var(--kit-mono);
+}
+.kit-stage {
+  box-sizing: border-box; display: inline-block; height: 20px; white-space: nowrap;
+  font: 12px/18px var(--kit-mono); padding: 0 8px; border-radius: 999px; cursor: pointer;
+  border: 1px solid var(--kit-line); background: var(--kit-bg); color: var(--kit-muted);
+}
+.kit-stage.done { color: var(--kit-ok); border-color: var(--kit-ok); background: transparent; }
+.kit-stage.now { color: var(--kit-signal-ink); background: var(--kit-signal); border-color: var(--kit-signal); }
+.kit-stage.flagged {
+  color: var(--kit-agent); border-color: var(--kit-agent);
+  background: color-mix(in srgb, var(--kit-agent) 14%, transparent);
+}
+.kit-stage.live::before {
+  content: ""; display: inline-block; width: 7px; height: 7px; margin-right: 6px;
+  border-radius: 50%; background: var(--kit-ok); animation: kit-pulse 1.2s infinite;
+}
+.kit-stage.now.live::before { background: var(--kit-signal-ink); }
+.kit-stage.plain { cursor: default; }
+.kit-arrow { color: var(--kit-muted); }
+.kit-stages.parked :is(.kit-stage, .kit-arrow) { opacity: .55; filter: grayscale(1); }
+.kit-stages.parked .kit-stage.live::before { animation: none; }
+.kit-more {
+  display: inline-block; margin-left: 6px; width: 14px; height: 14px; line-height: 12px;
+  text-align: center; border-radius: 50%; border: 1px solid currentColor;
+  font: italic 600 10px var(--kit-sans); cursor: help;
+}
+.kit-more::before { content: "i"; }
+.kit-tip > b { display: block; font-weight: 600; }
+.kit-tip-rows { display: grid; grid-template-columns: auto 1fr auto; }
+.kit-tip-row { display: grid; grid-column: 1 / -1; grid-template-columns: subgrid; }
+.kit-tip-id { color: var(--kit-muted); font-variant-numeric: tabular-nums; }
+.kit-tip-id:not(:empty) { padding-right: 8px; }
+.kit-tip-meta { padding-left: 12px; text-align: right; white-space: nowrap; }
+.kit-tip-meta, .kit-tip-note { color: var(--kit-muted); }
+.kit-tip-note { display: block; margin-top: 4px; contain: inline-size; }
+.kit-pill.kit-badge {
+  box-sizing: border-box; display: inline-block; vertical-align: middle; height: 20px;
+  padding: 0 8px; border: 1px solid transparent; border-radius: 999px;
+  font-size: 12px; line-height: 18px; white-space: nowrap;
+  background: var(--kit-line); color: var(--kit-muted);
+}
+.kit-pill.kit-badge.t-you {
+  background: color-mix(in srgb, var(--kit-signal) 14%, transparent); color: var(--kit-signal); font-weight: 600;
+}
+.kit-pill.kit-badge.t-wait {
+  background: color-mix(in srgb, var(--kit-wait) 14%, transparent); color: var(--kit-wait); font-weight: 600;
+}
+.kit-stages .kit-badge { margin-left: 8px; }
+.kit-stages .kit-badge + .kit-badge { margin-left: 0; }
+.kit-waits-at { margin-left: 8px; }
+.kit-more-waits { color: var(--kit-muted); cursor: help; text-decoration: underline dotted; text-underline-offset: 3px; }
+
+/* the agent's one line; in a slot it holds its height with or without one */
+.kit-working {
+  box-sizing: border-box; display: inline-flex; align-items: center; gap: 8px; vertical-align: middle;
+  max-width: 100%; min-width: 0; height: 20px; margin: 8px 0 0; padding: 0 8px;
+  border: 1px solid transparent; border-radius: 999px; white-space: nowrap;
+  background: color-mix(in srgb, var(--kit-signal) 14%, transparent); color: var(--kit-wait);
+  font: 12px var(--kit-mono);
+}
+.kit-working i {
+  width: 8px; height: 8px; border-radius: 50%; background: var(--kit-wait);
+  animation: kit-pulse 1.2s infinite; flex: none;
+}
+.kit-working.kit-pending { background: var(--kit-panel); border: 1px solid var(--kit-line); color: var(--kit-muted); }
+.kit-working.kit-pending i { background: var(--kit-muted); }
+.kit-agent-slot { height: 28px; margin: 8px 0 0; display: flex; align-items: center; min-width: 0; }
+.kit-agent-slot .kit-working { margin: 0; max-width: 100%; min-width: 0; }
+.kit-agent-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+
+/* a draft's box (drafts.js): it grows with its text */
+.kit-draft { width: 100%; resize: vertical; font: 14px var(--kit-sans); }
+textarea.kit-draft { min-height: 72px; field-sizing: content; max-height: 360px; }
+.kit-draft.attn { border-color: var(--kit-signal); outline: 1px solid var(--kit-signal); }
+.kit-draft-box { flex: 1; min-width: 0; width: 100%; }
+.kit-note-line .kit-draft { flex: 1; }
+
+/* the bar at the foot of a page of drafts */
+.kit-sendbar {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 12px 16px;
+  border: 1px solid var(--kit-line); border-radius: 8px; background: var(--kit-card);
+}
+.kit-sendbar-count { font: 12px var(--kit-mono); white-space: nowrap; margin-right: auto; }
+.kit-sendbar-hint { color: var(--kit-muted); font-size: 13px; flex: 1 1 100%; order: 3; }
+.kit-sendbar .kit-btns { flex: 0 1 auto; gap: 8px; }
