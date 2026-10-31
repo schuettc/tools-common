@@ -346,7 +346,7 @@ a.kit-brand:hover, a.kit-brand:focus-visible { text-decoration: underline; }
 
 /* the frame: index | centre | thread in the app grid; each side folds to a
    thin strip (frame.js). The toggle stays pinned while its column scrolls, and
-   the left body rises under it. */
+   each body rises under it. */
 .kit-col { overflow: auto; scrollbar-gutter: stable; }
 .kit-left-col { width: 288px; padding: 0 0 32px; }
 .kit-right-col { width: 384px; }
@@ -359,8 +359,7 @@ a.kit-brand:hover, a.kit-brand:focus-visible { text-decoration: underline; }
   background: var(--kit-card); color: var(--kit-muted);
   font: 14px/1 var(--kit-mono); cursor: pointer;
 }
-.kit-right-col .kit-col-toggle { margin: 8px auto 0 12px; }
-.kit-left-col > .kit-col-body { margin-top: -33px; }
+.kit-left-col > .kit-col-body, .kit-right-col > .kit-col-body { margin-top: -33px; }
 .kit-col-toggle:hover { color: var(--kit-signal); border-color: var(--kit-signal); }
 .kit-col.kit-collapsed { width: 40px; overflow: hidden; }
 .kit-col.kit-collapsed > .kit-col-body { display: none; }
@@ -428,8 +427,9 @@ a.kit-brand:hover, a.kit-brand:focus-visible { text-decoration: underline; }
 
 /* the thread column (thread.js): each message edged by who wrote it */
 .kit-thread { padding: 16px; }
-.kit-right-col > .kit-col-body .kit-thread { padding-top: 0; }
-.kit-thread > .kit-label { margin-bottom: 4px; }
+/* the label sits on the toggle's line, centred on it */
+.kit-right-col > .kit-col-body .kit-thread { padding-top: 14px; }
+.kit-thread > .kit-label { margin-bottom: 8px; }
 .kit-thread-name {
   font-weight: 600; margin: 0 0 12px;
   display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden;
