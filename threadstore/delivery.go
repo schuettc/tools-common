@@ -166,6 +166,9 @@ func (s *Store) ClaimTx(ctx context.Context, tx *sql.Tx, session string, scopes,
 	if d != nil || err != nil {
 		return d, err
 	}
+	// A gone owner's scope is taken over, unless the owner touched a delivery
+	// within the presence TTL: a snapshot that hasn't caught up with it then
+	// mustn't take a Send it has only just claimed.
 	var scope string
 	err = tx.QueryRowContext(ctx, `SELECT t.scope FROM thread_messages m
 		JOIN thread_threads t ON t.id = m.thread_id
@@ -173,6 +176,8 @@ func (s *Store) ClaimTx(ctx context.Context, tx *sql.Tx, session string, scopes,
 		LEFT JOIN thread_deliveries d ON d.id = m.delivery_id
 		WHERE t.scope IN (SELECT value FROM json_each(?3))
 		AND o.owner NOT IN ('', ?1) AND o.owner NOT IN (SELECT value FROM json_each(?2)) AND o.owned_at <= ?4
+		AND NOT EXISTS (SELECT 1 FROM thread_deliveries x WHERE x.scope = t.scope AND x.session = o.owner
+			AND x.state = 'inflight' AND x.touched_at > ?4)
 		AND (`+queued+` OR (m.state IN ('sent', 'with_agent', 'working', 'no_reply') AND d.session != ?1))
 		ORDER BY m.queued_at, m.batch_id LIMIT 1`, session, here, may, stale).Scan(&scope)
 	switch {

@@ -419,3 +419,21 @@ func TestAPresentNewOwnerKeepsWhatItTookOver(t *testing.T) {
 		t.Fatalf("delivery %+v", got)
 	}
 }
+
+// An owner of long standing that has just claimed a Send isn't taken over by a
+// session whose presence snapshot hasn't caught up with it yet.
+func TestAFreshClaimKeepsItsOwnerFromTakeover(t *testing.T) {
+	s, c := newStore(t)
+	th := thread(t, s, "group:x", "triage", "s1")
+	c.add(DefaultPresenceTTL + time.Second)
+	post(t, s, th, "one")
+	if d := claim(t, s, "s1", "s1"); d == nil {
+		t.Fatal("the owner got nothing")
+	}
+	if d := claim(t, s, "s2", "s2"); d != nil {
+		t.Fatalf("s2 took over a fresh claim: %+v", d)
+	}
+	if th, err := s.ThreadsByOwner(ctx, "s1"); err != nil || len(th) != 1 {
+		t.Fatalf("s1 owns %d threads %v, want 1", len(th), err)
+	}
+}
