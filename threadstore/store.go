@@ -36,6 +36,18 @@ type Store struct {
 // New returns a store over d, whose steps include Migrations.
 func New(d *sqlitedb.DB) *Store { return &Store{DB: d, Now: time.Now} }
 
+// tx runs fn in a transaction whose first statement is a write: a transaction
+// that reads first and then writes fails at once if another process wrote in
+// between, instead of waiting for it.
+func (s *Store) tx(ctx context.Context, fn func(*sql.Tx) error) error {
+	return s.DB.Tx(ctx, func(tx *sql.Tx) error {
+		if _, err := tx.ExecContext(ctx, "UPDATE thread_threads SET owner = owner WHERE id = 0"); err != nil {
+			return err
+		}
+		return fn(tx)
+	})
+}
+
 func ms(t time.Time) int64 {
 	if t.IsZero() {
 		return 0
@@ -108,6 +120,9 @@ type Message struct {
 	// only keeps it.
 	Meta    json.RawMessage
 	ReplyTo int64
+	// BatchID and BatchPos place a message in the batch it went out in.
+	BatchID  int64
+	BatchPos int
 	// Owner is the session the message goes to first, recorded when it was
 	// queued.
 	Owner string
@@ -128,13 +143,13 @@ type NewMessage struct {
 	ReplyTo int64
 }
 
-const msgCols = "id, thread_id, author, body, meta, COALESCE(reply_to, 0), owner, state, line, created_at, queued_at, settled_at"
+const msgCols = "id, thread_id, author, body, meta, COALESCE(reply_to, 0), COALESCE(batch_id, 0), batch_pos, owner, state, line, created_at, queued_at, settled_at"
 
 func scanMessage(sc interface{ Scan(...any) error }) (Message, error) {
 	var m Message
 	var meta string
 	var c, qd, st int64
-	if err := sc.Scan(&m.ID, &m.ThreadID, &m.Author, &m.Body, &meta, &m.ReplyTo, &m.Owner, &m.State, &m.Line, &c, &qd, &st); err != nil {
+	if err := sc.Scan(&m.ID, &m.ThreadID, &m.Author, &m.Body, &meta, &m.ReplyTo, &m.BatchID, &m.BatchPos, &m.Owner, &m.State, &m.Line, &c, &qd, &st); err != nil {
 		return m, err
 	}
 	if meta != "" {
@@ -203,7 +218,7 @@ func insert(ctx context.Context, x interface {
 func (s *Store) Post(ctx context.Context, thread int64, m NewMessage) (Message, error) {
 	now := ms(s.Now())
 	var id int64
-	err := s.DB.Tx(ctx, func(tx *sql.Tx) error {
+	err := s.tx(ctx, func(tx *sql.Tx) error {
 		var owner string
 		if err := tx.QueryRowContext(ctx, "SELECT owner FROM thread_threads WHERE id = ?", thread).Scan(&owner); errors.Is(err, sql.ErrNoRows) {
 			return ErrNotFound

@@ -15,6 +15,13 @@ CREATE TABLE thread_threads (
   UNIQUE (scope, name)
 );
 CREATE INDEX thread_threads_owner ON thread_threads(owner);
+CREATE TABLE thread_batches (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  scope      TEXT NOT NULL,
+  state      TEXT NOT NULL DEFAULT 'draft',
+  created_at INTEGER NOT NULL
+);
+CREATE UNIQUE INDEX thread_batches_one_draft ON thread_batches(scope) WHERE state = 'draft';
 CREATE TABLE thread_messages (
   id          INTEGER PRIMARY KEY AUTOINCREMENT,
   thread_id   INTEGER NOT NULL REFERENCES thread_threads(id),
@@ -22,6 +29,8 @@ CREATE TABLE thread_messages (
   body        TEXT NOT NULL,
   meta        TEXT NOT NULL DEFAULT '',
   reply_to    INTEGER REFERENCES thread_messages(id),
+  batch_id    INTEGER REFERENCES thread_batches(id),
+  batch_pos   INTEGER NOT NULL DEFAULT 0,
   owner       TEXT NOT NULL DEFAULT '',
   state       TEXT NOT NULL DEFAULT '',
   line        TEXT NOT NULL DEFAULT '',
