@@ -364,3 +364,24 @@ func TestUserTargetsStayPortableAndIndependent(t *testing.T) {
 		t.Fatal("caller changed shared targets")
 	}
 }
+
+func TestOwnsWithMarkersRequiresMudaNameAndStringMarker(t *testing.T) {
+	const header = "---\nname: muda\ndescription: Use when starting or resuming delivery-waste optimization in a GitHub repository.\nmuda-version: \">=0.1.0\"\nmuda-owned: muda\n---\n"
+	for _, tc := range []struct {
+		label, body string
+		want        bool
+	}{
+		{"actual muda header", header, true},
+		{"quoted values", "---\nname: 'muda'\nmuda-owned: \"muda\"\n---\n", true},
+		{"foreign same name", "---\nname: muda\n---\n", false},
+		{"boolean is not ownership", "---\nname: muda\nmuda-owned: true\n---\n", false},
+		{"wrong skill name", "---\nname: muda-diagnose\nmuda-owned: muda\n---\n", false},
+		{"marker outside header", "---\nname: muda\n---\nmuda-owned: muda\n", false},
+	} {
+		t.Run(tc.label, func(t *testing.T) {
+			if got := skills.OwnsWithMarkers("muda", []byte(tc.body), map[string]string{"muda-owned": "muda"}); got != tc.want {
+				t.Fatalf("ownership = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}

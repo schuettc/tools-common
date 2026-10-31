@@ -4,6 +4,12 @@ Root module releases are tagged `vX.Y.Z`; the separate `sqlitedb` and
 `mermaidkit` modules are tagged `sqlitedb/vX.Y.Z` and `mermaidkit/vX.Y.Z`. Releases before this file are described by their
 tags and PRs.
 
+## Unreleased
+
+### Added
+- `hookconfig.Remove` removes only declared exact command-hook spellings under their event and matcher, preserving unrelated siblings and group fields. `Count` inspects those same identities without mutation for attributable duplicate-registration checks.
+- `skills.OwnsWithMarkers` adds exact frontmatter string markers to the existing name ownership rule; `Owns` retains name-only behavior.
+
 ## 0.39.0
 
 ### Added

@@ -287,25 +287,31 @@ func (s *skill) write(body []byte) error {
 // replace one. It is for readers that only inspect, such as a setup tool
 // deciding whether an installed skill is the tool's to update.
 func Owns(name string, b []byte) bool {
-	return oneComponent(name) == nil && skillName(b) == name
+	return OwnsWithMarkers(name, b, nil)
 }
 
 // skillName is the name in a skill's front matter ("" for none).
 func skillName(b []byte) string {
+	value, _ := frontmatterValue(b, "name")
+	return value
+}
+
+// frontmatterValue uses the installer's simple first-field recognition, not YAML.
+func frontmatterValue(b []byte, key string) (string, bool) {
 	sc := bufio.NewScanner(bytes.NewReader(b))
 	if !sc.Scan() || strings.TrimSpace(sc.Text()) != "---" {
-		return ""
+		return "", false
 	}
 	for sc.Scan() {
 		l := strings.TrimSpace(sc.Text())
 		if l == "---" {
-			return ""
+			return "", false
 		}
-		if v, ok := strings.CutPrefix(l, "name:"); ok {
-			return strings.Trim(strings.TrimSpace(v), `"'`)
+		if v, ok := strings.CutPrefix(l, key+":"); ok {
+			return strings.Trim(strings.TrimSpace(v), `"'`), true
 		}
 	}
-	return ""
+	return "", false
 }
 
 // oneComponent refuses a skill name that is not one plain directory name, so
@@ -315,4 +321,21 @@ func oneComponent(name string) error {
 		return fmt.Errorf("skill name %q: must be one directory name", name)
 	}
 	return nil
+}
+
+// OwnsWithMarkers applies Owns' name rule and requires every declared marker to
+// be present with its exact string value in the front matter. It uses the same
+// simple field recognition and quote trimming as the name rule, not a YAML
+// parser. Nil or empty markers retain name-only ownership. Adoption callers
+// must check both the existing and desired assets with the same policy.
+func OwnsWithMarkers(name string, body []byte, markers map[string]string) bool {
+	if oneComponent(name) != nil || skillName(body) != name {
+		return false
+	}
+	for key, want := range markers {
+		if value, found := frontmatterValue(body, key); !found || value != want {
+			return false
+		}
+	}
+	return true
 }
