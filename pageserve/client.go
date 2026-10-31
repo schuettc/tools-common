@@ -110,11 +110,14 @@ func (c *Client) Fresh(ctx context.Context) error {
 	c.startMu.Lock()
 	e, err = c.Find()
 	c.startMu.Unlock()
-	if errors.Is(err, ErrNotRunning) || (err == nil && !e.Stale) {
-		return nil
-	}
-	if err != nil {
+	switch {
+	case errors.Is(err, ErrNotRunning): // another channel stopped it: start one
+		_, err = c.ensure()
 		return err
+	case err != nil:
+		return err
+	case !e.Stale:
+		return nil
 	}
 	if err := c.Stop(ctx); err != nil && !errors.Is(err, ErrNotRunning) {
 		return fmt.Errorf("restarting %s serve for the newer install: %w", c.Tool, err)

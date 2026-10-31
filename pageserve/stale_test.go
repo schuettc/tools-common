@@ -240,6 +240,7 @@ func TestFreshRacingChannelsStopOnce(t *testing.T) {
 		})
 		c.Find = find
 		c.Stop = func(context.Context) error {
+			time.Sleep(50 * time.Millisecond) // the others find it stale meanwhile
 			mu.Lock()
 			defer mu.Unlock()
 			stops++
