@@ -408,3 +408,41 @@ export interface Frame {
 
 /** The three columns of a .kit-app grid; the caller appends left, centre and right after its bar. */
 export function frame(o: FrameOptions): Frame;
+
+// ---- index.js
+
+/** A row's needs-you dot, which says so in a tip. */
+export function attentionDot(): HTMLElement;
+
+export interface IndexRowOptions {
+  /** What the row opens: its data-card, and what select gets. */
+  id: string;
+  title: string;
+  meta?: string;
+  /** The row in front of the reader. */
+  on?: boolean;
+  /** It needs the reader: a dot, and its meta in the signal colour. */
+  attention?: boolean;
+  /** Its meta in the wait colour. */
+  waits?: boolean;
+  /** It holds a draft: a wait-coloured edge and meta. */
+  draft?: boolean;
+  /** Nodes after the row's button, before the dot. */
+  extra?: Node[];
+  select?(id: string): void;
+}
+
+/** One row of the left index; add a class of your own for anything further. */
+export function indexRow(o: IndexRowOptions): HTMLElement;
+
+export interface IndexSectionOptions {
+  name: string;
+  rows: HTMLElement[];
+  /** The words when there are no rows. */
+  empty: string;
+  /** Turns the name into a link: "<name> ›". */
+  open?: () => void;
+}
+
+/** A named group of rows. */
+export function indexSection(o: IndexSectionOptions): HTMLElement;

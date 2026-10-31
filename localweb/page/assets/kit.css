@@ -377,3 +377,41 @@ a.kit-brand:hover, a.kit-brand:focus-visible { text-decoration: underline; }
   font: 13px/1.5 var(--kit-sans); white-space: normal;
 }
 .kit-tip-at:hover > .kit-tip, .kit-tip-at.show > .kit-tip { display: block; }
+
+/* words where something has nothing to show yet */
+.kit-empty { color: var(--kit-muted); font-size: 13px; margin: 4px 0 8px; }
+/* a label, or a key, that does something when pressed */
+.kit-label-link { background: none; border: 0; padding: 0; cursor: pointer; color: var(--kit-signal); }
+
+/* the left index (index.js): a row is its button, then the dot. Draft is the
+   wait colour, the row in front of you the signal. */
+.kit-index-section { padding: 4px 12px 8px; }
+.kit-index-section > .kit-label { margin: 12px 8px 8px; }
+.kit-index-section > .kit-empty { margin: 0 8px; }
+.kit-index-rows { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.kit-index-row {
+  display: flex; align-items: flex-start; gap: 4px;
+  border-radius: 6px; border-left: 3px solid transparent;
+}
+.kit-index-row.on { background: color-mix(in srgb, var(--kit-signal) 14%, var(--kit-card)); }
+.kit-index-row.on .kit-index-title { color: var(--kit-signal); }
+.kit-index-row.on .kit-index-main:hover { background: none; }
+.kit-index-main {
+  flex: 1; min-width: 0; display: grid; grid-template-columns: 1fr; text-align: left;
+  background: none; border: 0; padding: 8px; cursor: pointer; color: var(--kit-fg); font: inherit;
+}
+.kit-index-main:hover { background: var(--kit-card); border-radius: 6px; }
+.kit-index-title {
+  font-size: 14px; line-height: 1.4; overflow-wrap: anywhere;
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden;
+}
+.kit-index-row .kit-meta { grid-column: 1; font: 11.5px var(--kit-mono); color: var(--kit-muted); }
+.kit-index-row.attn .kit-meta { color: var(--kit-signal); font-weight: 700; }
+.kit-index-row.waits .kit-meta { color: var(--kit-wait); }
+.kit-index-row.draft { border-left-color: var(--kit-wait); }
+.kit-index-row.draft .kit-meta { color: var(--kit-wait); font-weight: 700; }
+.kit-attn-at { flex: none; align-self: center; }
+.kit-attn-dot {
+  box-sizing: content-box; width: 7px; height: 7px; margin: 0 4px;
+  border: 4px solid transparent; border-radius: 50%; background: var(--kit-signal) padding-box;
+}

@@ -13,3 +13,4 @@ export * from './share.js';
 export * from './msgstate.js';
 export * from './tip.js';
 export * from './frame.js';
+export * from './index.js';
