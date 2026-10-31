@@ -63,7 +63,7 @@ export function thread(o) {
     o.key
       ? h('p', { class: 'kit-key kit-thread-key' }, o.readOnly ? o.key : copyLink(o.key, o.link ?? o.id))
       : null,
-    o.messages.length
+    o.messages?.length
       ? h('ul', { class: 'kit-thread-msgs' }, o.messages.map(m => threadMessage(m, o.attachments)))
       : h('p', { class: 'kit-empty' }, 'No messages yet.'),
     note

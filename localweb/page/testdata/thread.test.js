@@ -118,3 +118,8 @@ test('thread: the column draws messages with their edge', () => {
   fixture().append(t);
   eq(getComputedStyle(t.querySelector('.kit-thread-msg')).borderLeftWidth, '3px');
 });
+
+test('thread: with no messages given, it says there are none', () => {
+  const t = thread({ id: 'a', name: 'Example' });
+  eq(t.querySelector('.kit-empty').textContent, 'No messages yet.');
+});
