@@ -214,14 +214,14 @@ func TestSiftSend(t *testing.T) {
 		t.Fatalf("taken %+v", taken)
 	}
 
-	// That session dies before it lands: the send isn't stranded, and the dead
+	// That session dies before it lands: the next takes over, and the dead
 	// session's token no longer counts.
 	if got := claim(t, s, "third", "third"); got != nil {
 		t.Fatalf("third took a fresh claim: %+v", got)
 	}
 	c.add(DefaultPresenceTTL + time.Second)
 	back := claim(t, s, "third", "third")
-	if back == nil || back.ID != taken.ID || back.Token == taken.Token {
+	if back == nil || back.BatchID != taken.BatchID || back.Token == taken.Token {
 		t.Fatalf("taken back %+v", back)
 	}
 	if moved, _ := s.Landed(ctx, "other", taken.Token); len(moved) != 0 {

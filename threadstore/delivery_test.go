@@ -143,12 +143,12 @@ func TestClaimWithNobodyPresent(t *testing.T) {
 	}
 }
 
-// A session that claimed and died before the delivery landed does not strand
-// it: once the claimer is gone and PresenceTTL has passed, another takes it,
+// In a scope with no owner, a session that claimed and died before the delivery
+// landed does not strand it: once the claimer is gone and PresenceTTL has passed, another takes it,
 // the same delivery with a new token.
 func TestADeliveryWhoseClaimerIsGoneIsClaimedAgain(t *testing.T) {
 	s, c := newStore(t)
-	post(t, s, thread(t, s, "group:x", "triage", "s1"), "one")
+	post(t, s, thread(t, s, "group:x", "triage", ""), "one")
 	first := claim(t, s, "s1", "s1")
 	if d := claim(t, s, "s2", "s1", "s2"); d != nil {
 		t.Fatalf("s2 took from a present claimer: %+v", d)
@@ -177,9 +177,11 @@ func TestAStaleSnapshotDoesNotReclaimAFreshClaim(t *testing.T) {
 	}
 }
 
+// With no owner to take over from, a delivery that landed stays. A gone owner's
+// goes with the takeover.
 func TestADeliveryThatLandedIsNeverClaimedAgain(t *testing.T) {
 	s, c := newStore(t)
-	post(t, s, thread(t, s, "group:x", "triage", "s1"), "one")
+	post(t, s, thread(t, s, "group:x", "triage", ""), "one")
 	d := claim(t, s, "s1", "s1")
 	if _, err := s.Landed(ctx, "s1", d.Token); err != nil {
 		t.Fatal(err)
@@ -399,18 +401,21 @@ func TestAReplyToOneSentMessageBringsTheDeliveryToTheAgent(t *testing.T) {
 	}
 }
 
-// The owner still comes first when a delivery is taken back: its claimer went,
-// its owner is present.
-func TestReclaimLeavesAPresentOwnersDelivery(t *testing.T) {
+// A session that took over is the owner now: the old owner coming back takes
+// nothing from it while it is present, and nor does anyone else.
+func TestAPresentNewOwnerKeepsWhatItTookOver(t *testing.T) {
 	s, c := newStore(t)
 	post(t, s, thread(t, s, "group:x", "triage", "s1"), "one")
 	c.add(DefaultPresenceTTL + time.Second)
-	first := claim(t, s, "s2", "s2") // s1 was gone, s2 took it
+	first := claim(t, s, "s2", "s2") // s1 was gone, s2 took the scope
 	c.add(DefaultPresenceTTL + time.Second)
-	if d := claim(t, s, "s3", "s1", "s3"); d != nil {
+	if d := claim(t, s, "s1", "s1", "s2"); d != nil {
+		t.Fatalf("the old owner took %+v", d)
+	}
+	if d := claim(t, s, "s3", "s1", "s2", "s3"); d != nil {
 		t.Fatalf("s3 took a present owner's delivery: %+v", d)
 	}
-	if d := claim(t, s, "s1", "s1", "s3"); d == nil || d.ID != first.ID {
-		t.Fatalf("the owner got %+v", d)
+	if got, _ := s.Delivery(ctx, first.ID); got.Session != "s2" || got.State != InFlight {
+		t.Fatalf("delivery %+v", got)
 	}
 }

@@ -121,18 +121,23 @@ func (s *Store) SetOwnerTx(ctx context.Context, tx *sql.Tx, scope, session strin
 }
 
 // Claim hands session one Send from scopes, the scopes it may claim: first from
-// the ones it owns, then from those with no owner or whose owner has gone. In
-// each, it first takes back a delivery from a session that has gone, otherwise
-// the oldest Send waiting, whole. The messages stay sent: the harness's landed
-// report moves them. It returns nil when there is nothing.
+// the ones it owns, then from one whose owner has gone, which it takes over, then
+// from those with no owner. In each, it first takes back a delivery from a
+// session that has gone, otherwise the oldest Send waiting, whole. The messages
+// stay sent: the harness's landed report moves them. It returns nil when there
+// is nothing.
 //
 // An owner has gone when it isn't in present, the sessions the tool sees right
-// now, and has been owner for PresenceTTL. A delivery is taken back while it has
-// not landed, its claimer isn't in present and nobody has touched it for
-// PresenceTTL: a session that died before its delivery landed does not strand
-// it, and a caller whose present was read before another session claimed or
-// became owner does not take from it. A delivery that reached the agent is only
-// handed out again by SetOwner.
+// now, and has been owner for PresenceTTL. Taking over is SetOwner in Claim's
+// transaction, so the owner and the scope's unanswered messages move together
+// and a second claimer finds an owner just named. Only a scope with something
+// unanswered is taken over, the oldest first, one per Claim: the rest wait for a
+// Claim that can bring them. A delivery is taken back while it has not landed,
+// its claimer isn't in present and nobody has touched it for PresenceTTL: a
+// session that died before its delivery landed does not strand it, and a caller
+// whose present was read before another session claimed or became owner does not
+// take from it. A delivery that reached the agent is only handed out again by a
+// takeover.
 func (s *Store) Claim(ctx context.Context, session string, scopes, present []string) (*Delivery, error) {
 	var d *Delivery
 	err := s.tx(ctx, func(tx *sql.Tx) error {
@@ -156,57 +161,84 @@ func (s *Store) ClaimTx(ctx context.Context, tx *sql.Tx, session string, scopes,
 	now := s.Now()
 	stale := ms(now.Add(-s.presenceTTL()))
 	const own = "COALESCE(o.owner, '') = ?1"
-	const gone = `(COALESCE(o.owner, '') = '' OR (o.owner != ?1 AND o.owner NOT IN (SELECT value FROM json_each(?2)) AND o.owned_at <= ?4))`
-	for _, mayTake := range []string{own, gone} {
-		var id int64
-		err := tx.QueryRowContext(ctx, `SELECT d.id FROM thread_deliveries d LEFT JOIN thread_scopes o ON o.scope = d.scope
-			WHERE d.state = 'inflight' AND d.shown_at = 0 AND d.touched_at <= ?4
-			AND d.session NOT IN (SELECT value FROM json_each(?2))
-			AND d.scope IN (SELECT value FROM json_each(?3)) AND `+mayTake+`
-			ORDER BY d.id LIMIT 1`, session, here, may, stale).Scan(&id)
-		if err == nil {
-			_, err = tx.ExecContext(ctx, "UPDATE thread_deliveries SET session = ?, token = ?, touched_at = ?, held = 0 WHERE id = ?", session, reportToken(), ms(now), id)
-			if err != nil {
-				return nil, err
-			}
-			return deliveryRead(ctx, tx, s, id)
-		}
-		if !errors.Is(err, sql.ErrNoRows) {
+	const noOwner = "COALESCE(o.owner, '') = ''"
+	d, err := claimFrom(ctx, tx, s, session, here, may, now, stale, own)
+	if d != nil || err != nil {
+		return d, err
+	}
+	var scope string
+	err = tx.QueryRowContext(ctx, `SELECT t.scope FROM thread_messages m
+		JOIN thread_threads t ON t.id = m.thread_id
+		JOIN thread_scopes o ON o.scope = t.scope
+		LEFT JOIN thread_deliveries d ON d.id = m.delivery_id
+		WHERE t.scope IN (SELECT value FROM json_each(?3))
+		AND o.owner NOT IN ('', ?1) AND o.owner NOT IN (SELECT value FROM json_each(?2)) AND o.owned_at <= ?4
+		AND (`+queued+` OR (m.state IN ('sent', 'with_agent', 'working', 'no_reply') AND d.session != ?1))
+		ORDER BY m.queued_at, m.batch_id LIMIT 1`, session, here, may, stale).Scan(&scope)
+	switch {
+	case err == nil:
+		if _, err := s.SetOwnerTx(ctx, tx, scope, session); err != nil {
 			return nil, err
 		}
-		var batch int64
-		var scope string
-		// The ?2 and ?4 no-ops are there because own uses neither, and every
-		// argument has to bind.
-		err = tx.QueryRowContext(ctx, `SELECT m.batch_id, t.scope FROM thread_messages m
-			JOIN thread_threads t ON t.id = m.thread_id
-			LEFT JOIN thread_scopes o ON o.scope = t.scope
-			LEFT JOIN thread_deliveries d ON d.id = m.delivery_id
-			WHERE `+queued+` AND t.scope IN (SELECT value FROM json_each(?3)) AND `+mayTake+`
-			AND ?2 = ?2 AND ?4 = ?4
-			ORDER BY m.queued_at, m.batch_id LIMIT 1`, session, here, may, stale).Scan(&batch, &scope)
-		if errors.Is(err, sql.ErrNoRows) {
-			continue
-		}
+		return claimFrom(ctx, tx, s, session, here, may, now, stale, own)
+	case !errors.Is(err, sql.ErrNoRows):
+		return nil, err
+	}
+	return claimFrom(ctx, tx, s, session, here, may, now, stale, noOwner)
+}
+
+// claimFrom hands session one Send from the scopes in may that pass mayTake: a
+// delivery taken back from a session that has gone, otherwise the oldest Send
+// waiting, whole. It returns nil when there is nothing.
+func claimFrom(ctx context.Context, tx *sql.Tx, s *Store, session, here, may string, now time.Time, stale int64, mayTake string) (*Delivery, error) {
+	var id int64
+	// The ?1 no-op is there because noOwner doesn't use it, and every argument
+	// has to bind.
+	err := tx.QueryRowContext(ctx, `SELECT d.id FROM thread_deliveries d LEFT JOIN thread_scopes o ON o.scope = d.scope
+		WHERE d.state = 'inflight' AND d.shown_at = 0 AND d.touched_at <= ?4
+		AND d.session NOT IN (SELECT value FROM json_each(?2))
+		AND d.scope IN (SELECT value FROM json_each(?3)) AND `+mayTake+`
+		AND ?1 = ?1
+		ORDER BY d.id LIMIT 1`, session, here, may, stale).Scan(&id)
+	if err == nil {
+		_, err = tx.ExecContext(ctx, "UPDATE thread_deliveries SET session = ?, token = ?, touched_at = ?, held = 0 WHERE id = ?", session, reportToken(), ms(now), id)
 		if err != nil {
-			return nil, err
-		}
-		res, err := tx.ExecContext(ctx, "INSERT INTO thread_deliveries(scope, batch_id, session, state, sent_at, touched_at, token) VALUES (?, ?, ?, 'inflight', ?, ?, ?)",
-			scope, batch, session, ms(now), ms(now), reportToken())
-		if err != nil {
-			return nil, err
-		}
-		if id, err = res.LastInsertId(); err != nil {
-			return nil, err
-		}
-		if _, err := tx.ExecContext(ctx, `UPDATE thread_messages SET delivery_id = ? WHERE id IN (
-			SELECT m.id FROM thread_messages m LEFT JOIN thread_deliveries d ON d.id = m.delivery_id
-			WHERE m.batch_id = ? AND `+queued+`)`, id, batch); err != nil {
 			return nil, err
 		}
 		return deliveryRead(ctx, tx, s, id)
 	}
-	return nil, nil
+	if !errors.Is(err, sql.ErrNoRows) {
+		return nil, err
+	}
+	var batch int64
+	var scope string
+	err = tx.QueryRowContext(ctx, `SELECT m.batch_id, t.scope FROM thread_messages m
+		JOIN thread_threads t ON t.id = m.thread_id
+		LEFT JOIN thread_scopes o ON o.scope = t.scope
+		LEFT JOIN thread_deliveries d ON d.id = m.delivery_id
+		WHERE `+queued+` AND t.scope IN (SELECT value FROM json_each(?2)) AND `+mayTake+`
+		AND ?1 = ?1
+		ORDER BY m.queued_at, m.batch_id LIMIT 1`, session, may).Scan(&batch, &scope)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	res, err := tx.ExecContext(ctx, "INSERT INTO thread_deliveries(scope, batch_id, session, state, sent_at, touched_at, token) VALUES (?, ?, ?, 'inflight', ?, ?, ?)",
+		scope, batch, session, ms(now), ms(now), reportToken())
+	if err != nil {
+		return nil, err
+	}
+	if id, err = res.LastInsertId(); err != nil {
+		return nil, err
+	}
+	if _, err := tx.ExecContext(ctx, `UPDATE thread_messages SET delivery_id = ? WHERE id IN (
+		SELECT m.id FROM thread_messages m LEFT JOIN thread_deliveries d ON d.id = m.delivery_id
+		WHERE m.batch_id = ? AND `+queued+`)`, id, batch); err != nil {
+		return nil, err
+	}
+	return deliveryRead(ctx, tx, s, id)
 }
 
 // jsonList is list as JSON for json_each; nil is an empty list, not null.

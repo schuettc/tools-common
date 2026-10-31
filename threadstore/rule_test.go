@@ -250,16 +250,16 @@ func TestABatchIsNeverSplit(t *testing.T) {
 	if d == nil || !sameIDs(ids(d.Messages), []int64{d1.ID, d2.ID}) {
 		t.Fatalf("delivery %+v", d)
 	}
-	// Taken back, it is still whole.
+	// Taken over, it is still whole.
 	c.add(DefaultPresenceTTL + time.Second)
 	back := claim(t, s, "c", "c")
-	if back == nil || back.ID != d.ID || !sameIDs(ids(back.Messages), []int64{d1.ID, d2.ID}) {
-		t.Fatalf("taken back %+v", back)
+	if back == nil || back.BatchID != d.BatchID || !sameIDs(ids(back.Messages), []int64{d1.ID, d2.ID}) {
+		t.Fatalf("taken over %+v", back)
 	}
 }
 
-// A owner that returns gets back what a session since gone was holding, and
-// another scope's owner doesn't stand in its way.
+// A owner that returns takes its scope back once the session that took it has
+// gone too, and another scope's owner doesn't stand in its way.
 func TestAReturnedOwnerReclaims(t *testing.T) {
 	s, c := newStore(t)
 	ma := post(t, s, thread(t, s, "project:a", "t", "a"), "for a")
@@ -390,5 +390,123 @@ func TestTwoClaimersNeverBothGetASend(t *testing.T) {
 	}
 	if n != 1 {
 		t.Fatalf("%d claimers got it", n)
+	}
+}
+
+// Automatic takeover: an owner has gone, so the claimer takes the scope and what
+// it left unanswered, a Send being worked on included.
+func TestClaimTakesOverAGoneOwnersWorkingSend(t *testing.T) {
+	s, c := newStore(t)
+	scope := "project:p"
+	m := post(t, s, thread(t, s, scope, "t", "a"), "one")
+	d := claim(t, s, "a", "a")
+	if _, err := s.Reply(ctx, "a", []int64{m.ID}, msgstate.Working, "on it", nil); err != nil {
+		t.Fatal(err)
+	}
+	c.add(DefaultPresenceTTL + time.Second)
+	got := claim(t, s, "b", "b")
+	if got == nil || !sameIDs(ids(got.Messages), []int64{m.ID}) {
+		t.Fatalf("b got %+v", got)
+	}
+	if th := thread(t, s, scope, "t", ""); th.Owner != "b" {
+		t.Fatalf("owner %q", th.Owner)
+	}
+	if old, _ := s.Delivery(ctx, d.ID); old.State != Moved {
+		t.Fatalf("a's delivery %s", old.State)
+	}
+	if _, err := s.Reply(ctx, "a", []int64{m.ID}, msgstate.Answered, "mine", nil); err == nil {
+		t.Fatal("the gone owner replied after the takeover")
+	}
+}
+
+// Everything unanswered moves, in its place in line; what was answered stays.
+func TestClaimTakesOverEveryUnansweredMessage(t *testing.T) {
+	s, c := newStore(t)
+	scope := "project:p"
+	th := thread(t, s, scope, "t", "a")
+	done := post(t, s, th, "answered")
+	claim(t, s, "a", "a")
+	if _, err := s.Reply(ctx, "a", []int64{done.ID}, msgstate.Answered, "yes", nil); err != nil {
+		t.Fatal(err)
+	}
+	noReply := post(t, s, th, "no reply")
+	dNo := claim(t, s, "a", "a")
+	if _, err := s.Landed(ctx, "a", dNo.Token); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.TurnEnded(ctx, "a"); err != nil {
+		t.Fatal(err)
+	}
+	landed := post(t, s, th, "landed")
+	dLanded := claim(t, s, "a", "a")
+	if _, err := s.Landed(ctx, "a", dLanded.Token); err != nil {
+		t.Fatal(err)
+	}
+	waiting := post(t, s, th, "queued")
+	c.add(DefaultPresenceTTL + time.Second)
+	var got []int64
+	for {
+		d := claim(t, s, "b", "b")
+		if d == nil {
+			break
+		}
+		got = append(got, ids(d.Messages)...)
+	}
+	if want := []int64{noReply.ID, landed.ID, waiting.ID}; !sameIDs(got, want) {
+		t.Fatalf("got %v, want %v", got, want)
+	}
+	if st := stateOf(t, s, done.ID); st != msgstate.Answered {
+		t.Fatalf("answered became %s", st)
+	}
+}
+
+// Two sessions over one gone owner: the first takes the scope, and the second
+// then sees an owner just named, even with another Send waiting.
+func TestTwoClaimersOverAGoneOwnerGiveOneOwner(t *testing.T) {
+	s, c := newStore(t)
+	scope := "project:p"
+	th := thread(t, s, scope, "t", "a")
+	post(t, s, th, "one")
+	post(t, s, th, "two")
+	c.add(DefaultPresenceTTL + time.Second)
+	names := []string{"b", "c"}
+	got := make([]*Delivery, len(names))
+	var wg sync.WaitGroup
+	for i, name := range names {
+		wg.Go(func() {
+			d, err := s.Claim(ctx, name, []string{scope}, names)
+			if err != nil {
+				t.Error(err)
+			}
+			got[i] = d
+		})
+	}
+	wg.Wait()
+	if (got[0] == nil) == (got[1] == nil) {
+		t.Fatalf("deliveries %+v %+v", got[0], got[1])
+	}
+	winner := names[0]
+	if got[0] == nil {
+		winner = names[1]
+	}
+	if owner := thread(t, s, scope, "t", "").Owner; owner != winner {
+		t.Fatalf("owner %q, the Send went to %q", owner, winner)
+	}
+}
+
+// A scope with nothing unanswered has nothing to take over yet.
+func TestClaimLeavesAGoneOwnersScopeWithNothingUnanswered(t *testing.T) {
+	s, c := newStore(t)
+	m := post(t, s, thread(t, s, "project:p", "t", "a"), "one")
+	claim(t, s, "a", "a")
+	if _, err := s.Reply(ctx, "a", []int64{m.ID}, msgstate.Answered, "yes", nil); err != nil {
+		t.Fatal(err)
+	}
+	c.add(DefaultPresenceTTL + time.Second)
+	if d := claim(t, s, "b", "b"); d != nil {
+		t.Fatalf("b got %+v", d)
+	}
+	if owner := thread(t, s, "project:p", "t", "").Owner; owner != "a" {
+		t.Fatalf("owner %q", owner)
 	}
 }
