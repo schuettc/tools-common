@@ -345,3 +345,22 @@ func TestOwns(t *testing.T) {
 		t.Error("Owns(\"\", nameless skill) = true")
 	}
 }
+
+func TestUserTargetsStayPortableAndIndependent(t *testing.T) {
+	home(t)
+	t.Setenv("PI_CODING_AGENT_DIR", t.TempDir())
+	targets := skills.UserTargets()
+	want := map[string]string{"claude-code": "~/.claude/skills", "codex": "~/.codex/skills", "pi": "~/.pi/agent/skills"}
+	if len(targets) != len(want) {
+		t.Fatalf("targets = %v", targets)
+	}
+	for name, path := range want {
+		if targets[name] != path {
+			t.Errorf("%s = %q, want %q", name, targets[name], path)
+		}
+	}
+	targets["pi"] = "changed"
+	if skills.UserTargets()["pi"] != want["pi"] {
+		t.Fatal("caller changed shared targets")
+	}
+}
