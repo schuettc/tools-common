@@ -15,6 +15,8 @@
 //     `<tool> watch`: find or start serve, call it, register the session,
 //     long-poll for the human's Sends and push each one to the agent.
 //   - Commands: the serve, channel, watch, report and skills commands.
+//   - conformance (its own package): the test a tool's CI runs against its
+//     server for the rules Run gives it.
 //
 // It is built on channelmcp, localweb, harness and the root tools package,
 // and reimplements none of them. Each tool keeps only its own routes and
