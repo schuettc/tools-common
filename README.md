@@ -196,6 +196,9 @@ srv, err := localweb.Start(ctx, localweb.Config{
   gone and every call returns 401. `ApiError.isStale` is true, `createApi({onStale})`
   runs once, and `live()` reports `stale` and stops. Show the tool's own words
   with `bar({staleText})` and `setLive('stale')`.
+- **New build:** every API response carries `X-Tool-Build` (`pageserve`). `createApi({onNewBuild})`
+  runs once when it differs from the first this page saw. Pass `api.newBuild` as `live()`'s
+  `onNewBuild`, so the `stale` event after a new install reaches the same callback.
 - **Layout:** `.kit-app` is the page grid: the bar across the top, then
   `.kit-list` | `.kit-read` | an optional `.kit-rail` (360px, the tool's own
   dock). `.kit-page` + `.kit-main` is the same without a rail. It is a desktop layout:

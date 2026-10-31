@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -19,6 +20,7 @@ import (
 
 	tools "github.com/subaud-tools/tools-common"
 	"github.com/subaud-tools/tools-common/localweb"
+	"github.com/subaud-tools/tools-common/localweb/page"
 )
 
 type running struct {
@@ -262,5 +264,57 @@ func TestTabsAlreadyOnTheEventsAreKept(t *testing.T) {
 	wait(t, r)
 	if _, err := os.Stat(filepath.Join(tools.StateDir("cull"), "tabs.json")); err != nil {
 		t.Fatalf("not kept: %v", err)
+	}
+}
+
+// Every answer of the API says which build is serving: the tool's routes, the
+// shared ones and a route that isn't there.
+func TestEveryAPIResponseCarriesTheBuild(t *testing.T) {
+	r := startRun(t, Options{Version: "1.2.3"})
+	e, _ := LiveFor("cull").Running()
+	want := buildOf("1.2.3", testPage)
+	if !regexp.MustCompile(`^1\.2\.3\+[0-9a-f]{12}$`).MatchString(want) {
+		t.Fatalf("build %q", want)
+	}
+	for _, path := range []string{"/api/ping", "/api/poll", "/api/nothing"} {
+		resp := get(t, e, path)
+		_ = resp.Body.Close()
+		if got := resp.Header.Get(BuildHeader); got != want {
+			t.Fatalf("%s: %s %q, want %q", path, BuildHeader, got, want)
+		}
+	}
+	_ = Stop(context.Background(), LiveFor("cull"))
+	wait(t, r)
+}
+
+// The build changes with the version and with any asset, wherever it is, the
+// kit's included: a rebuild with one version still counts as a change.
+func TestTheBuildHashesEveryAsset(t *testing.T) {
+	tree := func(body string) fstest.MapFS {
+		return fstest.MapFS{"index.html": {Data: []byte("page")}, "deep/in/app.js": {Data: []byte(body)}}
+	}
+	base := buildOf("1", tree("a"))
+	if got := buildOf("1", tree("a")); got != base {
+		t.Fatalf("not stable: %q, %q", base, got)
+	}
+	if got := buildOf("2", tree("a")); got == base {
+		t.Fatal("the version doesn't count")
+	}
+	if got := buildOf("1", tree("b")); got == base {
+		t.Fatal("a nested asset doesn't count")
+	}
+	moved := fstest.MapFS{"index.html": {Data: []byte("page")}, "deep/app.js": {Data: []byte("a")}}
+	if got := buildOf("1", moved); got == base {
+		t.Fatal("a file's name doesn't count")
+	}
+	joined := fstest.MapFS{"a": {Data: []byte("bc")}}
+	if buildOf("1", joined) == buildOf("1", fstest.MapFS{"a": {Data: []byte("b")}, "c": {Data: nil}}) {
+		t.Fatal("a file's bounds don't count")
+	}
+	if withKit := buildOf("1", page.With(tree("a"))); withKit == base {
+		t.Fatal("the kit's files aren't walked")
+	}
+	if !strings.HasPrefix(buildOf("1", nil), "1+") {
+		t.Fatal("no assets")
 	}
 }

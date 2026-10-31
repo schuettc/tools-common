@@ -389,3 +389,24 @@ test('live: a throwing onShow does not stop updates', () => {
     handle.stop();
   }
 });
+
+test('live: a stale event reaches onNewBuild and onEvent', () => {
+  let n = 0;
+  const { es, events, handle } = setup({ onNewBuild: () => n++ });
+  es.last().emitOpen();
+  es.last().emitMessage('1', { type: 'stale', data: {} });
+  eq(n, 1);
+  eq(events.map(e => e.type), ['stale']);
+  es.last().emitMessage('2', { type: 'other', data: {} });
+  eq(n, 1, 'only a stale event');
+  handle.stop();
+});
+
+test('live: a throwing onNewBuild does not stop the stream', () => {
+  const { es, events, handle } = setup({ onNewBuild: () => { throw new Error('boom'); } });
+  es.last().emitOpen();
+  es.last().emitMessage('1', { type: 'stale', data: {} });
+  es.last().emitMessage('2', { type: 'after', data: {} });
+  eq(events.map(e => e.type), ['stale', 'after']);
+  handle.stop();
+});

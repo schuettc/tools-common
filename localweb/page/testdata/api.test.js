@@ -62,3 +62,47 @@ test('api: 401 is stale and reported once', async () => {
   try { await api.get('/y'); } catch (e) { err = e; }
   eq(err.isStale, false, 'a 500 is not stale');
 });
+
+const built = (build, body = {}, status = 200) => () =>
+  new Response(JSON.stringify(body), { status, headers: build ? { 'X-Tool-Build': build } : {} });
+
+test('api: a new build is noticed once, on any answer', async () => {
+  const f = fakeFetch();
+  const seen = [];
+  const api = createApi({ fetch: f.fetch, onNewBuild: () => seen.push('new') });
+  f.queue.push(built('1+a'), built('1+a'), built(null), built('2+b'), built('3+c'));
+  await api.get('/a');
+  await api.get('/b');
+  eq(seen, [], 'the first build seen is the page\'s own');
+  await api.get('/no-header');
+  eq(seen, [], 'an answer with no header says nothing');
+  await api.get('/c');
+  eq(seen, ['new']);
+  await api.get('/d');
+  eq(seen, ['new'], 'once, however often it changes');
+});
+
+test('api: an error answer carries the build too', async () => {
+  const f = fakeFetch();
+  let n = 0;
+  const api = createApi({ fetch: f.fetch, onNewBuild: () => n++ });
+  f.queue.push(built('1+a'), built('2+b', { error: 'nope' }, 409));
+  await api.get('/a');
+  let err;
+  try { await api.post('/b', {}); } catch (e) { err = e; }
+  eq([err.status, n], [409, 1]);
+});
+
+test('api: newBuild reaches the same callback, still once', async () => {
+  const f = fakeFetch();
+  let n = 0;
+  const api = createApi({ fetch: f.fetch, onNewBuild: () => n++ });
+  api.newBuild();
+  eq(n, 1);
+  api.newBuild();
+  f.queue.push(built('1+a'), built('2+b'));
+  await api.get('/a');
+  await api.get('/b');
+  eq(n, 1);
+  createApi({ fetch: f.fetch }).newBuild(); // no callback: nothing to call
+});

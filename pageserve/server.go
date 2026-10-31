@@ -7,6 +7,8 @@ package pageserve
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"io"
 	"io/fs"
@@ -18,6 +20,32 @@ import (
 	tools "github.com/subaud-tools/tools-common"
 	"github.com/subaud-tools/tools-common/localweb"
 )
+
+// BuildHeader is on every API response: the version and a hash of the page's
+// assets, so an open page sees serve change (the kit's createApi, onNewBuild).
+const BuildHeader = "X-Tool-Build"
+
+// buildOf is what BuildHeader says, "<version>+<hash>", walked from assets so a
+// rebuild with the same version still counts as a change.
+func buildOf(version string, assets fs.FS) string {
+	h := sha256.New()
+	if assets != nil {
+		_ = fs.WalkDir(assets, ".", func(path string, d fs.DirEntry, err error) error {
+			if err != nil {
+				return err
+			}
+			if d.IsDir() {
+				return nil
+			}
+			b, _ := fs.ReadFile(assets, path)
+			// Each name and length goes in, so a file's bounds count.
+			_, _ = fmt.Fprintf(h, "%s\x00%d\x00", path, len(b))
+			h.Write(b)
+			return nil
+		})
+	}
+	return version + "+" + hex.EncodeToString(h.Sum(nil))[:12]
+}
 
 // Options configures Run.
 type Options struct {
@@ -54,7 +82,8 @@ type Options struct {
 // It writes the tool's one entry (Live.Advertise) while running and removes it
 // on the way out, keeps its token in StateDir/token across restarts, so open
 // tabs keep working, and marks itself stale once its binary is replaced (see
-// binaryWatch), which the next tool call acts on. Besides the tool's API it answers GET /api/events (Options.Stream, else
+// binaryWatch), which the next tool call acts on. Every API response carries
+// BuildHeader. Besides the tool's API it answers GET /api/events (Options.Stream, else
 // Events.Stream), GET /api/poll and POST /api/stop.
 func Run(ctx context.Context, o Options) error {
 	if o.Log == nil {
@@ -122,7 +151,12 @@ func Run(ctx context.Context, o Options) error {
 	if o.API != nil {
 		mux.Handle("/", o.API)
 	}
-	srv, err := localweb.Start(ctx, localweb.Config{Tool: tool, Assets: o.Assets, API: mux, Port: o.Port, Token: token})
+	build := buildOf(o.Version, o.Assets)
+	api := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set(BuildHeader, build)
+		mux.ServeHTTP(w, r)
+	})
+	srv, err := localweb.Start(ctx, localweb.Config{Tool: tool, Assets: o.Assets, API: api, Port: o.Port, Token: token})
 	if err != nil {
 		return err
 	}
