@@ -33,8 +33,14 @@ func main() {
 		defer stop()
 		err = serve(ctx, broke)
 	case len(os.Args) > 1 && os.Args[1] == "skills" && broke != "skills":
-		skill := func() ([]byte, error) { return []byte("---\nname: scratch\n---\nA skill.\n"), nil }
-		err = pageserve.SkillsCommand(tool, skill).Run(os.Args[2:], os.Stdout, os.Stderr)
+		// SCRATCH_SKILL names the skill apart from the tool.
+		name := os.Getenv("SCRATCH_SKILL")
+		if name == "" {
+			name = tool
+		}
+		skill := func() ([]byte, error) { return []byte("---\nname: " + name + "\n---\nA skill.\n"), nil }
+		c := pageserve.Commands{Spec: pageserve.Spec{Tool: tool}, Skill: skill, SkillName: name}
+		err = c.SkillsCommand().Run(os.Args[2:], os.Stdout, os.Stderr)
 	default:
 		err = fmt.Errorf("unknown command: %v", os.Args[1:])
 	}
@@ -63,6 +69,8 @@ func serve(ctx context.Context, broke string) error {
 		if err := os.Mkdir(filepath.Join(state, "tabs.json"), 0o700); err != nil {
 			return err
 		}
+	case "stop": // a tool whose own server takes the stop with the cookie
+		return cookieStop(ctx, o)
 	case "build": // a tool route that answers without the header
 		o.API = http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 			w.Header().Del(pageserve.BuildHeader)
@@ -70,6 +78,28 @@ func serve(ctx context.Context, broke string) error {
 		})
 	}
 	return pageserve.Run(ctx, o)
+}
+
+// cookieStop serves and advertises itself with a stop route anything signed in
+// can reach.
+func cookieStop(ctx context.Context, o pageserve.Options) error {
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	mux := http.NewServeMux()
+	mux.HandleFunc("POST /api/stop", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+		go cancel()
+	})
+	srv, err := localweb.Start(ctx, localweb.Config{Tool: tool, Assets: o.Assets, API: mux})
+	if err != nil {
+		return err
+	}
+	e := pageserve.Entry{URL: srv.URL, Base: "http://" + srv.Addr(), Token: srv.Token, PID: os.Getpid()}
+	if err := o.Live.Advertise(e); err != nil {
+		return err
+	}
+	defer o.Live.Withdraw(e.PID)
+	return srv.Wait()
 }
 
 // handRolled serves and advertises itself without pageserve.Run.

@@ -365,9 +365,15 @@ func TestPresence(t *testing.T) {
 		{"project", func(s Spec) Spec { return s }, []map[string]any{{"session": "s-1", "harness": "pi", "label": "pi · a", "root": root}}},
 		{"no project", func(s Spec) Spec { s.Root = nil; return s }, []map[string]any{{"session": "s-1", "harness": "pi", "label": "pi · a"}}},
 		{"no presence", func(s Spec) Spec { s.NoPresence = true; return s }, nil},
+		{"in tmux", func(s Spec) Spec { return s }, []map[string]any{{"session": "s-1", "harness": "pi", "label": "pi · a", "root": root,
+			"tmux_socket": inTmux.Socket, "tmux_pane": inTmux.Pane}}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			f := newFakeServe(t)
+			id := id
+			if tc.name == "in tmux" {
+				id.Where = inTmux
+			}
 			connect(t, New(tc.spec(cullSpec()), id, f.client()))
 			deadline := time.Now().Add(5 * time.Second)
 			for f.waits.Load() == 0 && time.Now().Before(deadline) {

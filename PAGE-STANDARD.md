@@ -17,6 +17,10 @@ Every server gets these from `pageserve.Run` with no code of its own. `conforman
 | Open pages notice a new serve. | `pageserve.BuildHeader` (`X-Tool-Build`) on every API response, read by `createApi`'s `onNewBuild`. `live`'s `onNewBuild` hears the `stale` event, which comes while serve is still the old build: say a newer build is installed, but don't reload then, since a reload brings back the same page (diazo re-reads its view). Reload on the header's change. | this release |
 | Every server with a channel ships a skill. | `pageserve.SkillsCommand` | already released |
 | A channel is the shared one: `<tool> channel` from `pageserve.Commands`, with `Around` for anything the tool does around it, `--scope` for the session's folder, and `Spec.Scope` to name a root without gating the loop. | `pageserve.Commands.ChannelCommand` | 0.44.0 |
+| A page opens in its session's own Chrome window, beside the terminal, when the session has one; otherwise it reuses an open tab, or opens one. | `pageserve.Show` over `proj window` and `proj terminal`; the channel sends the session's tmux location (`Identity.Where`, `Where.Into` on a tool's open call) | 0.46.0 |
+| Only the token header can stop a server: a page served by the tool can't. | `POST /api/stop` refuses a request without `X-Local-Token`; checked by `conformance.Check` | 0.46.0 |
+| A restart never overlaps a server still writing: running requests and the tool's `OnStop` finish (bounded at 4.5 s) before the entry goes. | `pageserve.Run`, `Options.OnStop` | 0.46.0 |
+| A skill not named after its tool is installed, refreshed and checked like any other. | `Commands.SkillName`, `conformance.Server.SkillName` | 0.46.0 |
 
 A tool with `Options.Stream` answers `/api/events` itself, so it must put the `stale` event on its own stream. `/api/poll` always carries it.
 

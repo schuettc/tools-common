@@ -33,6 +33,7 @@ func TestEachRuleFailsOnAServerThatBreaksIt(t *testing.T) {
 		{"tabs", "tabs.json"},
 		{"build", "X-Tool-Build"},
 		{"skills", "skills install"},
+		{"stop", "cookie alone"},
 	} {
 		t.Run(tc.rule, func(t *testing.T) {
 			broken := s
@@ -55,5 +56,20 @@ func TestAToolWithNoChannelNeedsNoSkillsCommand(t *testing.T) {
 	s.Env = []string{"SCRATCH_BREAK=skills"}
 	if err := runRule(t, s, "skills"); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// A skill named apart from its tool is found under its own name, and only there.
+func TestASkillNamedApartIsCheckedUnderItsName(t *testing.T) {
+	s := scratchServer(t)
+	s.Env = []string{"SCRATCH_SKILL=reviewing-a-document"}
+	s.SkillName = "reviewing-a-document"
+	if err := runRule(t, s, "skills"); err != nil {
+		t.Fatal(err)
+	}
+	s.SkillName = ""
+	err := runRule(t, s, "skills")
+	if err == nil || !regexp.MustCompile("no scratch/SKILL.md").MatchString(err.Error()) {
+		t.Fatalf("%v", err)
 	}
 }

@@ -26,6 +26,9 @@ import (
 // TokenHeader is how non-browser clients (CLI, channel process) authenticate.
 const TokenHeader = "X-Local-Token" //nolint:gosec // G101: an HTTP header name, not a credential
 
+// shutdownWait is how long a stopping server waits for its requests to finish.
+const shutdownWait = 2 * time.Second
+
 // Config configures Start.
 type Config struct {
 	Tool   string       // names the cookie and the port-hint dir (StateDir(Tool))
@@ -48,9 +51,13 @@ type Server struct {
 	ln   net.Listener
 	srv  *http.Server
 	done chan error
+	// shutdown closes once the shutdown has ended; stuck is set before it does.
+	shutdown chan struct{}
+	stuck    bool
 }
 
-// Start binds 127.0.0.1 and serves until ctx is cancelled.
+// Start binds 127.0.0.1 and serves until ctx is cancelled, then lets the requests
+// it is answering finish, for up to shutdownWait.
 func Start(ctx context.Context, c Config) (*Server, error) {
 	ln, err := listen(c)
 	if err != nil {
@@ -68,7 +75,7 @@ func Start(ctx context.Context, c Config) (*Server, error) {
 		_ = ln.Close()
 		return nil, fmt.Errorf("localweb: Config.Token must be 64 hex characters")
 	}
-	s := &Server{Token: token, cfg: c, ln: ln, done: make(chan error, 1)}
+	s := &Server{Token: token, cfg: c, ln: ln, done: make(chan error, 1), shutdown: make(chan struct{})}
 	s.URL = "http://" + ln.Addr().String() + "/?t=" + s.Token
 	s.srv = &http.Server{Handler: s, ReadHeaderTimeout: 10 * time.Second}
 	savePort(c.Tool, ln.Addr().(*net.TCPAddr).Port)
@@ -76,15 +83,20 @@ func Start(ctx context.Context, c Config) (*Server, error) {
 		err := s.srv.Serve(ln)
 		if errors.Is(err, http.ErrServerClosed) {
 			err = nil
+			<-s.shutdown // Serve returns as Shutdown starts, not as it ends
 		}
 		s.done <- err
 	}()
 	//nolint:gosec // G118: ctx is already cancelled here; Shutdown needs a fresh timeout context
 	go func() {
 		<-ctx.Done()
-		sctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer close(s.shutdown)
+		sctx, cancel := context.WithTimeout(context.Background(), shutdownWait)
 		defer cancel()
-		_ = s.srv.Shutdown(sctx)
+		if err := s.srv.Shutdown(sctx); err != nil {
+			s.stuck = true
+			_ = s.srv.Close()
+		}
 	}()
 	return s, nil
 }
@@ -92,8 +104,21 @@ func Start(ctx context.Context, c Config) (*Server, error) {
 // Addr is the bound host:port.
 func (s *Server) Addr() string { return s.ln.Addr().String() }
 
-// Wait blocks until the server stops; nil after a clean shutdown.
+// Wait blocks until the server stops and its requests have finished, or
+// shutdownWait has passed (see Stuck); nil after a clean shutdown.
 func (s *Server) Wait() error { return <-s.done }
+
+// Stuck says, once Wait has returned, that requests were still running when
+// shutdownWait ran out. Their connections are closed; their handlers may not
+// have returned.
+func (s *Server) Stuck() bool {
+	select {
+	case <-s.shutdown:
+		return s.stuck
+	default:
+		return false
+	}
+}
 
 // cookieName carries the port: browsers keep cookies per host, not per
 // port, so two serves of one tool on 127.0.0.1 would otherwise overwrite

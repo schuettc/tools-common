@@ -8,6 +8,7 @@ package pageserve
 import (
 	"context"
 	"crypto/sha256"
+	"crypto/subtle"
 	"encoding/hex"
 	"fmt"
 	"io"
@@ -47,6 +48,15 @@ func buildOf(version string, assets fs.FS) string {
 	return version + "+" + hex.EncodeToString(h.Sum(nil))[:12]
 }
 
+// Counted from the server's context ending, which includes the wait for running
+// requests: onStopWait is when OnStop's context ends, and onStopGrace how long
+// after that Run gives it to return. Together they are less than the 5s Stop
+// waits for the entry to go, so no shutdown reads as a failed restart.
+const (
+	onStopWait  = 4 * time.Second
+	onStopGrace = 500 * time.Millisecond
+)
+
 // Options configures Run.
 type Options struct {
 	Live   Live         // where the entry is written; Live.Tool names the tool
@@ -68,6 +78,15 @@ type Options struct {
 	// starts in the background must end with ctx.
 	OnStart func(ctx context.Context, url string)
 	Ready   func(url string)
+	// OnStop runs the tool's own shutdown once the server has stopped taking
+	// requests and the requests it was answering have finished (or their wait
+	// ran out, which is logged), and before its entry is withdrawn, so whoever
+	// waits for the entry to go (Stop, Client.Fresh) starts the next serve only
+	// after the writing is done. Its ctx ends inside the time Stop waits. One
+	// that has not returned soon after is logged and left behind: Run withdraws
+	// and returns, and the process exiting ends it. It runs only for a serve that
+	// wrote its entry.
+	OnStop func(ctx context.Context)
 	// Stream, when set, answers GET /api/events instead of Events.Stream:
 	// a tool whose page streams from its own event bus (casebook's).
 	// GET /api/poll stays Events'.
@@ -84,7 +103,8 @@ type Options struct {
 // tabs keep working, and marks itself stale once its binary is replaced (see
 // binaryWatch), which the next tool call acts on. Every API response carries
 // BuildHeader. Besides the tool's API it answers GET /api/events (Options.Stream, else
-// Events.Stream), GET /api/poll and POST /api/stop.
+// Events.Stream), GET /api/poll and POST /api/stop, which takes only the token
+// header.
 func Run(ctx context.Context, o Options) error {
 	if o.Log == nil {
 		o.Log = io.Discard
@@ -144,7 +164,13 @@ func Run(ctx context.Context, o Options) error {
 	}
 	mux.HandleFunc("GET /api/events", stream)
 	mux.HandleFunc("GET /api/poll", o.Events.Poll)
-	mux.HandleFunc("POST /api/stop", func(w http.ResponseWriter, _ *http.Request) {
+	// Only the token header stops serve: a page served by a tool holds the
+	// cookie, and it must not be able to.
+	mux.HandleFunc("POST /api/stop", func(w http.ResponseWriter, r *http.Request) {
+		if subtle.ConstantTimeCompare([]byte(r.Header.Get(localweb.TokenHeader)), []byte(token)) != 1 {
+			http.Error(w, "stop takes the token header", http.StatusForbidden)
+			return
+		}
 		w.WriteHeader(http.StatusNoContent)
 		go func() { time.Sleep(50 * time.Millisecond); cancel() }()
 	})
@@ -190,13 +216,36 @@ func Run(ctx context.Context, o Options) error {
 	if o.Ready != nil {
 		o.Ready(srv.URL)
 	}
+	ended := make(chan time.Time, 1)
+	go func() { <-ctx.Done(); ended <- time.Now() }()
 	err = srv.Wait()
 	cancel()
+	if srv.Stuck() {
+		_, _ = fmt.Fprintf(o.Log, "%s serve: requests still running as it stops\n", tool)
+	}
 	o.Events.wait() // streams end with ctx
 	// Saved as serve stops, so the list a restart reads is not already old.
 	if err := o.Events.Tabs.Save(); err != nil {
 		_, _ = fmt.Fprintf(o.Log, "%s serve: the open tabs were not saved: %v\n", tool, err)
 	}
 	<-watched // a last tick must not write the entry after it is withdrawn
+	if o.OnStop != nil {
+		runOnStop(o, <-ended)
+	}
 	return err
+}
+
+// runOnStop calls OnStop and waits for it, up to its bound from ended, when the
+// server's context ended.
+func runOnStop(o Options, ended time.Time) {
+	// That context has ended: the tool's shutdown gets its own.
+	ctx, stopped := context.WithDeadline(context.Background(), ended.Add(onStopWait))
+	defer stopped()
+	returned := make(chan struct{})
+	go func() { defer close(returned); o.OnStop(ctx) }()
+	select {
+	case <-returned:
+	case <-time.After(time.Until(ended.Add(onStopWait + onStopGrace))):
+		_, _ = fmt.Fprintf(o.Log, "%s serve: OnStop overran; going on without it\n", o.Live.Tool)
+	}
 }

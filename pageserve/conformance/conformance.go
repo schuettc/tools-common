@@ -45,6 +45,8 @@ type Server struct {
 	Env    []string // added to the serve's environment: a tool's own short test clock
 	// Channel: the tool has a channel, so it must ship a skill.
 	Channel bool
+	// SkillName names the skill when it isn't named after the tool. "": Tool.
+	SkillName string
 	// Quiet is how long serve must stay up with no request at all (0: 3s).
 	// Nothing in pageserve exits for being idle: a tool that adds a timer of its
 	// own is caught only when Env shortens it to under this.
@@ -68,6 +70,7 @@ var rules = []struct {
 	{"tabs", keepsTabs},
 	{"build", saysBuild},
 	{"skills", shipsSkill},
+	{"stop", stopTakesHeader},
 }
 
 // Check asserts every server rule against s, one subtest per rule.
@@ -401,6 +404,47 @@ func saysBuild(_ *testing.T, c *scratch) error {
 	return c.stop()
 }
 
+// stopTakesHeader: POST /api/stop takes the token header only, so a page served
+// by the tool, which holds the cookie, can't stop its server. It sends the
+// page's own Origin, past localweb's cross-origin guard.
+func stopTakesHeader(_ *testing.T, c *scratch) error {
+	e, err := c.start()
+	if err != nil {
+		return err
+	}
+	noFollow := &http.Client{CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+	first, err := noFollow.Get(e.URL)
+	if err != nil {
+		return err
+	}
+	_ = first.Body.Close()
+	if len(first.Cookies()) == 0 {
+		return errors.New("the page's URL set no cookie to try the stop with")
+	}
+	req, err := http.NewRequest(http.MethodPost, e.Base+"/api/stop", strings.NewReader("{}"))
+	if err != nil {
+		return err
+	}
+	for _, ck := range first.Cookies() {
+		req.AddCookie(ck)
+	}
+	req.Header.Set("Origin", e.Base)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return err
+	}
+	_ = resp.Body.Close()
+	if resp.StatusCode < 300 {
+		return fmt.Errorf("POST /api/stop with the cookie alone got %d: a page could stop its server", resp.StatusCode)
+	}
+	select {
+	case <-c.proc.exited:
+		return errors.New("POST /api/stop with the cookie alone stopped the server")
+	case <-time.After(300 * time.Millisecond):
+	}
+	return c.stop()
+}
+
 // shipsSkill: a tool with a channel installs its skill.
 func shipsSkill(_ *testing.T, c *scratch) error {
 	if !c.s.Channel {
@@ -411,15 +455,19 @@ func shipsSkill(_ *testing.T, c *scratch) error {
 	if out, err := cmd.CombinedOutput(); err != nil {
 		return fmt.Errorf("`%s skills install --agent pi`: %w\n%s", c.s.Tool, err, out)
 	}
+	name := c.s.SkillName
+	if name == "" {
+		name = c.s.Tool
+	}
 	found := false
 	_ = filepath.WalkDir(c.home, func(path string, d fs.DirEntry, err error) error {
-		if err == nil && !d.IsDir() && strings.HasSuffix(path, filepath.Join(c.s.Tool, "SKILL.md")) {
+		if err == nil && !d.IsDir() && strings.HasSuffix(path, filepath.Join(name, "SKILL.md")) {
 			found = true
 		}
 		return nil
 	})
 	if !found {
-		return fmt.Errorf("`%s skills install` wrote no %s/SKILL.md", c.s.Tool, c.s.Tool)
+		return fmt.Errorf("`%s skills install` wrote no %s/SKILL.md", c.s.Tool, name)
 	}
 	return nil
 }

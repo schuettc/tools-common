@@ -64,6 +64,69 @@ func TestChannelRefreshesTheSkill(t *testing.T) {
 	}
 }
 
+const namedSkill = "---\nname: reviewing-a-document\ndescription: test\n---\nbody\n"
+
+func namedCommands() Commands {
+	return Commands{Spec: Spec{Tool: "galley"}, SkillName: "reviewing-a-document",
+		Skill: func() ([]byte, error) { return []byte(namedSkill), nil }}
+}
+
+// A skill named apart from its tool is installed under its own name.
+func TestSkillsInstallUsesTheSkillsName(t *testing.T) {
+	pi := t.TempDir()
+	t.Setenv("PI_CODING_AGENT_DIR", pi)
+	cmd := namedCommands().SkillsCommand()
+	var out, errw bytes.Buffer
+	if err := cmd.Run([]string{"install", "--agent", "pi"}, &out, &errw); err != nil {
+		t.Fatalf("%v: %s", err, errw.String())
+	}
+	if b, err := os.ReadFile(filepath.Join(pi, "skills", "reviewing-a-document", "SKILL.md")); err != nil || string(b) != namedSkill {
+		t.Fatalf("%q %v", b, err)
+	}
+	if _, err := os.Stat(filepath.Join(pi, "skills", "galley")); !os.IsNotExist(err) {
+		t.Fatalf("installed under the tool's name: %v", err)
+	}
+	var u tools.UsageError
+	if err := cmd.Run([]string{"remove"}, &out, &errw); !errors.As(err, &u) || u.Msg != "expected: galley skills install [--agent NAME]…" {
+		t.Fatalf("%v", err)
+	}
+}
+
+// With no SkillName the skill goes under the tool's name.
+func TestSkillsCommandDefaultsToTheToolsName(t *testing.T) {
+	pi := t.TempDir()
+	t.Setenv("PI_CODING_AGENT_DIR", pi)
+	var out, errw bytes.Buffer
+	c := Commands{Spec: Spec{Tool: "cull"}, Skill: skill}
+	if err := c.SkillsCommand().Run([]string{"install", "--agent", "pi"}, &out, &errw); err != nil {
+		t.Fatalf("%v: %s", err, errw.String())
+	}
+	if _, err := os.Stat(filepath.Join(pi, "skills", "cull", "SKILL.md")); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// The channel refreshes a skill named apart from its tool.
+func TestChannelRefreshesASkillNamedApart(t *testing.T) {
+	pi := t.TempDir()
+	t.Setenv("PI_CODING_AGENT_DIR", pi)
+	path := filepath.Join(pi, "skills", "reviewing-a-document", "SKILL.md")
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte("---\nname: reviewing-a-document\n---\nold\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	var errw bytes.Buffer
+	namedCommands().refreshSkill(&errw)
+	if b, _ := os.ReadFile(path); string(b) != namedSkill {
+		t.Fatalf("skill not refreshed: %q", b)
+	}
+	if !strings.Contains(errw.String(), "galley channel: refreshed the reviewing-a-document skill at ") {
+		t.Fatalf("log %q", errw.String())
+	}
+}
+
 func cullCommands(t *testing.T) Commands {
 	t.Helper()
 	t.Setenv("CULL_HOME", t.TempDir())
