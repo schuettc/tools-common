@@ -14,7 +14,7 @@ Every server gets these from `pageserve.Run` with no code of its own. `conforman
 | It keeps its token across restarts, so open tabs keep working. | `pageserve.Run`, in `StateDir/token`. `Options.Token` is gone. | this release |
 | It notices a newly installed binary and marks itself stale, and the next channel call restarts it. | `pageserve.Run` sets `Entry.Stale` and emits a `stale` event. `pageserve.Channel` calls `Client.Fresh` before each tool call. | this release |
 | It reuses an open tab rather than opening another. | `pageserve.Run` makes `localweb.Tabs`, keeps them in `StateDir/tabs.json` and wires them to `Events`. `Options.Tabs` hands the list to the tool, which asks it with `Tabs.Pick`. | this release |
-| Open pages notice a new serve. | `pageserve.BuildHeader` (`X-Tool-Build`) on every API response, read by `createApi`'s `onNewBuild`. Pass `api.newBuild` as `live`'s `onNewBuild`, so the `stale` event reaches the same callback. | this release |
+| Open pages notice a new serve. | `pageserve.BuildHeader` (`X-Tool-Build`) on every API response, read by `createApi`'s `onNewBuild`. `live`'s `onNewBuild` hears the `stale` event, which comes while serve is still the old build: say a newer build is installed, but don't reload then, since a reload brings back the same page (diazo re-reads its view). Reload on the header's change. | this release |
 | Every server with a channel ships a skill. | `pageserve.SkillsCommand` | already released |
 
 A tool with `Options.Stream` answers `/api/events` itself, so it must put the `stale` event on its own stream. `/api/poll` always carries it.
@@ -33,6 +33,7 @@ Every page takes these from the kit, `localweb/page`. Page shape has no test: it
 | The stage track, whose stages are the tool's own. | `stageTrack` | needs adopting from 0.41.0 |
 | Drafts that go out together on Send. | `createDrafts`, `sendBar` | needs adopting from 0.41.0 |
 | The message states. | `msgstate`, in Go and in the kit | already released |
+| Messages, Sends and who gets them follow one delivery rule: a Send goes whole, a session can hold several, the owner belongs to the scope and a takeover brings its unanswered messages, and a reply settles all or none. | `threadstore` (`threadstore/v0.1.0`), and `msgstate.Message` on the wire. A page keeping its messages elsewhere (diazo's `decisions.json`, galley's review) follows the same rule. | this release |
 
 ## What stays each tool's own
 

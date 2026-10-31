@@ -4,6 +4,16 @@ Root module releases are tagged `vX.Y.Z`; the separate `sqlitedb` and
 `mermaidkit` modules are tagged `sqlitedb/vX.Y.Z` and `mermaidkit/vX.Y.Z`. Releases before this file are described by their
 tags and PRs.
 
+## 0.43.0
+
+### Added
+- `msgstate.Message`: a thread message as a server sends it to the kit's thread, for a page that keeps its messages anywhere.
+
+## threadstore 0.1.0
+
+### Added
+- `threadstore`, a separate module on `sqlitedb`: threads, messages, drafts, Sends (batches) and deliveries under one delivery rule. A Send is delivered whole, a session can hold several, the owner belongs to the scope and a takeover moves the owner with its unanswered messages, and a reply settles all its messages or none. Every write has a form that joins the tool's own transaction. A tool takes `Migrations` by position into its own database's steps.
+
 ## 0.42.0
 
 Every server gets the standard's server rules with no code of its own. See `PAGE-STANDARD.md`.

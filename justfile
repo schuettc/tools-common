@@ -50,17 +50,17 @@ verify-slow:
     cd localweb/page && KIT_BROWSER=required go test ./...
 
 # Checks beyond the root Go gate (CI runs this too): the root module must stay
-# stdlib-only, and the separate sqlitedb and mermaidkit modules (own go.mod and
-# <module>/vX.Y.Z tags, so the gate's ./... never reaches them) get the family
-# gate's Go checks.
+# stdlib-only, and the separate sqlitedb, threadstore and mermaidkit modules (own
+# go.mod and <module>/vX.Y.Z tags, so the gate's ./... never reaches them) get
+# the family gate's Go checks.
 verify-extra:
     #!/usr/bin/env bash
     set -euo pipefail
     # A tool that imports tools-common must never pull in a third-party module.
     deps="$(go list -m all | tail -n +2)"
     if [ -n "$deps" ]; then echo "root module gained dependencies:"; echo "$deps"; exit 1; fi
-    # sqlitedb and mermaidkit are their own modules: gofmt, vet, race tests, build.
-    for m in sqlitedb mermaidkit; do
+    # sqlitedb, threadstore and mermaidkit are their own modules: gofmt, vet, race tests, build.
+    for m in sqlitedb threadstore mermaidkit; do
         (
             cd "$m"
             test -z "$(gofmt -l .)" || { gofmt -l .; echo "gofmt needed in $m; run just fmt"; exit 1; }
