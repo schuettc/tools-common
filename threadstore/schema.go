@@ -22,6 +22,18 @@ CREATE TABLE thread_batches (
   created_at INTEGER NOT NULL
 );
 CREATE UNIQUE INDEX thread_batches_one_draft ON thread_batches(scope) WHERE state = 'draft';
+CREATE TABLE thread_deliveries (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  session     TEXT NOT NULL,
+  state       TEXT NOT NULL,
+  token       TEXT NOT NULL,
+  held        INTEGER NOT NULL DEFAULT 0,
+  sent_at     INTEGER NOT NULL,
+  touched_at  INTEGER NOT NULL,
+  finished_at INTEGER NOT NULL DEFAULT 0,
+  shown_at    INTEGER NOT NULL DEFAULT 0
+);
+CREATE UNIQUE INDEX thread_deliveries_one_inflight ON thread_deliveries(session) WHERE state = 'inflight';
 CREATE TABLE thread_messages (
   id          INTEGER PRIMARY KEY AUTOINCREMENT,
   thread_id   INTEGER NOT NULL REFERENCES thread_threads(id),
@@ -31,6 +43,7 @@ CREATE TABLE thread_messages (
   reply_to    INTEGER REFERENCES thread_messages(id),
   batch_id    INTEGER REFERENCES thread_batches(id),
   batch_pos   INTEGER NOT NULL DEFAULT 0,
+  delivery_id INTEGER REFERENCES thread_deliveries(id),
   owner       TEXT NOT NULL DEFAULT '',
   state       TEXT NOT NULL DEFAULT '',
   line        TEXT NOT NULL DEFAULT '',
@@ -40,6 +53,7 @@ CREATE TABLE thread_messages (
 );
 CREATE INDEX thread_messages_thread ON thread_messages(thread_id, id);
 CREATE INDEX thread_messages_state ON thread_messages(state);
+CREATE INDEX thread_messages_delivery ON thread_messages(delivery_id);
 `
 
 // Migrations is the store's schema, as steps a tool appends to its own

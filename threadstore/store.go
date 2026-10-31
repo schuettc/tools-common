@@ -31,6 +31,9 @@ var ErrNotFound = errors.New("not found")
 type Store struct {
 	DB  *sqlitedb.DB
 	Now func() time.Time
+	// PresenceTTL overrides how long Claim leaves a delivery with a claimer that
+	// isn't present. Zero means use DefaultPresenceTTL.
+	PresenceTTL time.Duration
 }
 
 // New returns a store over d, whose steps include Migrations.
