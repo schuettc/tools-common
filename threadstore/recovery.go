@@ -84,7 +84,7 @@ func (s *Store) MoveDelivery(ctx context.Context, id int64, session string) erro
 		if err != nil {
 			return err
 		}
-		if _, err := s.setOwner(ctx, tx, scope, session); err != nil {
+		if _, err := s.SetOwnerTx(ctx, tx, scope, session); err != nil {
 			return err
 		}
 		if state == Stopped {

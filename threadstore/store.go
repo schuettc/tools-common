@@ -59,6 +59,12 @@ type Store struct {
 // New returns a store over d, whose steps include Migrations.
 func New(d *sqlitedb.DB) *Store { return &Store{DB: d, Now: time.Now} }
 
+// The forms named ...Tx do what the plain form does inside the tool's own
+// transaction, so a tool can record its decisions and the Send together. The
+// plain form is the same call in a transaction of its own. A tool's transaction
+// opens with a write, as tx does: one that reads first fails at once if another
+// process wrote in between.
+
 // tx runs fn in a transaction whose first statement is a write: a transaction
 // that reads first and then writes fails at once if another process wrote in
 // between, instead of waiting for it.
@@ -112,13 +118,14 @@ func (s *Store) Thread(ctx context.Context, scope, name string) (Thread, error) 
 	var th Thread
 	err := s.tx(ctx, func(tx *sql.Tx) error {
 		var err error
-		th, err = s.thread(ctx, tx, scope, name)
+		th, err = s.ThreadTx(ctx, tx, scope, name)
 		return err
 	})
 	return th, err
 }
 
-func (s *Store) thread(ctx context.Context, tx *sql.Tx, scope, name string) (Thread, error) {
+// ThreadTx is Thread in the tool's own transaction.
+func (s *Store) ThreadTx(ctx context.Context, tx *sql.Tx, scope, name string) (Thread, error) {
 	var id int64
 	err := tx.QueryRowContext(ctx, `INSERT INTO thread_threads(scope, name, created_at) VALUES (?, ?, ?)
 		ON CONFLICT(scope, name) DO UPDATE SET scope = excluded.scope RETURNING id`, scope, name, ms(s.Now())).Scan(&id)
@@ -299,13 +306,14 @@ func (s *Store) Post(ctx context.Context, thread int64, m NewMessage) (Message, 
 	var out Message
 	err := s.tx(ctx, func(tx *sql.Tx) error {
 		var err error
-		out, err = s.post(ctx, tx, thread, m)
+		out, err = s.PostTx(ctx, tx, thread, m)
 		return err
 	})
 	return out, err
 }
 
-func (s *Store) post(ctx context.Context, tx *sql.Tx, thread int64, m NewMessage) (Message, error) {
+// PostTx is Post in the tool's own transaction.
+func (s *Store) PostTx(ctx context.Context, tx *sql.Tx, thread int64, m NewMessage) (Message, error) {
 	now := ms(s.Now())
 	scope, err := scopeOf(ctx, tx, thread)
 	if err != nil {

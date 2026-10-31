@@ -77,13 +77,14 @@ func (s *Store) SetOwner(ctx context.Context, scope, session string) ([]int64, e
 	var moved []int64
 	err := s.tx(ctx, func(tx *sql.Tx) error {
 		var err error
-		moved, err = s.setOwner(ctx, tx, scope, session)
+		moved, err = s.SetOwnerTx(ctx, tx, scope, session)
 		return err
 	})
 	return moved, err
 }
 
-func (s *Store) setOwner(ctx context.Context, tx *sql.Tx, scope, session string) ([]int64, error) {
+// SetOwnerTx is SetOwner in the tool's own transaction.
+func (s *Store) SetOwnerTx(ctx context.Context, tx *sql.Tx, scope, session string) ([]int64, error) {
 	now := ms(s.Now())
 	if _, err := tx.ExecContext(ctx, `INSERT INTO thread_scopes(scope, owner, owned_at) VALUES (?1, ?2, ?3)
 		ON CONFLICT(scope) DO UPDATE SET owner = ?2, owned_at = ?3`, scope, session, now); err != nil {
@@ -136,13 +137,14 @@ func (s *Store) Claim(ctx context.Context, session string, scopes, present []str
 	var d *Delivery
 	err := s.tx(ctx, func(tx *sql.Tx) error {
 		var err error
-		d, err = s.claim(ctx, tx, session, scopes, present)
+		d, err = s.ClaimTx(ctx, tx, session, scopes, present)
 		return err
 	})
 	return d, err
 }
 
-func (s *Store) claim(ctx context.Context, tx *sql.Tx, session string, scopes, present []string) (*Delivery, error) {
+// ClaimTx is Claim in the tool's own transaction.
+func (s *Store) ClaimTx(ctx context.Context, tx *sql.Tx, session string, scopes, present []string) (*Delivery, error) {
 	here, err := jsonList(present)
 	if err != nil {
 		return nil, err
@@ -275,13 +277,14 @@ func (s *Store) Held(ctx context.Context, session, token string) (bool, error) {
 	var marked bool
 	err := s.tx(ctx, func(tx *sql.Tx) error {
 		var err error
-		marked, err = s.held(ctx, tx, session, token)
+		marked, err = s.HeldTx(ctx, tx, session, token)
 		return err
 	})
 	return marked, err
 }
 
-func (s *Store) held(ctx context.Context, tx *sql.Tx, session, token string) (bool, error) {
+// HeldTx is Held in the tool's own transaction.
+func (s *Store) HeldTx(ctx context.Context, tx *sql.Tx, session, token string) (bool, error) {
 	id, err := tokenDelivery(ctx, tx, session, token)
 	if err != nil || id == 0 {
 		return false, err
@@ -302,13 +305,14 @@ func (s *Store) Landed(ctx context.Context, session, token string) ([]int64, err
 	var moved []int64
 	err := s.tx(ctx, func(tx *sql.Tx) error {
 		var err error
-		moved, err = s.landedByToken(ctx, tx, session, token)
+		moved, err = s.LandedTx(ctx, tx, session, token)
 		return err
 	})
 	return moved, err
 }
 
-func (s *Store) landedByToken(ctx context.Context, tx *sql.Tx, session, token string) ([]int64, error) {
+// LandedTx is Landed in the tool's own transaction.
+func (s *Store) LandedTx(ctx context.Context, tx *sql.Tx, session, token string) ([]int64, error) {
 	id, err := tokenDelivery(ctx, tx, session, token)
 	if err != nil || id == 0 {
 		return nil, err
@@ -371,13 +375,14 @@ func (s *Store) TurnEnded(ctx context.Context, session string) ([]Delivery, erro
 	var out []Delivery
 	err := s.tx(ctx, func(tx *sql.Tx) error {
 		var err error
-		out, err = s.turnEnded(ctx, tx, session)
+		out, err = s.TurnEndedTx(ctx, tx, session)
 		return err
 	})
 	return out, err
 }
 
-func (s *Store) turnEnded(ctx context.Context, tx *sql.Tx, session string) ([]Delivery, error) {
+// TurnEndedTx is TurnEnded in the tool's own transaction.
+func (s *Store) TurnEndedTx(ctx context.Context, tx *sql.Tx, session string) ([]Delivery, error) {
 	rows, err := tx.QueryContext(ctx, "SELECT id FROM thread_deliveries WHERE session = ? AND state = 'inflight' AND shown_at != 0 ORDER BY id", session)
 	if err != nil {
 		return nil, err
@@ -447,13 +452,15 @@ func (s *Store) Reply(ctx context.Context, session string, ids []int64, state ms
 	var touched []int64
 	err := s.tx(ctx, func(tx *sql.Tx) error {
 		var err error
-		touched, err = s.reply(ctx, tx, session, ids, state, text, meta)
+		touched, err = s.ReplyTx(ctx, tx, session, ids, state, text, meta)
 		return err
 	})
 	return touched, err
 }
 
-func (s *Store) reply(ctx context.Context, tx *sql.Tx, session string, ids []int64, state msgstate.State, text string, meta json.RawMessage) ([]int64, error) {
+// ReplyTx is Reply in the tool's own transaction. A refusal returns before any
+// write, so the tool may go on to commit.
+func (s *Store) ReplyTx(ctx context.Context, tx *sql.Tx, session string, ids []int64, state msgstate.State, text string, meta json.RawMessage) ([]int64, error) {
 	if state != msgstate.Working && !msgstate.Final(state) {
 		return nil, Refused{Reason: fmt.Sprintf("state %q: want working, answered, declined or failed", state)}
 	}

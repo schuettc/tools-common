@@ -16,13 +16,14 @@ func (s *Store) Draft(ctx context.Context, thread int64, m NewMessage) (Message,
 	var out Message
 	err := s.tx(ctx, func(tx *sql.Tx) error {
 		var err error
-		out, err = s.draft(ctx, tx, thread, m)
+		out, err = s.DraftTx(ctx, tx, thread, m)
 		return err
 	})
 	return out, err
 }
 
-func (s *Store) draft(ctx context.Context, tx *sql.Tx, thread int64, m NewMessage) (Message, error) {
+// DraftTx is Draft in the tool's own transaction.
+func (s *Store) DraftTx(ctx context.Context, tx *sql.Tx, thread int64, m NewMessage) (Message, error) {
 	now := ms(s.Now())
 	scope, err := scopeOf(ctx, tx, thread)
 	if err != nil {
@@ -117,13 +118,14 @@ func (s *Store) SendBatch(ctx context.Context, batch int64) (int, error) {
 	var n int
 	err := s.tx(ctx, func(tx *sql.Tx) error {
 		var err error
-		n, err = s.sendBatch(ctx, tx, batch)
+		n, err = s.SendBatchTx(ctx, tx, batch)
 		return err
 	})
 	return n, err
 }
 
-func (s *Store) sendBatch(ctx context.Context, tx *sql.Tx, batch int64) (int, error) {
+// SendBatchTx is SendBatch in the tool's own transaction.
+func (s *Store) SendBatchTx(ctx context.Context, tx *sql.Tx, batch int64) (int, error) {
 	now := ms(s.Now())
 	res, err := tx.ExecContext(ctx, "UPDATE thread_messages SET state = ?, queued_at = ? WHERE batch_id = ? AND state = 'draft'", msgstate.Sent, now, batch)
 	if err != nil {
