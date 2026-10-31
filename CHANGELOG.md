@@ -4,6 +4,11 @@ Root module releases are tagged `vX.Y.Z`; the separate `sqlitedb` and
 `mermaidkit` modules are tagged `sqlitedb/vX.Y.Z` and `mermaidkit/vX.Y.Z`. Releases before this file are described by their
 tags and PRs.
 
+## 0.39.0
+
+### Added
+- The page kit's bar has `setSectionsShown(shown)`, which shows or hides its section buttons, so one bar can stay on screen across pages that have sections and pages that don't.
+
 ## 0.38.0
 
 ### Added
