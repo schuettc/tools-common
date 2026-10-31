@@ -61,8 +61,8 @@ type Spec struct {
 	// loop only waits.
 	NoPresence bool
 	// PresenceBody is the body of POST /api/agent/presence for id (nil:
-	// {session, harness, label, root}, root left out when the tool has no
-	// project).
+	// {session, harness, label, root, tmux_socket, tmux_pane}, root left out when
+	// the tool has no project and the tmux fields outside tmux).
 	PresenceBody func(id Identity) any
 	// OnServe runs in the wait loop when the serve it reaches is a new
 	// process (its entry's StartedAt changed since the loop last looked),
@@ -83,13 +83,16 @@ type Identity struct {
 	// pi's channels.tools start the channel directly). Sessions in one pi
 	// process share it, which tells a pi-subagents worker from a fork.
 	PID int
+	// Where is where the session runs in tmux, zero outside it: the default
+	// presence carries it, and a tool's own call adds it with Where.Into.
+	Where Where
 }
 
 // FromEnv resolves the session by the family rule (tools-common harness).
 // Session is "" outside a harness.
 func FromEnv() Identity {
 	c := harness.FromEnv()
-	id := Identity{Session: c.SessionID, CWD: c.CWD, Harness: "pi", PID: os.Getppid()}
+	id := Identity{Session: c.SessionID, CWD: c.CWD, Harness: "pi", PID: os.Getppid(), Where: WhereFrom(os.Getenv)}
 	if c.IsClaude() {
 		id.Harness = "claude"
 	}
@@ -292,6 +295,7 @@ func (ch *Channel) Announce(ctx context.Context, c *Client) error {
 		if root := ch.scope(); root != "" {
 			b["root"] = root
 		}
+		ch.ID.Where.Into(b)
 		body = b
 	}
 	_, err := c.Do(ctx, http.MethodPost, "/api/agent/presence", body, nil)
