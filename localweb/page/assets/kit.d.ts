@@ -355,3 +355,56 @@ export interface ShareMenu {
 
 /** Builds button's menu from items, hidden, and makes the button toggle it, right-aligned under it. A pick closes it and calls onPick; an outside click, Escape and a resize close it. */
 export function shareMenu<A extends string>(button: HTMLElement, items: ShareItem<A>[], onPick: (act: A, item: ShareItem<A>) => void): ShareMenu;
+
+// ---- tip.js
+
+/** Makes trigger open tip (a .kit-tip) inside box (a .kit-tip-at): on hover, keyboard focus, Enter or a tap; Esc, leaving by keyboard or a tap elsewhere closes it. when says whether there is anything to show; a press with nothing to show goes to what is under it. */
+export function wireTip(box: HTMLElement, trigger: HTMLElement, tip: HTMLElement, when?: () => boolean): void;
+/** A tip of one plain line. */
+export function lineTip(text: string): HTMLElement;
+
+// ---- frame.js
+
+export interface CollapsibleOptions {
+  col: HTMLElement;
+  body: HTMLElement;
+  /** Names the panel to the reader ("Show the index") and in the key. */
+  panel: string;
+  side: 'left' | 'right';
+  /** The tool's name: the fold is remembered in localStorage["<name>.collapsed.<panel>"]. */
+  name: string;
+  /** Start folded whatever the page remembers, and leave what it remembers alone. */
+  folded?: boolean;
+}
+
+/** Puts a toggle and body in col: the side folds to a thin strip and the page remembers it. */
+export function collapsible(o: CollapsibleOptions): void;
+
+export interface FrameSide {
+  panel: string;
+  /** The column's aria-label. */
+  label: string;
+  folded?: boolean;
+}
+
+export interface FrameOptions {
+  /** The tool's name; see CollapsibleOptions.name. */
+  name: string;
+  left?: FrameSide;
+  centre: { label: string };
+  right?: FrameSide;
+}
+
+export interface Frame {
+  left: HTMLElement | null;
+  /** Where the caller draws the index. */
+  leftBody: HTMLElement | null;
+  /** The centre column, which the caller draws into. */
+  centre: HTMLElement;
+  right: HTMLElement | null;
+  /** Where the caller draws the thread. */
+  rightBody: HTMLElement | null;
+}
+
+/** The three columns of a .kit-app grid; the caller appends left, centre and right after its bar. */
+export function frame(o: FrameOptions): Frame;

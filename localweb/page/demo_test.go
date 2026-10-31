@@ -13,7 +13,7 @@ import (
 func TestDemoLoads(t *testing.T) {
 	srv := httptest.NewServer(http.FileServerFS(With(os.DirFS("."))))
 	defer srv.Close()
-	for _, view := range []string{"attention", "label"} {
+	for _, view := range []string{"attention", "label", "parts"} {
 		dom, err := dumpDOM(t, srv.URL+"/demo/?view="+view)
 		if err != nil {
 			t.Fatal(err)

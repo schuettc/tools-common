@@ -343,3 +343,37 @@ a.kit-brand:hover, a.kit-brand:focus-visible { text-decoration: underline; }
   border: 1px solid var(--kit-line); border-radius: 6px; padding: 6px 10px;
 }
 .kit-note:focus-visible { outline: 1px solid var(--kit-signal); outline-offset: 0; }
+
+/* the frame: index | centre | thread in the app grid; each side folds to a
+   thin strip (frame.js). The toggle stays pinned while its column scrolls, and
+   the left body rises under it. */
+.kit-col { overflow: auto; scrollbar-gutter: stable; }
+.kit-left-col { width: 288px; padding: 0 0 32px; }
+.kit-right-col { width: 384px; }
+.kit-left-col, .kit-right-col { position: relative; transition: width .15s; }
+.kit-mid { padding: 24px 24px 32px; }
+.kit-col-toggle {
+  position: sticky; top: 8px; z-index: 3; display: block;
+  margin: 8px 12px 0 auto; width: 25px; min-height: 25px; padding: 0;
+  border: 1px solid var(--kit-line); border-radius: 6px;
+  background: var(--kit-card); color: var(--kit-muted);
+  font: 14px/1 var(--kit-mono); cursor: pointer;
+}
+.kit-right-col .kit-col-toggle { margin: 8px auto 0 12px; }
+.kit-left-col > .kit-col-body { margin-top: -33px; }
+.kit-col-toggle:hover { color: var(--kit-signal); border-color: var(--kit-signal); }
+.kit-col.kit-collapsed { width: 40px; overflow: hidden; }
+.kit-col.kit-collapsed > .kit-col-body { display: none; }
+.kit-col.kit-collapsed > .kit-col-toggle { margin: 8px auto; }
+
+/* the page's one pop-out (tip.js): fixed, so nothing that scrolls clips it */
+.kit-tip-at { display: inline-flex; }
+.kit-tip {
+  display: none; position: fixed; z-index: 40; pointer-events: none;
+  width: max-content; max-width: min(420px, calc(100vw - 16px));
+  padding: 8px 12px; border-radius: 8px;
+  background: var(--kit-panel); color: var(--kit-fg); border: 1px solid var(--kit-line);
+  box-shadow: 0 6px 20px rgb(0 0 0 / 15%);
+  font: 13px/1.5 var(--kit-sans); white-space: normal;
+}
+.kit-tip-at:hover > .kit-tip, .kit-tip-at.show > .kit-tip { display: block; }

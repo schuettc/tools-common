@@ -168,3 +168,4 @@ func TestJSSheet(t *testing.T)     { runBrowser(t, "sheet") }
 func TestJSSearch(t *testing.T)    { runBrowser(t, "search") }
 func TestJSShare(t *testing.T)     { runBrowser(t, "share") }
 func TestJSEnter(t *testing.T)     { runBrowser(t, "enter") }
+func TestJSFrame(t *testing.T)     { runBrowser(t, "frame") }
