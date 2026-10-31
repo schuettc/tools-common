@@ -36,6 +36,17 @@ var harnesses = []harness{
 	{Name: "pi", Label: "pi", Home: ".pi/agent", Env: "PI_CODING_AGENT_DIR"},
 }
 
+// UserTargets returns a fresh map of canonical harness names to portable default
+// user skills-directory templates. Unlike Install, it does not expand HOME or
+// environment overrides: these destinations are suitable for published setup.
+func UserTargets() map[string]string {
+	targets := make(map[string]string, len(harnesses))
+	for _, h := range harnesses {
+		targets[h.Name] = "~/" + h.Home + "/skills"
+	}
+	return targets
+}
+
 // dir is the harness's home directory.
 func (h harness) dir() (string, error) {
 	if v := os.Getenv(h.Env); filepath.IsAbs(v) {
