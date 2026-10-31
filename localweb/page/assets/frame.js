@@ -41,20 +41,28 @@ function side(name, which, cls, o, onPress) {
 // optional; centre is { label }. The caller draws into leftBody, centre and
 // rightBody, and appends left, centre and right to its grid. setRightEmpty(empty,
 // card) tells it whether the thread of the card in front of the reader (its id)
-// has messages: an empty one folds, and its first message opens it. A press on
-// the toggle wins until the card changes, and is kept beside the fold, so a
-// reload on that card holds it too.
+// has messages: an empty one folds, and its first message opens it. The id must
+// be unique across the tool (e.g. `${folder}/${card}`). A press on the toggle wins
+// until the card changes. The tab holds it; it is also kept beside the fold, read
+// only on the first call, so a reload on that card holds it and a tab on another
+// card can't undo it.
 export function frame({ name, left, centre, right }) {
   const [l, leftBody] = side(name, 'left', 'kit-list', left);
   const pressedOn = `${name}.collapsed.${right ? right.panel : ''}.card`;
   let shown = '';
-  const [r, rightBody, foldRight] = side(name, 'right', 'kit-rail', right, () => localStorage.setItem(pressedOn, shown));
+  let pressed; // the card this tab's press holds on, null for none; undefined before the first call
+  const [r, rightBody, foldRight] = side(name, 'right', 'kit-rail', right, () => {
+    pressed = shown;
+    localStorage.setItem(pressedOn, shown);
+  });
   const mid = h('main', { class: 'kit-read kit-col kit-mid', 'aria-label': centre.label });
   const setRightEmpty = (empty, card = '') => {
     if (!r) return;
     shown = card;
-    if (localStorage.getItem(pressedOn) === card) return;
-    localStorage.removeItem(pressedOn);
+    if (pressed === undefined) pressed = localStorage.getItem(pressedOn) === card ? card : null;
+    if (pressed === card) return;
+    if (pressed !== null && localStorage.getItem(pressedOn) === pressed) localStorage.removeItem(pressedOn);
+    pressed = null;
     foldRight(empty);
   };
   return { left: l, leftBody, centre: mid, right: r, rightBody, setRightEmpty };

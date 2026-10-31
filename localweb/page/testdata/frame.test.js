@@ -116,6 +116,21 @@ test('frame: a press holds over a reload on its card, and not on another', () =>
   assert(!other.right.classList.contains('kit-collapsed'), 'another card takes the rule');
 });
 
+test('frame: a tab on another card leaves a press alone', () => {
+  clean();
+  const here = frame(parts());
+  const there = frame(parts());
+  here.setRightEmpty(false, 'plan-a/F1');
+  there.setRightEmpty(false, 'plan-b/F1');
+  here.right.firstChild.click();
+  there.setRightEmpty(false, 'plan-b/F1');
+  here.setRightEmpty(false, 'plan-a/F1');
+  assert(here.right.classList.contains('kit-collapsed'), 'the press holds in its tab');
+  const reloaded = frame(parts());
+  reloaded.setRightEmpty(false, 'plan-a/F1');
+  assert(reloaded.right.classList.contains('kit-collapsed'), 'and over a reload on its card');
+});
+
 test('frame: the empty rule does nothing to a page with no thread', () => {
   clean();
   frame(parts({ right: undefined })).setRightEmpty(true, 'F1');

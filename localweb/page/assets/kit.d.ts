@@ -410,7 +410,7 @@ export interface Frame {
   right: HTMLElement | null;
   /** Where the caller draws the thread. */
   rightBody: HTMLElement | null;
-  /** Says whether the thread of card (its id) has no messages: an empty one folds to its strip and its first message opens it. A press on the toggle wins until the card changes, over a reload too. */
+  /** Says whether the thread of card has no messages: an empty one folds to its strip and its first message opens it. card is an id unique across the tool, e.g. `${folder}/${card}`. A press on the toggle wins until the card changes, over a reload too. */
   setRightEmpty(empty: boolean, card?: string): void;
 }
 
