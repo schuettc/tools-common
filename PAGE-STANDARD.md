@@ -16,6 +16,7 @@ Every server gets these from `pageserve.Run` with no code of its own. `conforman
 | It reuses an open tab rather than opening another. | `pageserve.Run` makes `localweb.Tabs`, keeps them in `StateDir/tabs.json` and wires them to `Events`. `Options.Tabs` hands the list to the tool, which asks it with `Tabs.Pick`. | this release |
 | Open pages notice a new serve. | `pageserve.BuildHeader` (`X-Tool-Build`) on every API response, read by `createApi`'s `onNewBuild`. `live`'s `onNewBuild` hears the `stale` event, which comes while serve is still the old build: say a newer build is installed, but don't reload then, since a reload brings back the same page (diazo re-reads its view). Reload on the header's change. | this release |
 | Every server with a channel ships a skill. | `pageserve.SkillsCommand` | already released |
+| A channel is the shared one: `<tool> channel` from `pageserve.Commands`, with `Around` for anything the tool does around it, `--scope` for the session's folder, and `Spec.Scope` to name a root without gating the loop. | `pageserve.Commands.ChannelCommand` | 0.44.0 |
 
 A tool with `Options.Stream` answers `/api/events` itself, so it must put the `stale` event on its own stream. `/api/poll` always carries it.
 
@@ -32,6 +33,8 @@ Every page takes these from the kit, `localweb/page`. Page shape has no test: it
 | The fixed card header. | `card`, through its `head` | already released |
 | The stage track, whose stages are the tool's own. | `stageTrack` | needs adopting from 0.41.0 |
 | Drafts that go out together on Send. | `createDrafts`, `sendBar` | needs adopting from 0.41.0 |
+| A switcher in the top bar lists the tool's other pages, kept current. | `bar`'s `setElsewhere`, kept by `keepElsewhere(bar, read)` | 0.44.0 |
+| A front page lists the tool's pages with filters, status pills and folding groups. | `filterRow`, `statusPills`, `groupList` | 0.44.0 |
 | The message states. | `msgstate`, in Go and in the kit | already released |
 | Messages, Sends and who gets them follow one delivery rule: a Send goes whole, a session can hold several, the owner belongs to the scope and a takeover brings its unanswered messages, and a reply settles all or none. | `threadstore` (`threadstore/v0.1.0`), and `msgstate.Message` on the wire. A page keeping its messages elsewhere (diazo's `decisions.json`, galley's review) follows the same rule. | this release |
 
@@ -51,7 +54,7 @@ Server rules:
 
 | Server (tools-common pin) | No idle exit | Kept token | Stale mark | Tab reuse | Build header | Skill |
 |---|---|---|---|---|---|---|
-| diazo 0.47.0 (0.35.0) | conforms | own `keptToken` | own `watchBinary` and `Fresh` calls | own `Tabs` setup | own `X-Diazo-Version` | conforms |
+| diazo 0.49.0 (0.42.0) | conforms | conforms | conforms | conforms | conforms | conforms |
 | sift, in tackle (0.40.0) | `Idle: 8h` | new each start | none | none | none | conforms |
 | cull, in tackle (0.40.0) | `Idle: 8h` | new each start | none | none | none | no skills command |
 | casebook 0.24.0 (0.33.0) | `Idle: 8h`, `Busy` | new each start | none | none, counts its own streams | none | no skills command |

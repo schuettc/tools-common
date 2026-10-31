@@ -13,7 +13,7 @@ import (
 )
 
 // manifest is every file the kit ships; each task that adds an asset adds it here.
-var manifest = []string{"kit.css", "kit.js", "kit.d.ts", "boot.js", "theme.js", "keys.js", "api.js", "live.js", "dom.js", "selection.js", "sheet.js", "share.js", "share.css", "msgstate.js", "tip.js", "frame.js", "index.js", "thread.js", "track.js", "drafts.js"}
+var manifest = []string{"kit.css", "kit.js", "kit.d.ts", "boot.js", "theme.js", "keys.js", "api.js", "live.js", "dom.js", "selection.js", "sheet.js", "share.js", "share.css", "msgstate.js", "tip.js", "frame.js", "index.js", "thread.js", "track.js", "drafts.js", "elsewhere.js", "frontpage.js"}
 
 func TestFSEmbedsAssets(t *testing.T) {
 	for _, name := range manifest {

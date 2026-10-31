@@ -379,10 +379,12 @@ export interface CollapsibleOptions {
   name: string;
   /** Start folded whatever the page remembers, and leave what it remembers alone. */
   folded?: boolean;
+  /** Hears each press of the toggle. */
+  onPress?(): void;
 }
 
-/** Puts a toggle and body in col: the side folds to a thin strip and the page remembers it. */
-export function collapsible(o: CollapsibleOptions): void;
+/** Puts a toggle and body in col: the side folds to a thin strip and the page remembers it. Returns a function that folds or opens the side without remembering it. */
+export function collapsible(o: CollapsibleOptions): (folded: boolean) => void;
 
 export interface FrameSide {
   panel: string;
@@ -408,6 +410,8 @@ export interface Frame {
   right: HTMLElement | null;
   /** Where the caller draws the thread. */
   rightBody: HTMLElement | null;
+  /** Says whether the thread of card has no messages: an empty one folds to its strip and its first message opens it. card is an id unique across the tool, e.g. `${folder}/${card}`. A press on the toggle wins until the card changes, over a reload too. */
+  setRightEmpty(empty: boolean, card?: string): void;
 }
 
 /** The three columns of a .kit-app grid; the caller appends left, centre and right after its bar. */
@@ -614,3 +618,37 @@ export interface SendBarOptions {
 
 /** The bar at the foot of a page of drafts. */
 export function sendBar(o: SendBarOptions): HTMLElement;
+
+// ---- elsewhere.js
+
+/** The call to make whenever the bar's "also open" list may have changed. Each runs read() for the items and sets the bar only when they changed (their onClick aside), so an open list stays open. A call during a read reads once more after it, never twice at once; a failed read leaves the list as it was. */
+export function keepElsewhere(bar: Pick<BarHandle, 'setElsewhere'>, read: () => Promise<ElsewhereItem[]> | ElsewhereItem[]): () => Promise<void>;
+
+// ---- frontpage.js
+
+/** A value to filter by, with how many it holds. */
+export interface FilterItem {
+  value: string;
+  label: string;
+  count: number;
+}
+
+/** A section of the left column: All with the total, then one row per item with its count. Several can be chosen; All is on when none is. onToggle hears the value pressed, '' for All. */
+export function filterRow(o: { label: string; items: FilterItem[]; chosen: string[]; onToggle(value: string): void }): HTMLElement;
+
+/** The status pills, drawn as a stage track with no arrows, since statuses aren't a sequence. A pill with no count is hidden unless chosen. The value '' is the tool's All, on when none is chosen. onToggle hears the value pressed. */
+export function statusPills(o: { pills: FilterItem[]; chosen: string[]; onToggle(value: string): void; label?: string }): HTMLElement;
+
+export interface ListGroup {
+  key: string;
+  title: string;
+  /** The group's rows, each an <li>. */
+  rows: HTMLElement[];
+  /** The line shown when it has no rows. */
+  empty: string;
+  /** The edge of a group that needs you. */
+  edge?: 'signal' | 'agent' | 'wait';
+}
+
+/** Named groups of rows, each a card that folds in place. folded holds the keys that start folded; onFold hears each press with the key and whether it is now folded. The tool decides which groups to pass, and keeps what it hears for its next draw. */
+export function groupList(o: { groups: ListGroup[]; folded: string[]; onFold(key: string, folded: boolean): void }): HTMLElement;

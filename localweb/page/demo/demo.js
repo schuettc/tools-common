@@ -1,4 +1,4 @@
-import { h, bar, list, facts, card, buttons, codeBlock, fold, noteField, messagePill, MESSAGE_STATES, createKeys, initTheme, frame, lineTip, wireTip, indexRow, indexSection, thread, stageTrack, workingLine, waitBadges, createDrafts, questionButton, QUESTIONS, sendBar } from '/_kit/kit.js';
+import { h, bar, list, facts, card, buttons, codeBlock, fold, noteField, messagePill, MESSAGE_STATES, createKeys, initTheme, frame, lineTip, wireTip, indexRow, indexSection, thread, stageTrack, workingLine, waitBadges, createDrafts, questionButton, QUESTIONS, sendBar, keepElsewhere, filterRow, statusPills, groupList } from '/_kit/kit.js';
 
 const MARK = `<svg viewBox="0 0 64 64"><rect width="64" height="64" rx="14" fill="#14161d"/><path d="M13 22H28M13 32H26M13 42H28" stroke="#9aa0ab" stroke-width="3.6" stroke-linecap="round"/><path d="M13 22H28" stroke="#d98f66" stroke-width="3.6" stroke-linecap="round"/><path d="M33 17V47" stroke="#d98f66" stroke-width="2.4"/><rect x="38" y="18" width="14" height="28" rx="3" fill="none" stroke="#d98f66" stroke-width="2.4"/></svg>`;
 const mark = () => {
@@ -160,6 +160,13 @@ function parts() {
   const box = h('span', { class: 'kit-tip-at' }, more, tip);
   wireTip(box, more, tip);
   f.centre.append(h('div', { class: 'kit-label' }, 'frame and tip'), box);
+  f.setRightEmpty(false, 'F2');
+  f.centre.append(
+    h('div', { class: 'kit-label' }, 'the thread folds when its card has no messages'),
+    buttons([
+      { label: 'a card with no messages', run: () => f.setRightEmpty(true, 'F3') },
+      { label: 'a card with messages', run: () => f.setRightEmpty(false, 'F2') },
+    ]));
   f.centre.append(
     h('div', { class: 'kit-label' }, 'stage track'),
     workingLine({ text: 'Reading the last ten builds', slot: true }),
@@ -208,7 +215,47 @@ function parts() {
       indexRow({ id: 'F4', title: 'Waiting on another finding', meta: 'waiting on F1', waits: true, select }),
     ] }),
     indexSection({ name: 'Later', rows: [], empty: 'Nothing for later.' }));
+  frontPage(f);
   return f;
+}
+
+// Which ones are chosen is the tool's own, and so is the redraw after a press.
+function frontPage(f) {
+  const slot = h('div');
+  const left = h('div');
+  let projects = [];
+  let statuses = [];
+  const folded = ['built'];
+  const toggled = (on, v) => (!v ? [] : on.includes(v) ? on.filter(x => x !== v) : [...on, v]);
+  const line = text => h('li', { class: 'kit-row' }, h('span', { class: 'kit-title' }, text));
+  const draw = () => {
+    left.replaceChildren(filterRow({
+      label: 'Projects',
+      items: [{ value: 'diazo', label: 'diazo', count: 3 }, { value: 'sift', label: 'sift', count: 1 }],
+      chosen: projects,
+      onToggle: v => { projects = toggled(projects, v); draw(); },
+    }));
+    slot.replaceChildren(
+      statusPills({
+        pills: [{ value: '', label: 'All', count: 4 }, { value: 'needs', label: 'Needs you', count: 1 }, { value: 'built', label: 'Built', count: 3 }, { value: 'parked', label: 'Parked', count: 0 }],
+        chosen: statuses,
+        onToggle: v => { statuses = toggled(statuses, v); draw(); },
+      }),
+      groupList({
+        groups: [
+          { key: 'needs', title: 'Needs you', edge: 'signal', rows: [line('Cache misses on every build')], empty: 'Nothing is waiting on you.' },
+          { key: 'waiting', title: 'Waiting', rows: [], empty: 'Nothing is waiting on anyone.' },
+          { key: 'built', title: 'Built', rows: [line('The server standard'), line('The shared store'), line('The page parts')], empty: 'Nothing is built yet.' },
+        ],
+        folded,
+        onFold(key, on) {
+          folded.splice(0, folded.length, ...folded.filter(k => k !== key), ...(on ? [key] : []));
+        },
+      }));
+  };
+  draw();
+  f.leftBody.append(left);
+  f.centre.append(h('div', { class: 'kit-label' }, 'the front page: filter rows, status pills and groups that fold'), slot);
 }
 
 // ------------------------------------------------------------------- the page
@@ -227,11 +274,12 @@ const forced = new URLSearchParams(location.search).get('theme');
 if (forced) theme.set(forced); // screenshots: ?theme=light|dark
 b.setLive('live');
 // The "also open" button: other work a click away, listed when pressed.
-b.setElsewhere([
+// keepElsewhere calls this whenever the list may have changed.
+keepElsewhere(b, () => [
   { label: 'muster: unanswered requests', detail: 'needs you · Decisions', tone: 'you', onClick() {} },
   { label: 'Claude Code mods for channels', detail: 'working · Spec', tone: 'working', onClick() {} },
   { label: 'casebook triage', detail: 'idle · Plan', onClick() {} },
-]);
+])();
 if (view === 'parts') {
   // The three columns: ?view=parts.
   app.className = 'kit-app';

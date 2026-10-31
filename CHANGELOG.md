@@ -4,6 +4,13 @@ Root module releases are tagged `vX.Y.Z`; the separate `sqlitedb` and
 `mermaidkit` modules are tagged `sqlitedb/vX.Y.Z` and `mermaidkit/vX.Y.Z`. Releases before this file are described by their
 tags and PRs.
 
+## 0.44.0
+
+### Added
+- The page kit's front page and switcher parts, from diazo's: `keepElsewhere(bar, read)` keeps the bar's switcher current (one read at a time, the bar set only on a change), and `filterRow`, `statusPills` and `groupList` draw a front page's filters, status pills with counts and folding groups from plain values.
+- `frame`'s `setRightEmpty(empty, card)`: the thread column folds to its strip when its card has no messages and opens on the first one. A fold Court makes holds on that card, in that tab, until the card changes; the card id must be unique across the tool.
+- `pageserve.Commands.Around` wraps the channel's run, the channel command takes `--scope <dir>`, and `Spec.Scope` names the wait's root without gating the loop. After a torn poll the loop finds a new serve within moments, then looks once per `Retry`.
+
 ## 0.43.0
 
 ### Added
