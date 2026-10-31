@@ -18,5 +18,6 @@ export * from './tabs.js';
 export * from './thread.js';
 export * from './track.js';
 export * from './drafts.js';
+export * from './draftlist.js';
 export * from './elsewhere.js';
 export * from './frontpage.js';

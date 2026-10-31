@@ -1,4 +1,4 @@
-import { h, bar, list, facts, card, buttons, codeBlock, fold, noteField, messagePill, MESSAGE_STATES, createKeys, initTheme, frame, lineTip, wireTip, indexRow, indexSection, thread, railTabs, stageTrack, workingLine, waitBadges, createDrafts, questionButton, QUESTIONS, sendBar, keepElsewhere, filterRow, statusPills, groupList } from '/_kit/kit.js';
+import { h, bar, list, facts, card, buttons, codeBlock, fold, noteField, messagePill, MESSAGE_STATES, createKeys, initTheme, frame, lineTip, wireTip, indexRow, indexSection, thread, railTabs, draftList, stageTrack, workingLine, waitBadges, createDrafts, questionButton, QUESTIONS, sendBar, keepElsewhere, filterRow, statusPills, groupList } from '/_kit/kit.js';
 
 const MARK = `<svg viewBox="0 0 64 64"><rect width="64" height="64" rx="14" fill="#14161d"/><path d="M13 22H28M13 32H26M13 42H28" stroke="#9aa0ab" stroke-width="3.6" stroke-linecap="round"/><path d="M13 22H28" stroke="#d98f66" stroke-width="3.6" stroke-linecap="round"/><path d="M33 17V47" stroke="#d98f66" stroke-width="2.4"/><rect x="38" y="18" width="14" height="28" rx="3" fill="none" stroke="#d98f66" stroke-width="2.4"/></svg>`;
 const mark = () => {
@@ -197,7 +197,7 @@ function parts(tabbed) {
     ],
     note: { el: note.el, box: note.box, send() {} },
   });
-  f.rightBody.append(tabbed ? tabsDemo(chat).el : chat);
+  f.rightBody.append(tabbed ? tabsDemo(f, chat).el : chat);
   f.centre.append(
     h('div', { class: 'kit-label' }, 'questions, drafts and Send'),
     buttons([
@@ -220,16 +220,40 @@ function parts(tabbed) {
   return f;
 }
 
-// ?view=tabs: the right column with tabs, the thread in one of them.
-function tabsDemo(chat) {
-  return railTabs({
+// ?view=tabs: the right column with tabs, the thread in one and the drafts in
+// the other. Where the drafts live, and what a press shows, are the tool's own.
+function tabsDemo(f, chat) {
+  let drafts = [
+    { id: 'd1', quote: '“Deleted records are purged weekly”', text: 'Is weekly right? Legal said 72 hours.', meta: 'draft · goes with the next Send' },
+    { id: 'd2', quote: '“open it to everyone in March”', text: 'Drop the month; we have no date yet.', meta: 'draft · goes with the next Send' },
+  ];
+  const shows = h('p', { class: 'kit-empty' }, 'Press a draft to show its item here.');
+  const slot = h('div');
+  const t = railTabs({
     name: 'kitdemo',
     open: 'drafts',
     tabs: [
-      { id: 'drafts', label: 'Drafts', count: 0, body: h('p', { class: 'kit-empty' }, 'Nothing drafted yet.') },
+      { id: 'drafts', label: 'Drafts', count: drafts.length, body: slot },
       { id: 'chat', label: 'Chat', count: 2, body: chat },
     ],
   });
+  const draw = selected => {
+    slot.replaceChildren(draftList({
+      drafts,
+      selected,
+      empty: 'Nothing drafted yet.',
+      onEdit(id, text) { drafts = drafts.map(d => (d.id === id ? { ...d, text } : d)); },
+      onDelete(id) {
+        drafts = drafts.filter(d => d.id !== id);
+        t.setCount('drafts', drafts.length);
+        draw(selected);
+      },
+      onSelect(id) { shows.textContent = `Showing ${drafts.find(d => d.id === id).quote}`; },
+    }));
+  };
+  draw('d1');
+  f.centre.prepend(h('div', { class: 'kit-label' }, 'the item a draft is on'), shows);
+  return t;
 }
 
 // Which ones are chosen is the tool's own, and so is the redraw after a press.

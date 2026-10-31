@@ -659,6 +659,33 @@ export interface SendBarOptions {
 /** The bar at the foot of a page of drafts. */
 export function sendBar(o: SendBarOptions): HTMLElement;
 
+// ---- draftlist.js
+
+export interface DraftListItem {
+  id: string;
+  /** The item the draft is on, drawn as given. */
+  quote: string;
+  /** The draft's words. */
+  text: string;
+  /** A line under the words. */
+  meta?: string;
+}
+
+export interface DraftCallbacks {
+  /** Hears the new words on blur or Enter, when they changed. The row already shows them, so it needn't redraw: a redraw here can lose the press that took the focus away. */
+  onEdit?(id: string, text: string): void;
+  /** Hears delete. Unsaved words go with the draft. The tool removes the row. */
+  onDelete?(id: string): void;
+  /** Hears a press on the row, or the focus moving into its box: show the item. The row marks itself, so it needn't redraw. */
+  onSelect?(id: string): void;
+}
+
+/** One draft's row, an <li>. */
+export function draftRow(o: DraftCallbacks & { draft: DraftListItem; on?: boolean }): HTMLElement;
+
+/** The drafts list, for a tab of the right column. The tool stores the drafts; don't redraw while a box has the focus, since unsaved words go with the old box. */
+export function draftList(o: DraftCallbacks & { drafts: DraftListItem[]; empty: string; selected?: string }): HTMLElement;
+
 // ---- elsewhere.js
 
 /** The call to make whenever the bar's "also open" list may have changed. Each runs read() for the items and sets the bar only when they changed (their onClick aside), so an open list stays open. A call during a read reads once more after it, never twice at once; a failed read leaves the list as it was. */
