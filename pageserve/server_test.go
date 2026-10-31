@@ -211,6 +211,60 @@ func TestStopRefusesTheCookieAlone(t *testing.T) {
 	wait(t, r)
 }
 
+// A restart can't overlap the old serve's shutdown: while OnStop runs the server
+// takes no requests and its entry is still there, so a second serve won't start,
+// and once the entry is gone it does.
+func TestShutdownFinishesBeforeTheEntryGoes(t *testing.T) {
+	t.Setenv("CULL_HOME", t.TempDir())
+	live := LiveFor("cull")
+	stopping, finish := make(chan error, 1), make(chan struct{})
+	var deadline bool
+	r := runHere(t, Options{OnStop: func(ctx context.Context) {
+		_, deadline = ctx.Deadline()
+		_, err := live.Running()
+		stopping <- err
+		<-finish
+	}})
+	e, _ := live.Running()
+	req, _ := http.NewRequest(http.MethodPost, e.Base+"/api/stop", strings.NewReader("{}"))
+	req.Header.Set(localweb.TokenHeader, e.Token)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = resp.Body.Close()
+	select {
+	case err := <-stopping:
+		if err != nil {
+			t.Fatalf("the entry went before OnStop: %v", err)
+		}
+	case <-time.After(5 * time.Second):
+		close(finish)
+		t.Fatal("OnStop never ran")
+	}
+	if resp, err := http.Get(e.Base + "/api/poll"); err == nil {
+		_ = resp.Body.Close()
+		t.Error("the server still takes requests during OnStop")
+	}
+	if err := Run(context.Background(), Options{Live: live}); err == nil || !strings.Contains(err.Error(), "already running") {
+		t.Errorf("a second serve during OnStop: %v", err)
+	}
+	close(finish)
+	wait(t, r)
+	if !deadline {
+		t.Error("OnStop's context has no deadline")
+	}
+	if _, err := live.Running(); !errors.Is(err, ErrNotRunning) {
+		t.Fatalf("the entry stayed: %v", err)
+	}
+	second := runHere(t, Options{})
+	if _, err := live.Running(); err != nil {
+		t.Fatalf("no second serve: %v", err)
+	}
+	_ = Stop(context.Background(), live)
+	wait(t, second)
+}
+
 func TestAPIRequiresToken(t *testing.T) {
 	r := startRun(t, Options{})
 	e, _ := LiveFor("cull").Running()

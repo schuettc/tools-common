@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -262,4 +263,42 @@ func TestFreshRacingChannelsStopOnce(t *testing.T) {
 	if stops != 1 {
 		t.Fatalf("stopped %d times, want 1", stops)
 	}
+}
+
+// Replacing a stale serve waits out its shutdown: the new one starts only once
+// the old one has finished and its entry has gone.
+func TestFreshStartsTheNewServeAfterTheOldOneShutsDown(t *testing.T) {
+	t.Setenv("CULL_HOME", t.TempDir())
+	live := LiveFor("cull")
+	var finished atomic.Bool
+	r := runHere(t, Options{OnStop: func(context.Context) {
+		time.Sleep(300 * time.Millisecond)
+		finished.Store(true)
+	}})
+	e, err := live.Running()
+	if err != nil {
+		t.Fatal(err)
+	}
+	e.Stale = true
+	if err := live.Advertise(e); err != nil {
+		t.Fatal(err)
+	}
+	started := false
+	c := NewClient(live, func() (Entry, error) {
+		started = true
+		if !finished.Load() {
+			t.Error("the new serve started during the old one's shutdown")
+		}
+		if _, err := live.Running(); !errors.Is(err, ErrNotRunning) {
+			t.Errorf("the old entry was there: %v", err)
+		}
+		return Entry{}, nil
+	})
+	if err := c.Fresh(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if !started {
+		t.Fatal("no new serve")
+	}
+	wait(t, r)
 }
