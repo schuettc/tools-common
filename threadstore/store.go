@@ -34,6 +34,9 @@ type Store struct {
 	// PresenceTTL overrides how long Claim leaves a delivery with a claimer that
 	// isn't present. Zero means use DefaultPresenceTTL.
 	PresenceTTL time.Duration
+	// StuckAfter overrides when a delivery in flight counts as stuck. Zero means
+	// use DefaultStuckAfter.
+	StuckAfter time.Duration
 }
 
 // New returns a store over d, whose steps include Migrations.

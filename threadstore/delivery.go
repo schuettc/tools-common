@@ -39,6 +39,8 @@ type Delivery struct {
 	FinishedAt time.Time
 	// ShownAt is when it reached the agent; zero until then.
 	ShownAt time.Time
+	// Stuck: in flight and untouched for StuckAfter.
+	Stuck bool
 	// Held: the harness reported it held, the agent mid-turn, and it has not
 	// landed since.
 	Held     bool
@@ -150,6 +152,7 @@ func (s *Store) Delivery(ctx context.Context, id int64) (Delivery, error) {
 		return d, err
 	}
 	d.SentAt, d.TouchedAt, d.FinishedAt, d.ShownAt = tm(sent), tm(touched), tm(fin), tm(shown)
+	d.Stuck = d.State == InFlight && s.Now().Sub(d.TouchedAt) > s.stuckAfter()
 	d.Messages, err = messages(ctx, s.DB, "delivery_id = ? ORDER BY queued_at, COALESCE(batch_id, 0), batch_pos, id", id)
 	return d, err
 }
