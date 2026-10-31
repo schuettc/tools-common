@@ -4,6 +4,12 @@ Root module releases are tagged `vX.Y.Z`; the separate `sqlitedb` and
 `mermaidkit` modules are tagged `sqlitedb/vX.Y.Z` and `mermaidkit/vX.Y.Z`. Releases before this file are described by their
 tags and PRs.
 
+## 0.38.0
+
+### Added
+- `setupbundle.Source` and `BundleCommand` provide the shared build-only `setup-bundle --version X.Y.Z --out PATH` command. Producers supply canonical declaration bytes and a scoped filesystem; nil assets mean an intentionally empty bundle filesystem, not a fallback to local files.
+- `skills.UserTargets()` returns portable default user skill destinations from the same harness table the direct installer uses, without reading HOME or environment overrides.
+
 ## 0.37.0
 
 ### Added
