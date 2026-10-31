@@ -4,6 +4,20 @@ Root module releases are tagged `vX.Y.Z`; the separate `sqlitedb` and
 `mermaidkit` modules are tagged `sqlitedb/vX.Y.Z` and `mermaidkit/vX.Y.Z`. Releases before this file are described by their
 tags and PRs.
 
+## 0.46.0
+
+### Added
+- `pageserve.Show(where, url, events, page)` puts a page in the session's own Chrome window beside its terminal when it has one, and otherwise reuses or opens a tab, answering `window`, `reused` or `opened`; `TerminalOf`, `TerminalGo` and `Window` run `proj terminal` and `proj window` for a session's tmux location (`Where`). The channel sends `Identity.Where`; a tool's open call adds it with `Where.Into(body)`. Moved from diazo.
+- `Options.OnStop(ctx)`: the tool's own shutdown, run after running requests have finished and before the entry is withdrawn, so a restart never overlaps a serve still writing. Requests and `OnStop` together are bounded at 4.5 s; past that `Run` logs it and exits.
+- `Commands.SkillName` and `conformance.Server.SkillName`, for a skill not named after its tool (galley's `reviewing-a-document`).
+
+### Changed
+- `POST /api/stop` takes only the `X-Local-Token` header: a request carrying the token as a cookie alone is refused with 403, so a page served by the tool can't stop it. `conformance.Check` tests this.
+- `localweb`'s `Wait` returns once running requests have finished, up to 2 s, rather than when the listener closes.
+
+### Fixed
+- The frame (`collapsible`, `frame`) draws where `localStorage` throws, such as a sandboxed mockup frame, and remembers nothing there.
+
 ## 0.45.1
 
 ### Fixed
