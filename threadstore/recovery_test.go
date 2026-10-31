@@ -171,7 +171,7 @@ func TestResendTakesOnlyNoReplyBackToSent(t *testing.T) {
 		t.Fatalf("m1 %s", got)
 	}
 	d2 := claim(t, s, "s1", "s1")
-	if d2 == nil || !sameIDs(ids(d2.Messages), []int64{m2.ID}) || d2.BatchID == m2.BatchID {
+	if d2 == nil || !sameIDs(ids(d2.Messages), []int64{m2.ID}) || d2.BatchID != m2.BatchID {
 		t.Fatalf("delivery %+v", d2)
 	}
 }
@@ -188,5 +188,39 @@ func TestResendGoesToTheOwnerNow(t *testing.T) {
 	setOwner(t, s, "group:x", "s2")
 	if got := claim(t, s, "s2", "s1", "s2"); got == nil || got.Messages[0].ID != m.ID {
 		t.Fatalf("delivery %+v", got)
+	}
+}
+
+// A resend retries delivery; the Send still lists everything Court sent, and a
+// reply stays attributed to it.
+func TestResendKeepsTheOriginalSend(t *testing.T) {
+	s, _ := newStore(t)
+	_, m1, m2 := sendTwo(t, s, "group:x")
+	d := claim(t, s, "s1", "s1")
+	if err := s.Release(ctx, d.ID); err != nil {
+		t.Fatal(err)
+	}
+	if n, err := s.Resend(ctx, []int64{m1.ID, m2.ID}); err != nil || n != 2 {
+		t.Fatalf("resend %d %v", n, err)
+	}
+	if n, err := s.SendCount(ctx, "group:x"); err != nil || n != 1 {
+		t.Fatalf("sends %d %v", n, err)
+	}
+	d2 := claim(t, s, "s1", "s1")
+	if d2 == nil || d2.ID == d.ID || d2.BatchID != d.BatchID || !sameIDs(ids(d2.Messages), []int64{m1.ID, m2.ID}) {
+		t.Fatalf("delivery %+v", d2)
+	}
+	if _, err := s.Reply(ctx, "s1", []int64{m2.ID}, msgstate.Answered, "done", nil); err != nil {
+		t.Fatal(err)
+	}
+	b, err := s.Batch(ctx, d.BatchID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !sameIDs(ids(b.Messages), []int64{m1.ID, m2.ID}) {
+		t.Fatalf("the Send lists %v", ids(b.Messages))
+	}
+	if len(b.Replies) != 1 || b.Replies[0].ReplyTo != m2.ID {
+		t.Fatalf("replies %+v", b.Replies)
 	}
 }

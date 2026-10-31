@@ -155,14 +155,15 @@ func (s *Store) Interrupt(ctx context.Context) ([]Interruption, error) {
 }
 
 // Resend takes no_reply messages back to sent, the one move msgstate.Allowed
-// draws for them: a new Send for each scope among them, to its owner now. Any
-// other message is left as it is. It returns how many went.
+// draws for them: delivery is tried again, by a new delivery of the same Send,
+// to its scope's owner now. Each message stays in its Send, so the Send still
+// lists what Court sent and a reply stays attributed to it. Any other message is
+// left as it is. It returns how many went.
 func (s *Store) Resend(ctx context.Context, ids []int64) (int, error) {
 	now := ms(s.Now())
 	n := 0
 	err := s.tx(ctx, func(tx *sql.Tx) error {
 		n = 0
-		batches := map[string]int64{}
 		for _, id := range ids {
 			m, err := message(ctx, tx, id)
 			if errors.Is(err, ErrNotFound) || err == nil && !msgstate.Allowed(m.State, msgstate.Sent) {
@@ -171,20 +172,9 @@ func (s *Store) Resend(ctx context.Context, ids []int64) (int, error) {
 			if err != nil {
 				return err
 			}
-			scope, err := scopeOf(ctx, tx, m.ThreadID)
-			if err != nil {
-				return err
-			}
-			batch, ok := batches[scope]
-			if !ok {
-				if batch, err = sentBatch(ctx, tx, scope, now); err != nil {
-					return err
-				}
-				batches[scope] = batch
-			}
 			n++
-			if _, err := tx.ExecContext(ctx, `UPDATE thread_messages SET state = ?, batch_id = ?, batch_pos = ?, delivery_id = NULL, queued_at = ?, settled_at = 0, line = ''
-				WHERE id = ?`, msgstate.Sent, batch, n, now, id); err != nil {
+			if _, err := tx.ExecContext(ctx, `UPDATE thread_messages SET state = ?, delivery_id = NULL, queued_at = ?, settled_at = 0, line = ''
+				WHERE id = ?`, msgstate.Sent, now, id); err != nil {
 				return err
 			}
 		}
