@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -16,6 +17,7 @@ import (
 	"testing/fstest"
 	"time"
 
+	tools "github.com/subaud-tools/tools-common"
 	"github.com/subaud-tools/tools-common/localweb"
 )
 
@@ -46,13 +48,15 @@ func startRun(t *testing.T, o Options) *running {
 func runHere(t *testing.T, o Options) *running {
 	t.Helper()
 	ctx, cancel := context.WithCancel(context.Background())
-	t.Cleanup(cancel)
+	stopped := make(chan struct{})
+	// Serve writes its state as it stops, so the test's folder outlives it.
+	t.Cleanup(func() { cancel(); <-stopped })
 	r := &running{done: make(chan error, 1), url: make(chan string, 1), log: &strings.Builder{}, started: make(chan string, 1)}
 	o.Live, o.Assets, o.API = LiveFor("cull"), testPage, testAPI()
 	o.Log = &lockedWriter{w: r.log}
 	o.OnStart = func(_ context.Context, u string) { r.started <- u }
 	o.Ready = func(u string) { r.url <- u }
-	go func() { r.done <- Run(ctx, o) }()
+	go func() { r.done <- Run(ctx, o); close(stopped) }()
 	select {
 	case <-r.url:
 	case err := <-r.done:
@@ -185,4 +189,78 @@ func TestAPIRequiresToken(t *testing.T) {
 	_ = resp.Body.Close()
 	_ = Stop(context.Background(), LiveFor("cull"))
 	wait(t, r)
+}
+
+// The list reaches the tool before the server can answer, a poll that names its
+// tab checks it in there, and it outlives a restart: the next page open reuses
+// the tab, which only checks in once a minute when hidden.
+func TestTabsAreTheToolsAndSurviveARestart(t *testing.T) {
+	t.Setenv("CULL_HOME", t.TempDir())
+	live := LiveFor("cull")
+	var tabs *localweb.Tabs
+	var atStart *localweb.Tabs
+	o := Options{Tabs: func(l *localweb.Tabs) { tabs = l }}
+	r := runHere(t, o)
+	atStart = tabs
+	if atStart == nil {
+		t.Fatal("Options.Tabs was not called")
+	}
+	e, err := live.Running()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c := tabs.Pick("plan"); c.Kind != localweb.TabNone {
+		t.Fatalf("before a check-in: %+v", c)
+	}
+	_ = get(t, e, "/api/poll?tab=t1&page=plan").Body.Close()
+	if c := tabs.Pick("plan"); c.Kind != localweb.TabHere || c.Tab != "t1" {
+		t.Fatalf("after a check-in: %+v", c)
+	}
+	if err := Stop(context.Background(), live); err != nil {
+		t.Fatal(err)
+	}
+	wait(t, r)
+
+	r = runHere(t, o)
+	if tabs == atStart {
+		t.Fatal("the restart kept the old list")
+	}
+	if c := tabs.Pick("plan"); c.Kind != localweb.TabHere || c.Tab != "t1" {
+		t.Fatalf("after a restart: %+v", c)
+	}
+	if err := Stop(context.Background(), live); err != nil {
+		t.Fatal(err)
+	}
+	wait(t, r)
+}
+
+// With no callback the tabs are still kept: a tool gets the rule for nothing.
+func TestTabsAreKeptWithNoCodeInTheTool(t *testing.T) {
+	r := startRun(t, Options{})
+	e, _ := LiveFor("cull").Running()
+	_ = get(t, e, "/api/poll?tab=t1&page=plan").Body.Close()
+	b, err := os.ReadFile(filepath.Join(tools.StateDir("cull"), "tabs.json"))
+	if err != nil || !strings.Contains(string(b), `"t1"`) {
+		t.Fatalf("%s %v", b, err)
+	}
+	_ = Stop(context.Background(), LiveFor("cull"))
+	wait(t, r)
+}
+
+// A list the tool already put on its Events is the one kept, so a tool with its
+// own clock in a test, or not yet moved off its own list, isn't handed a second.
+func TestTabsAlreadyOnTheEventsAreKept(t *testing.T) {
+	own := localweb.NewTabs(nil)
+	evs := NewEvents()
+	evs.Tabs = own
+	var got *localweb.Tabs
+	r := startRun(t, Options{Events: evs, Tabs: func(l *localweb.Tabs) { got = l }})
+	if got != own {
+		t.Fatal("Run replaced the list on the Events")
+	}
+	_ = Stop(context.Background(), LiveFor("cull"))
+	wait(t, r)
+	if _, err := os.Stat(filepath.Join(tools.StateDir("cull"), "tabs.json")); err != nil {
+		t.Fatalf("not kept: %v", err)
+	}
 }

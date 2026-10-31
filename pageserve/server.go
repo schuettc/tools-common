@@ -25,7 +25,12 @@ type Options struct {
 	Assets fs.FS        // the page, served at / without a token
 	API    http.Handler // the tool's own /api/ routes (token required); nil: none
 	// Events is the log behind /api/events and /api/poll (nil: a new one).
-	Events  *Events
+	Events *Events
+	// Tabs, when set, is handed the list of the page's open tabs before the
+	// server listens, for the tool's handlers to Pick from. Run makes the list,
+	// keeps it in StateDir/tabs.json and hears from it through Events, whether
+	// this is set or not, so a tool makes none of its own.
+	Tabs    func(*localweb.Tabs)
 	Port    int // 0: remembered, else free
 	Version string
 	Log     io.Writer // one line per start/stop
@@ -91,6 +96,18 @@ func Run(ctx context.Context, o Options) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	o.Events.bind(ctx)
+	// The open tabs outlive a restart, so the first page open after an install
+	// reuses a tab instead of opening one (a hidden tab checks in only once a
+	// minute).
+	if o.Events.Tabs == nil {
+		o.Events.Tabs = localweb.NewTabs(nil)
+	}
+	if err := o.Events.Tabs.Keep(filepath.Join(state, "tabs.json")); err != nil {
+		_, _ = fmt.Fprintf(o.Log, "%s serve: the open tabs were not read: %v\n", tool, err)
+	}
+	if o.Tabs != nil {
+		o.Tabs(o.Events.Tabs)
+	}
 	mux := http.NewServeMux()
 	stream := o.Events.Stream
 	if o.Stream != nil {
@@ -142,6 +159,10 @@ func Run(ctx context.Context, o Options) error {
 	err = srv.Wait()
 	cancel()
 	o.Events.wait() // streams end with ctx
-	<-watched       // a last tick must not write the entry after it is withdrawn
+	// Saved as serve stops, so the list a restart reads is not already old.
+	if err := o.Events.Tabs.Save(); err != nil {
+		_, _ = fmt.Fprintf(o.Log, "%s serve: the open tabs were not saved: %v\n", tool, err)
+	}
+	<-watched // a last tick must not write the entry after it is withdrawn
 	return err
 }

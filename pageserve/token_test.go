@@ -57,7 +57,7 @@ func TestServesStartedAtOnceUseOneToken(t *testing.T) {
 	t.Setenv("CULL_HOME", t.TempDir())
 	live := LiveFor("cull")
 	ctx, cancel := context.WithCancel(context.Background())
-	t.Cleanup(cancel)
+	defer cancel()
 	ready := make(chan struct{})
 	var once sync.Once
 	done := make(chan error, 2)

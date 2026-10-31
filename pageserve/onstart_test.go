@@ -12,11 +12,12 @@ import (
 func TestOnStartRunsBeforeTheEntryIsWritten(t *testing.T) {
 	t.Setenv("CULL_HOME", t.TempDir())
 	ctx, cancel := context.WithCancel(context.Background())
-	t.Cleanup(cancel)
+	done := make(chan error, 1)
+	// Serve writes its state as it stops, so the test's folder outlives it.
+	t.Cleanup(func() { cancel(); <-done })
 	live := LiveFor("cull")
 	seen := make(chan error, 1)
 	ready := make(chan struct{}, 1)
-	done := make(chan error, 1)
 	o := Options{Live: live, Assets: testPage, API: testAPI(),
 		OnStart: func(context.Context, string) { _, err := live.Running(); seen <- err },
 		Ready:   func(string) { ready <- struct{}{} }}
