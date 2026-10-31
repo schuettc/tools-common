@@ -134,34 +134,20 @@ func TestSendBatchQueuesItAsOneUnit(t *testing.T) {
 	d1, d2 := draft(t, s, a, "one"), draft(t, s, b, "two")
 	batch, _, _ := s.DraftBatch(ctx, "round:1")
 	c.add(time.Minute)
-	if n, err := s.SendBatch(ctx, batch, "s1"); err != nil || n != 2 {
+	if n, err := s.SendBatch(ctx, batch); err != nil || n != 2 {
 		t.Fatalf("send %d %v", n, err)
 	}
 	for _, id := range []int64{d1.ID, d2.ID} {
-		if got, _ := s.Message(ctx, id); got.State != msgstate.Sent || got.Owner != "s1" || !got.QueuedAt.Equal(c.t) {
+		if got, _ := s.Message(ctx, id); got.State != msgstate.Sent || !got.QueuedAt.Equal(c.t) {
 			t.Errorf("message %+v", got)
 		}
 	}
-	if _, err := s.SendBatch(ctx, batch, "s1"); err == nil {
+	if _, err := s.SendBatch(ctx, batch); err == nil {
 		t.Fatal("sent a batch twice")
 	}
 	// The scope's next draft starts a new batch.
 	draft(t, s, a, "three")
 	if next, _, _ := s.DraftBatch(ctx, "round:1"); next == batch || next == 0 {
 		t.Fatalf("next batch %d", next)
-	}
-}
-
-// A batch sent with no owner goes to each thread's own.
-func TestSendBatchWithNoOwnerUsesTheThreads(t *testing.T) {
-	s, _ := newStore(t)
-	th := thread(t, s, "group:x", "triage", "s1")
-	d := draft(t, s, th, "one")
-	batch, _, _ := s.DraftBatch(ctx, "group:x")
-	if _, err := s.SendBatch(ctx, batch, ""); err != nil {
-		t.Fatal(err)
-	}
-	if got, _ := s.Message(ctx, d.ID); got.Owner != "s1" {
-		t.Fatalf("owner %q", got.Owner)
 	}
 }

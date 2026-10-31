@@ -36,15 +36,22 @@ func TestStuckAfterOverridesTheThreshold(t *testing.T) {
 	}
 }
 
-func TestReleaseLandsEveryUnsettledMessageOnNoReply(t *testing.T) {
-	s, c := newStore(t)
-	th := thread(t, s, "group:x", "triage", "s1")
-	m1, m2, m3 := post(t, s, th, "one"), post(t, s, th, "two"), post(t, s, th, "three")
-	d := claim(t, s, "s1", "s1")
-	if _, _, err := s.Reply(ctx, "s1", []int64{m1.ID}, msgstate.Working, "on it", nil); err != nil {
+func sendTwo(t *testing.T, s *Store, scope string) (Thread, Message, Message) {
+	t.Helper()
+	th := thread(t, s, scope, "triage", "s1")
+	m1, m2 := draft(t, s, th, "one"), draft(t, s, th, "two")
+	batch, _, _ := s.DraftBatch(ctx, scope)
+	if _, err := s.SendBatch(ctx, batch); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := s.Reply(ctx, "s1", []int64{m3.ID}, msgstate.Answered, "done", nil); err != nil {
+	return th, m1, m2
+}
+
+func TestReleaseLandsEveryUnsettledMessageOnNoReply(t *testing.T) {
+	s, c := newStore(t)
+	_, m1, m2 := sendTwo(t, s, "group:x")
+	d := claim(t, s, "s1", "s1")
+	if _, err := s.Reply(ctx, "s1", []int64{m1.ID}, msgstate.Answered, "done", nil); err != nil {
 		t.Fatal(err)
 	}
 	c.add(time.Minute)
@@ -54,13 +61,10 @@ func TestReleaseLandsEveryUnsettledMessageOnNoReply(t *testing.T) {
 	if got, _ := s.Delivery(ctx, d.ID); got.State != Released || !got.FinishedAt.Equal(c.t) {
 		t.Fatalf("delivery %+v", got)
 	}
-	if got := stateOf(t, s, m1.ID); got != msgstate.NoReply {
-		t.Errorf("working message %s", got)
-	}
 	if got := stateOf(t, s, m2.ID); got != msgstate.NoReply {
 		t.Errorf("with-agent message %s", got)
 	}
-	if got := stateOf(t, s, m3.ID); got != msgstate.Answered {
+	if got := stateOf(t, s, m1.ID); got != msgstate.Answered {
 		t.Errorf("answered message %s", got)
 	}
 	if err := s.Release(ctx, d.ID); !errors.Is(err, ErrNotFound) {
@@ -82,13 +86,9 @@ func TestReleaseTakesAMessageStillSentToNoReply(t *testing.T) {
 }
 
 func TestMoveDeliveryRequeuesForTheNewSessionInTheirOldOrder(t *testing.T) {
-	s, c := newStore(t)
-	th := thread(t, s, "group:x", "triage", "s1")
-	m1 := post(t, s, th, "one")
-	c.add(time.Minute)
-	m2 := post(t, s, th, "two")
+	s, _ := newStore(t)
+	th, m1, m2 := sendTwo(t, s, "group:x")
 	d := claim(t, s, "s1", "s1")
-	c.add(time.Minute)
 	m3 := post(t, s, th, "three, queued behind")
 	if err := s.MoveDelivery(ctx, d.ID, "s2"); err != nil {
 		t.Fatal(err)
@@ -103,17 +103,20 @@ func TestMoveDeliveryRequeuesForTheNewSessionInTheirOldOrder(t *testing.T) {
 		t.Fatalf("the old session got %+v", got)
 	}
 	d2 := claim(t, s, "s2", "s1", "s2")
-	if d2 == nil || !sameIDs(ids(d2.Messages), []int64{m1.ID, m2.ID, m3.ID}) {
+	if d2 == nil || !sameIDs(ids(d2.Messages), []int64{m1.ID, m2.ID}) {
 		t.Fatalf("delivery %+v", d2)
+	}
+	d3 := claim(t, s, "s2", "s1", "s2")
+	if d3 == nil || !sameIDs(ids(d3.Messages), []int64{m3.ID}) {
+		t.Fatalf("delivery %+v", d3)
 	}
 }
 
 func TestMoveDeliveryLeavesASettledMessageSettled(t *testing.T) {
 	s, _ := newStore(t)
-	th := thread(t, s, "group:x", "triage", "s1")
-	m1, m2 := post(t, s, th, "one"), post(t, s, th, "two")
+	_, m1, m2 := sendTwo(t, s, "group:x")
 	d := claim(t, s, "s1", "s1")
-	_, _, _ = s.Reply(ctx, "s1", []int64{m1.ID}, msgstate.Answered, "done", nil)
+	_, _ = s.Reply(ctx, "s1", []int64{m1.ID}, msgstate.Answered, "done", nil)
 	if err := s.MoveDelivery(ctx, d.ID, "s2"); err != nil {
 		t.Fatal(err)
 	}
@@ -123,51 +126,16 @@ func TestMoveDeliveryLeavesASettledMessageSettled(t *testing.T) {
 	if got := stateOf(t, s, m2.ID); got != msgstate.Sent {
 		t.Fatalf("m2 %s", got)
 	}
-}
-
-func TestMoveThreadTakesItsQueuedMessages(t *testing.T) {
-	s, _ := newStore(t)
-	th := thread(t, s, "group:x", "triage", "s1")
-	m := post(t, s, th, "one")
-	if err := s.MoveThread(ctx, th.ID, "s2"); err != nil {
-		t.Fatal(err)
-	}
-	if got := claim(t, s, "s1", "s1", "s2"); got != nil {
-		t.Fatalf("the old session got %+v", got)
-	}
-	if d := claim(t, s, "s2", "s1", "s2"); d == nil || d.Messages[0].ID != m.ID {
-		t.Fatalf("delivery %+v", d)
-	}
-	if err := s.MoveThread(ctx, 999, "s2"); !errors.Is(err, ErrNotFound) {
-		t.Fatalf("moved no thread: %v", err)
-	}
-}
-
-func TestMoveSessionTakesItsThreadsQueueAndInFlightDelivery(t *testing.T) {
-	s, _ := newStore(t)
-	a := thread(t, s, "group:x", "a", "s1")
-	b := thread(t, s, "group:x", "b", "s1")
-	m1 := post(t, s, a, "one")
-	d := claim(t, s, "s1", "s1")
-	m2 := post(t, s, b, "two")
-	n, moved, err := s.MoveSession(ctx, "s1", "s2")
-	if err != nil || n != 2 || moved != d.ID {
-		t.Fatalf("threads %d delivery %d %v", n, moved, err)
-	}
-	d2 := claim(t, s, "s2", "s1", "s2")
-	if d2 == nil || !sameIDs(ids(d2.Messages), []int64{m1.ID, m2.ID}) {
+	d2 := claim(t, s, "s2", "s2")
+	if d2 == nil || !sameIDs(ids(d2.Messages), []int64{m2.ID}) {
 		t.Fatalf("delivery %+v", d2)
 	}
 }
 
 func TestInterruptSendsInFlightMessagesAgainInTheirOldOrder(t *testing.T) {
-	s, c := newStore(t)
-	th := thread(t, s, "group:x", "triage", "s1")
-	m1 := post(t, s, th, "one")
-	c.add(time.Minute)
-	m2 := post(t, s, th, "two")
+	s, _ := newStore(t)
+	th, m1, m2 := sendTwo(t, s, "group:x")
 	d := claim(t, s, "s1", "s1")
-	c.add(time.Minute)
 	m3 := post(t, s, th, "three, queued behind")
 	got, err := s.Interrupt(ctx)
 	if err != nil || len(got) != 1 || got[0].Delivery != d.ID || got[0].Session != "s1" || !sameIDs(got[0].Messages, []int64{m1.ID, m2.ID}) {
@@ -180,17 +148,19 @@ func TestInterruptSendsInFlightMessagesAgainInTheirOldOrder(t *testing.T) {
 		t.Fatalf("delivery %s", got.State)
 	}
 	d2 := claim(t, s, "s1", "s1")
-	if d2 == nil || !sameIDs(ids(d2.Messages), []int64{m1.ID, m2.ID, m3.ID}) {
+	if d2 == nil || d2.ID == d.ID || !sameIDs(ids(d2.Messages), []int64{m1.ID, m2.ID}) {
 		t.Fatalf("delivery %+v", d2)
+	}
+	if d3 := claim(t, s, "s1", "s1"); d3 == nil || !sameIDs(ids(d3.Messages), []int64{m3.ID}) {
+		t.Fatalf("delivery %+v", d3)
 	}
 }
 
 func TestResendTakesOnlyNoReplyBackToSent(t *testing.T) {
 	s, _ := newStore(t)
-	th := thread(t, s, "group:x", "triage", "s1")
-	m1, m2 := post(t, s, th, "one"), post(t, s, th, "two")
+	_, m1, m2 := sendTwo(t, s, "group:x")
 	d := claim(t, s, "s1", "s1")
-	_, _, _ = s.Reply(ctx, "s1", []int64{m1.ID}, msgstate.Answered, "done", nil)
+	_, _ = s.Reply(ctx, "s1", []int64{m1.ID}, msgstate.Answered, "done", nil)
 	if err := s.Release(ctx, d.ID); err != nil {
 		t.Fatal(err)
 	}
@@ -201,25 +171,22 @@ func TestResendTakesOnlyNoReplyBackToSent(t *testing.T) {
 		t.Fatalf("m1 %s", got)
 	}
 	d2 := claim(t, s, "s1", "s1")
-	if d2 == nil || !sameIDs(ids(d2.Messages), []int64{m2.ID}) {
+	if d2 == nil || !sameIDs(ids(d2.Messages), []int64{m2.ID}) || d2.BatchID == m2.BatchID {
 		t.Fatalf("delivery %+v", d2)
 	}
 }
 
-// A message sent again goes to whoever has its thread now.
-func TestResendGoesToTheThreadsOwnerNow(t *testing.T) {
+// A message sent again goes to whoever has its scope when it is claimed.
+func TestResendGoesToTheOwnerNow(t *testing.T) {
 	s, _ := newStore(t)
-	th := thread(t, s, "group:x", "triage", "s1")
-	m := post(t, s, th, "one")
+	m := post(t, s, thread(t, s, "group:x", "triage", "s1"), "one")
 	d := claim(t, s, "s1", "s1")
 	_ = s.Release(ctx, d.ID)
-	if err := s.MoveThread(ctx, th.ID, "s2"); err != nil {
-		t.Fatal(err)
+	if n, err := s.Resend(ctx, []int64{m.ID}); err != nil || n != 1 {
+		t.Fatalf("resend %d %v", n, err)
 	}
-	if _, err := s.Resend(ctx, []int64{m.ID}); err != nil {
-		t.Fatal(err)
-	}
-	if got, _ := s.Message(ctx, m.ID); got.Owner != "s2" {
-		t.Fatalf("owner %q", got.Owner)
+	setOwner(t, s, "group:x", "s2")
+	if got := claim(t, s, "s2", "s1", "s2"); got == nil || got.Messages[0].ID != m.ID {
+		t.Fatalf("delivery %+v", got)
 	}
 }

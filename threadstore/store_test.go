@@ -27,7 +27,7 @@ CREATE TABLE sends (id INTEGER PRIMARY KEY);`)
 func openDB(t *testing.T) *sqlitedb.DB {
 	t.Helper()
 	d, err := sqlitedb.Open(ctx, filepath.Join(t.TempDir(), "tool.db"), sqlitedb.Options{
-		Migrations: append([]sqlitedb.Step{toolStep}, Migrations...),
+		Migrations: append([]sqlitedb.Step{toolStep}, Migrations[:1]...),
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -46,7 +46,12 @@ func newStore(t *testing.T) (*Store, *clock) {
 
 func thread(t *testing.T, s *Store, scope, name, owner string) Thread {
 	t.Helper()
-	th, err := s.Thread(ctx, scope, name, owner)
+	if owner != "" {
+		if _, err := s.SetOwner(ctx, scope, owner); err != nil {
+			t.Fatal(err)
+		}
+	}
+	th, err := s.Thread(ctx, scope, name)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -93,16 +98,24 @@ func TestMigrationsSitBesideAToolsOwnTables(t *testing.T) {
 }
 
 func TestAScopeAndNameAreOneThread(t *testing.T) {
-	s, c := newStore(t)
+	s, _ := newStore(t)
 	first := thread(t, s, "round:1", "CLAUDE.md", "s1")
-	if first.Scope != "round:1" || first.Name != "CLAUDE.md" || first.Owner != "s1" || !first.CreatedAt.Equal(c.t) {
-		t.Fatalf("thread %+v", first)
+	again := thread(t, s, "round:1", "CLAUDE.md", "")
+	if again != first {
+		t.Fatalf("again %+v, want %+v", again, first)
 	}
-	if again := thread(t, s, "round:1", "CLAUDE.md", "s2"); again != first {
-		t.Fatalf("again %+v, want %+v (the first owner kept)", again, first)
+	if other := thread(t, s, "round:2", "CLAUDE.md", ""); other.ID == first.ID || other.Owner != "" {
+		t.Fatalf("another scope's thread: %+v", other)
 	}
-	if other := thread(t, s, "round:2", "CLAUDE.md", ""); other.ID == first.ID {
-		t.Fatal("another scope shared the thread")
+}
+
+// The owner belongs to the scope, so every thread in it has the same one.
+func TestAThreadsOwnerIsItsScopes(t *testing.T) {
+	s, _ := newStore(t)
+	a := thread(t, s, "round:1", "a.md", "s1")
+	setOwner(t, s, "round:1", "s2")
+	if got := thread(t, s, "round:1", "a.md", ""); got.ID != a.ID || got.Owner != "s2" {
+		t.Fatalf("thread %+v", got)
 	}
 }
 
@@ -127,7 +140,7 @@ func TestPostQueuesAMessageForTheThreadsOwner(t *testing.T) {
 		t.Fatal(err)
 	}
 	if m.ThreadID != th.ID || m.Author != "court" || m.Body != "merge these" || string(m.Meta) != `{"keys":["a"]}` ||
-		m.State != msgstate.Sent || m.ReplyTo != first.ID || m.Owner != "s1" || !m.CreatedAt.Equal(c.t) || !m.QueuedAt.Equal(c.t) {
+		m.State != msgstate.Sent || m.ReplyTo != first.ID || !m.CreatedAt.Equal(c.t) || !m.QueuedAt.Equal(c.t) {
 		t.Fatalf("message %+v", m)
 	}
 }

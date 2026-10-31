@@ -12,7 +12,31 @@ import (
 
 func claim(t *testing.T, s *Store, session string, present ...string) *Delivery {
 	t.Helper()
-	d, err := s.Claim(ctx, session, present)
+	return claimIn(t, s, session, allScopes(t, s), present...)
+}
+
+// allScopes is every scope a thread has: a claim that may take from any.
+func allScopes(t *testing.T, s *Store) []string {
+	t.Helper()
+	rows, err := s.DB.QueryContext(ctx, "SELECT DISTINCT scope FROM thread_threads")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = rows.Close() }()
+	var out []string
+	for rows.Next() {
+		var scope string
+		if err := rows.Scan(&scope); err != nil {
+			t.Fatal(err)
+		}
+		out = append(out, scope)
+	}
+	return out
+}
+
+func claimIn(t *testing.T, s *Store, session string, scopes []string, present ...string) *Delivery {
+	t.Helper()
+	d, err := s.Claim(ctx, session, scopes, present)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -43,12 +67,11 @@ func replies(t *testing.T, s *Store, th Thread) []Message {
 	return out
 }
 
-func TestClaimCarriesEverythingQueuedStillSentWithAToken(t *testing.T) {
+func TestClaimCarriesASendStillSentWithAToken(t *testing.T) {
 	s, _ := newStore(t)
-	th := thread(t, s, "group:x", "triage", "s1")
-	m1, m2 := post(t, s, th, "one"), post(t, s, th, "two")
+	m := post(t, s, thread(t, s, "group:x", "triage", "s1"), "one")
 	d := claim(t, s, "s1", "s1")
-	if d == nil || d.Session != "s1" || d.State != InFlight || !sameIDs(ids(d.Messages), []int64{m1.ID, m2.ID}) {
+	if d == nil || d.Session != "s1" || d.State != InFlight || d.Scope != "group:x" || d.BatchID != m.BatchID || !sameIDs(ids(d.Messages), []int64{m.ID}) {
 		t.Fatalf("delivery %+v", d)
 	}
 	if d.Messages[0].State != msgstate.Sent {
@@ -59,7 +82,7 @@ func TestClaimCarriesEverythingQueuedStillSentWithAToken(t *testing.T) {
 	}
 }
 
-func TestClaimKeepsBatchesIntactAndInOrder(t *testing.T) {
+func TestClaimKeepsABatchInItsOrder(t *testing.T) {
 	s, c := newStore(t)
 	a := thread(t, s, "round:1", "a.md", "s1")
 	b := thread(t, s, "round:1", "b.md", "s1")
@@ -70,38 +93,14 @@ func TestClaimKeepsBatchesIntactAndInOrder(t *testing.T) {
 	if err := s.ReorderBatch(ctx, batch, []int64{d2.ID, d1.ID}); err != nil {
 		t.Fatal(err)
 	}
-	c.add(time.Minute)
-	last := post(t, s, b, "last")
-	c.add(time.Minute)
-	if _, err := s.SendBatch(ctx, batch, ""); err != nil {
+	if _, err := s.SendBatch(ctx, batch); err != nil {
 		t.Fatal(err)
 	}
-	d := claim(t, s, "s1", "s1")
-	if want := []int64{first.ID, last.ID, d2.ID, d1.ID}; d == nil || !sameIDs(ids(d.Messages), want) {
-		t.Fatalf("delivery %+v, want %v", d, want)
+	if d := claim(t, s, "s1", "s1"); d == nil || !sameIDs(ids(d.Messages), []int64{first.ID}) {
+		t.Fatalf("delivery %+v", d)
 	}
-}
-
-func TestOneInFlightAndMidTurnMessagesWait(t *testing.T) {
-	s, c := newStore(t)
-	th := thread(t, s, "group:x", "triage", "s1")
-	m1 := post(t, s, th, "one")
-	d1 := claim(t, s, "s1", "s1")
-	c.add(time.Minute)
-	m2 := post(t, s, th, "two")
-	m3 := post(t, s, th, "three")
-	if d := claim(t, s, "s1", "s1"); d != nil {
-		t.Fatalf("delivered while one is in flight: %+v", d)
-	}
-	if _, _, err := s.Reply(ctx, "s1", []int64{m1.ID}, msgstate.Answered, "done", nil); err != nil {
-		t.Fatal(err)
-	}
-	if got, _ := s.Delivery(ctx, d1.ID); got.State != Done {
-		t.Fatalf("delivery %s", got.State)
-	}
-	d2 := claim(t, s, "s1", "s1")
-	if d2 == nil || !sameIDs(ids(d2.Messages), []int64{m2.ID, m3.ID}) {
-		t.Fatalf("second delivery %+v", d2)
+	if d := claim(t, s, "s1", "s1"); d == nil || !sameIDs(ids(d.Messages), []int64{d2.ID, d1.ID}) {
+		t.Fatalf("delivery %+v", d)
 	}
 }
 
@@ -125,8 +124,9 @@ func TestAPresentOwnerKeepsItsMessages(t *testing.T) {
 }
 
 func TestAnotherPresentSessionTakesAGoneOwnersMessages(t *testing.T) {
-	s, _ := newStore(t)
+	s, c := newStore(t)
 	post(t, s, thread(t, s, "group:x", "triage", "s1"), "one")
+	c.add(DefaultPresenceTTL + time.Second)
 	d := claim(t, s, "s2", "s2")
 	if d == nil || d.Session != "s2" {
 		t.Fatalf("delivery %+v", d)
@@ -143,9 +143,10 @@ func TestAMessageWithNoOwnerGoesToAnySession(t *testing.T) {
 
 // With nobody present, every owner is gone, and nil is the same as nobody.
 func TestClaimWithNobodyPresent(t *testing.T) {
-	s, _ := newStore(t)
+	s, c := newStore(t)
 	post(t, s, thread(t, s, "group:x", "triage", "s1"), "one")
-	d, err := s.Claim(ctx, "s2", nil)
+	c.add(DefaultPresenceTTL + time.Second)
+	d, err := s.Claim(ctx, "s2", []string{"group:x"}, nil)
 	if err != nil || d == nil {
 		t.Fatalf("delivery %+v %v", d, err)
 	}
@@ -198,21 +199,6 @@ func TestADeliveryThatLandedIsNeverClaimedAgain(t *testing.T) {
 	}
 }
 
-// The owner still comes first when a delivery is taken back: its claimer went,
-// its owner is present.
-func TestReclaimLeavesAPresentOwnersDelivery(t *testing.T) {
-	s, c := newStore(t)
-	post(t, s, thread(t, s, "group:x", "triage", "s1"), "one")
-	first := claim(t, s, "s2", "s2") // s1 was gone, s2 took it
-	c.add(DefaultPresenceTTL + time.Second)
-	if d := claim(t, s, "s3", "s1", "s3"); d != nil {
-		t.Fatalf("s3 took a present owner's delivery: %+v", d)
-	}
-	if d := claim(t, s, "s1", "s1", "s3"); d == nil || d.ID != first.ID {
-		t.Fatalf("the owner got %+v", d)
-	}
-}
-
 func TestHeldMarksOnlyADeliveryThatHasNotLanded(t *testing.T) {
 	s, _ := newStore(t)
 	post(t, s, thread(t, s, "group:x", "triage", "s1"), "one")
@@ -257,7 +243,7 @@ func TestALateLandedLeavesWorkingWorking(t *testing.T) {
 	s, _ := newStore(t)
 	m := post(t, s, thread(t, s, "group:x", "triage", "s1"), "one")
 	d := claim(t, s, "s1", "s1")
-	if _, _, err := s.Reply(ctx, "s1", []int64{m.ID}, msgstate.Working, "on it", nil); err != nil {
+	if _, err := s.Reply(ctx, "s1", []int64{m.ID}, msgstate.Working, "on it", nil); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := s.Landed(ctx, "s1", d.Token); err != nil {
@@ -276,7 +262,7 @@ func TestTurnEndedLeavesALandedDeliveryWithNoReply(t *testing.T) {
 		t.Fatal(err)
 	}
 	ended, err := s.TurnEnded(ctx, "s1")
-	if err != nil || ended == nil || ended.ID != d.ID || ended.State != Done {
+	if err != nil || len(ended) != 1 || ended[0].ID != d.ID || ended[0].State != Done {
 		t.Fatalf("ended %+v %v", ended, err)
 	}
 	if got := stateOf(t, s, m.ID); got != msgstate.NoReply {
@@ -290,7 +276,7 @@ func TestTurnEndedLeavesADeliveryThatHasNotLanded(t *testing.T) {
 	m := post(t, s, thread(t, s, "group:x", "triage", "s1"), "one")
 	d := claim(t, s, "s1", "s1")
 	ended, err := s.TurnEnded(ctx, "s1")
-	if err != nil || ended != nil {
+	if err != nil || len(ended) != 0 {
 		t.Fatalf("ended %+v %v", ended, err)
 	}
 	if got, _ := s.Delivery(ctx, d.ID); got.State != InFlight || stateOf(t, s, m.ID) != msgstate.Sent {
@@ -304,8 +290,8 @@ func TestWorkingSetsTheLineAndAddsNoRow(t *testing.T) {
 	m := post(t, s, th, "one")
 	claim(t, s, "s1", "s1")
 	for _, line := range []string{"reading", "checking CI"} {
-		if _, skipped, err := s.Reply(ctx, "s1", []int64{m.ID}, msgstate.Working, line, nil); err != nil || len(skipped) != 0 {
-			t.Fatalf("working: %v %v", skipped, err)
+		if _, err := s.Reply(ctx, "s1", []int64{m.ID}, msgstate.Working, line, nil); err != nil {
+			t.Fatalf("working: %v", err)
 		}
 		if got, _ := s.Message(ctx, m.ID); got.State != msgstate.Working || got.Line != line {
 			t.Fatalf("message %+v", got)
@@ -321,9 +307,9 @@ func TestASettlingReplyAddsTheAgentsRow(t *testing.T) {
 	th := thread(t, s, "group:x", "triage", "s1")
 	m := post(t, s, th, "one")
 	claim(t, s, "s1", "s1")
-	_, _, _ = s.Reply(ctx, "s1", []int64{m.ID}, msgstate.Working, "on it", nil)
+	_, _ = s.Reply(ctx, "s1", []int64{m.ID}, msgstate.Working, "on it", nil)
 	c.add(time.Minute)
-	touched, _, err := s.Reply(ctx, "s1", []int64{m.ID}, msgstate.Declined, "won't: Court's call", json.RawMessage(`{"keys":["a"]}`))
+	touched, err := s.Reply(ctx, "s1", []int64{m.ID}, msgstate.Declined, "won't: Court's call", json.RawMessage(`{"keys":["a"]}`))
 	if err != nil || !sameIDs(touched, []int64{m.ID}) {
 		t.Fatalf("touched %v %v", touched, err)
 	}
@@ -344,11 +330,11 @@ func TestASettlingReplyAddsARowInEachThread(t *testing.T) {
 	b := thread(t, s, "round:1", "b.md", "")
 	d1, d2 := draft(t, s, a, "one"), draft(t, s, b, "two")
 	batch, _, _ := s.DraftBatch(ctx, "round:1")
-	if _, err := s.SendBatch(ctx, batch, "s1"); err != nil {
+	if _, err := s.SendBatch(ctx, batch); err != nil {
 		t.Fatal(err)
 	}
 	claim(t, s, "s1", "s1")
-	if _, _, err := s.Reply(ctx, "s1", []int64{d1.ID, d2.ID}, msgstate.Answered, "applied", nil); err != nil {
+	if _, err := s.Reply(ctx, "s1", []int64{d1.ID, d2.ID}, msgstate.Answered, "applied", nil); err != nil {
 		t.Fatal(err)
 	}
 	ra, rb := replies(t, s, a), replies(t, s, b)
@@ -360,10 +346,10 @@ func TestASettlingReplyAddsARowInEachThread(t *testing.T) {
 func TestAReplyToAnotherSessionsMessageRefusesTheWholeCall(t *testing.T) {
 	s, _ := newStore(t)
 	mine := post(t, s, thread(t, s, "group:x", "mine", "s1"), "one")
-	theirs := post(t, s, thread(t, s, "group:x", "theirs", "s2"), "two")
+	theirs := post(t, s, thread(t, s, "group:y", "theirs", "s2"), "two")
 	claim(t, s, "s1", "s1", "s2")
 	claim(t, s, "s2", "s1", "s2")
-	_, _, err := s.Reply(ctx, "s1", []int64{mine.ID, theirs.ID}, msgstate.Answered, "done", nil)
+	_, err := s.Reply(ctx, "s1", []int64{mine.ID, theirs.ID}, msgstate.Answered, "done", nil)
 	if !errors.Is(err, ErrNotFound) {
 		t.Fatalf("err %v", err)
 	}
@@ -377,40 +363,23 @@ func TestAReplyRefusesAStateThatIsNotAnAcknowledgement(t *testing.T) {
 	m := post(t, s, thread(t, s, "group:x", "triage", "s1"), "one")
 	claim(t, s, "s1", "s1")
 	for _, st := range []msgstate.State{msgstate.Sent, msgstate.WithAgent, msgstate.NoReply, Draft} {
-		if _, _, err := s.Reply(ctx, "s1", []int64{m.ID}, st, "x", nil); err == nil {
+		if _, err := s.Reply(ctx, "s1", []int64{m.ID}, st, "x", nil); err == nil {
 			t.Errorf("state %s accepted", st)
 		}
 	}
 }
 
-func TestAnAnswerAfterDeclinedIsSkippedWithNoRow(t *testing.T) {
-	s, _ := newStore(t)
-	th := thread(t, s, "group:x", "triage", "s1")
-	m := post(t, s, th, "one")
-	claim(t, s, "s1", "s1")
-	_, _, _ = s.Reply(ctx, "s1", []int64{m.ID}, msgstate.Declined, "no", nil)
-	touched, skipped, err := s.Reply(ctx, "s1", []int64{m.ID}, msgstate.Answered, "yes after all", nil)
-	if err != nil || len(touched) != 0 || len(skipped) != 1 || skipped[0].Reason != "already declined" {
-		t.Fatalf("touched %v skipped %+v %v", touched, skipped, err)
-	}
-	if got := stateOf(t, s, m.ID); got != msgstate.Declined {
-		t.Fatalf("state %s", got)
-	}
-	if rs := replies(t, s, th); len(rs) != 1 {
-		t.Fatalf("rows %+v", rs)
-	}
-}
-
-func TestALateAnswerSettlesNoReplyButWorkingIsSkipped(t *testing.T) {
+func TestALateAnswerSettlesNoReplyButWorkingIsRefused(t *testing.T) {
 	s, _ := newStore(t)
 	m := post(t, s, thread(t, s, "group:x", "triage", "s1"), "one")
 	d := claim(t, s, "s1", "s1")
 	_, _ = s.Landed(ctx, "s1", d.Token)
 	_, _ = s.TurnEnded(ctx, "s1")
-	if _, skipped, err := s.Reply(ctx, "s1", []int64{m.ID}, msgstate.Working, "late", nil); err != nil || len(skipped) != 1 {
-		t.Fatalf("working on no_reply: %+v %v", skipped, err)
+	var no Refused
+	if _, err := s.Reply(ctx, "s1", []int64{m.ID}, msgstate.Working, "late", nil); !errors.As(err, &no) {
+		t.Fatalf("working on no_reply: %v", err)
 	}
-	if touched, _, err := s.Reply(ctx, "s1", []int64{m.ID}, msgstate.Answered, "late answer", nil); err != nil || len(touched) != 1 {
+	if touched, err := s.Reply(ctx, "s1", []int64{m.ID}, msgstate.Answered, "late answer", nil); err != nil || len(touched) != 1 {
 		t.Fatalf("late answer %v %v", touched, err)
 	}
 	if got := stateOf(t, s, m.ID); got != msgstate.Answered {
@@ -421,10 +390,14 @@ func TestALateAnswerSettlesNoReplyButWorkingIsSkipped(t *testing.T) {
 // An answer proves the delivery reached the agent, and it reached it as one event.
 func TestAReplyToOneSentMessageBringsTheDeliveryToTheAgent(t *testing.T) {
 	s, _ := newStore(t)
-	th := thread(t, s, "group:x", "triage", "s1")
-	m1, m2 := post(t, s, th, "one"), post(t, s, th, "two")
+	a, b := thread(t, s, "round:1", "a.md", "s1"), thread(t, s, "round:1", "b.md", "")
+	m1, m2 := draft(t, s, a, "one"), draft(t, s, b, "two")
+	batch, _, _ := s.DraftBatch(ctx, "round:1")
+	if _, err := s.SendBatch(ctx, batch); err != nil {
+		t.Fatal(err)
+	}
 	d := claim(t, s, "s1", "s1")
-	if _, _, err := s.Reply(ctx, "s1", []int64{m1.ID}, msgstate.Answered, "done", nil); err != nil {
+	if _, err := s.Reply(ctx, "s1", []int64{m1.ID}, msgstate.Answered, "done", nil); err != nil {
 		t.Fatal(err)
 	}
 	if got := stateOf(t, s, m2.ID); got != msgstate.WithAgent {
@@ -432,5 +405,21 @@ func TestAReplyToOneSentMessageBringsTheDeliveryToTheAgent(t *testing.T) {
 	}
 	if got, _ := s.Delivery(ctx, d.ID); got.ShownAt.IsZero() || got.State != InFlight {
 		t.Fatalf("delivery %+v", got)
+	}
+}
+
+// The owner still comes first when a delivery is taken back: its claimer went,
+// its owner is present.
+func TestReclaimLeavesAPresentOwnersDelivery(t *testing.T) {
+	s, c := newStore(t)
+	post(t, s, thread(t, s, "group:x", "triage", "s1"), "one")
+	c.add(DefaultPresenceTTL + time.Second)
+	first := claim(t, s, "s2", "s2") // s1 was gone, s2 took it
+	c.add(DefaultPresenceTTL + time.Second)
+	if d := claim(t, s, "s3", "s1", "s3"); d != nil {
+		t.Fatalf("s3 took a present owner's delivery: %+v", d)
+	}
+	if d := claim(t, s, "s1", "s1", "s3"); d == nil || d.ID != first.ID {
+		t.Fatalf("the owner got %+v", d)
 	}
 }

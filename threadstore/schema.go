@@ -6,24 +6,31 @@ import "github.com/subaud-tools/tools-common/sqlitedb"
 // can't collide with a tool's own sends, threads or messages while the tool
 // moves its data.
 const schema = `
+CREATE TABLE thread_scopes (
+  scope    TEXT PRIMARY KEY,
+  owner    TEXT NOT NULL DEFAULT '',
+  owned_at INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX thread_scopes_owner ON thread_scopes(owner);
 CREATE TABLE thread_threads (
   id         INTEGER PRIMARY KEY AUTOINCREMENT,
   scope      TEXT NOT NULL,
   name       TEXT NOT NULL,
-  owner      TEXT NOT NULL DEFAULT '',
   created_at INTEGER NOT NULL,
   UNIQUE (scope, name)
 );
-CREATE INDEX thread_threads_owner ON thread_threads(owner);
 CREATE TABLE thread_batches (
   id         INTEGER PRIMARY KEY AUTOINCREMENT,
   scope      TEXT NOT NULL,
   state      TEXT NOT NULL DEFAULT 'draft',
-  created_at INTEGER NOT NULL
+  created_at INTEGER NOT NULL,
+  sent_at    INTEGER NOT NULL DEFAULT 0
 );
 CREATE UNIQUE INDEX thread_batches_one_draft ON thread_batches(scope) WHERE state = 'draft';
 CREATE TABLE thread_deliveries (
   id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  scope       TEXT NOT NULL,
+  batch_id    INTEGER NOT NULL REFERENCES thread_batches(id),
   session     TEXT NOT NULL,
   state       TEXT NOT NULL,
   token       TEXT NOT NULL,
@@ -33,7 +40,9 @@ CREATE TABLE thread_deliveries (
   finished_at INTEGER NOT NULL DEFAULT 0,
   shown_at    INTEGER NOT NULL DEFAULT 0
 );
-CREATE UNIQUE INDEX thread_deliveries_one_inflight ON thread_deliveries(session) WHERE state = 'inflight';
+CREATE INDEX thread_deliveries_session ON thread_deliveries(session, state);
+CREATE INDEX thread_deliveries_scope ON thread_deliveries(scope, state);
+CREATE INDEX thread_deliveries_batch ON thread_deliveries(batch_id);
 CREATE TABLE thread_messages (
   id          INTEGER PRIMARY KEY AUTOINCREMENT,
   thread_id   INTEGER NOT NULL REFERENCES thread_threads(id),
@@ -44,7 +53,6 @@ CREATE TABLE thread_messages (
   batch_id    INTEGER REFERENCES thread_batches(id),
   batch_pos   INTEGER NOT NULL DEFAULT 0,
   delivery_id INTEGER REFERENCES thread_deliveries(id),
-  owner       TEXT NOT NULL DEFAULT '',
   state       TEXT NOT NULL DEFAULT '',
   line        TEXT NOT NULL DEFAULT '',
   created_at  INTEGER NOT NULL,
@@ -54,6 +62,8 @@ CREATE TABLE thread_messages (
 CREATE INDEX thread_messages_thread ON thread_messages(thread_id, id);
 CREATE INDEX thread_messages_state ON thread_messages(state);
 CREATE INDEX thread_messages_delivery ON thread_messages(delivery_id);
+CREATE INDEX thread_messages_batch ON thread_messages(batch_id, batch_pos);
+CREATE INDEX thread_messages_reply_to ON thread_messages(reply_to);
 `
 
 // Migrations is the store's schema, as steps a tool appends to its own
