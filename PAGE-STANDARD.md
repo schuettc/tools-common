@@ -32,7 +32,7 @@ Every page takes these from the kit, `localweb/page`. Page shape has no test: it
 | One primary action on the top bar, on the far right. | `bar`, through its `primary` | already released |
 | The fixed card header. | `card`, through its `head` | already released |
 | The stage track, whose stages are the tool's own. | `stageTrack` | needs adopting from 0.41.0 |
-| Drafts that go out together on Send. | `createDrafts`, `sendBar` | needs adopting from 0.41.0 |
+| Drafts that go out together on Send. | `sendBar`, with the drafts held by `createDrafts`, or by the tool's own store where a draft lives in the content (galley's instructions anchored in the document) | needs adopting from 0.41.0 |
 | A switcher in the top bar lists the tool's other pages, kept current. | `bar`'s `setElsewhere`, kept by `keepElsewhere(bar, read)` | 0.44.0 |
 | A front page lists the tool's pages with filters, status pills and folding groups. | `filterRow`, `statusPills`, `groupList` | 0.44.0 |
 | The message states. | `msgstate`, in Go and in the kit | already released |
@@ -54,7 +54,7 @@ Server rules:
 
 | Server (tools-common pin) | No idle exit | Kept token | Stale mark | Tab reuse | Build header | Skill |
 |---|---|---|---|---|---|---|
-| diazo 0.49.0 (0.42.0) | conforms | conforms | conforms | conforms | conforms | conforms |
+| diazo 0.52.0 (0.45.1) | conforms | conforms | conforms | conforms | conforms | conforms |
 | sift, in tackle (0.40.0) | `Idle: 8h` | new each start | none | none | none | conforms |
 | cull, in tackle (0.40.0) | `Idle: 8h` | new each start | none | none | none | no skills command |
 | casebook 0.24.0 (0.33.0) | `Idle: 8h`, `Busy` | new each start | none | none, counts its own streams | none | no skills command |
@@ -67,7 +67,7 @@ Page rules:
 
 | Page | Frame and thread | Top bar | Card header | Stage track | Drafts | Message states |
 |---|---|---|---|---|---|---|
-| diazo | own copies, which the kit parts came from | uses `bar` | own `card.ts` over `card` | own copies, which the kit parts came from | own copies, which the kit parts came from | uses `msgstate` |
+| diazo | conforms | conforms | conforms | conforms | conforms | conforms |
 | sift | needs adopting from 0.41.0 | uses `bar` | uses `card` | needs adopting from 0.41.0 | needs adopting from 0.41.0 | uses `msgstate` |
 | cull | needs adopting from 0.41.0 | uses `bar` | uses `card` | needs adopting from 0.41.0 | needs adopting from 0.41.0 | uses `msgstate` |
 | casebook | needs adopting from 0.41.0 | uses `bar` | uses `card` | needs adopting from 0.41.0 | needs adopting from 0.41.0 | uses `msgstate` |
