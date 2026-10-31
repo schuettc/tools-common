@@ -545,6 +545,13 @@ export interface RailTabs {
 /** Tabs in the right column, under its fold toggle's line, one body shown at a time. */
 export function railTabs(o: RailTabsOptions): RailTabs;
 
+/** What the kit remembers for a reader, in localStorage. Where localStorage throws (a frame sandboxed without allow-same-origin), get answers null and set and remove do nothing, so the page still draws. */
+export const remembered: {
+  get(key: string): string | null;
+  set(key: string, value: string): void;
+  remove(key: string): void;
+};
+
 // ---- track.js
 
 export interface StageDetail {

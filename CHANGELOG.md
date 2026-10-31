@@ -4,6 +4,13 @@ Root module releases are tagged `vX.Y.Z`; the separate `sqlitedb` and
 `mermaidkit` modules are tagged `sqlitedb/vX.Y.Z` and `mermaidkit/vX.Y.Z`. Releases before this file are described by their
 tags and PRs.
 
+## 0.47.0
+
+### Added
+- `railTabs({tabs, open, name, onOpen})`: tabs with counts in the right column, one body shown at a time, inside the frame's thread column so its empty fold still folds the whole column. A press on a tab is remembered per tool; `setOpen(id)` shows a tab for the tool without changing what the reader chose. `setCount(id, n)` updates a count.
+- `draftList({drafts, empty, onEdit, onDelete, onSelect, selected})` returns `{el, redraw}`: each draft's quoted item, its words edited in place (saved on blur or Enter), delete, and a press that tells the tool which item to show; with none, the tool's `empty` line. Mount `el` once and call `redraw` on live updates: a row keeps its box, focus, caret and unsaved words while its draft id is unchanged, and the tool's text never replaces words the reader hasn't saved.
+- `remembered` (`get`, `set`, `remove`): the one guarded `localStorage` helper the frame and the tabs use, exported for a tool that remembers a reader's choice too.
+
 ## 0.46.0
 
 ### Added

@@ -3,24 +3,7 @@
 // box keeps its words. The whole thing goes in the frame's rightBody, so
 // setRightEmpty still folds the column around it.
 import { h } from './dom.js';
-
-// A sandboxed frame throws on touching localStorage. That costs the remembering
-// and nothing else.
-function recall(key) {
-  try {
-    return localStorage.getItem(key);
-  } catch {
-    return null;
-  }
-}
-
-function remember(key, id) {
-  try {
-    localStorage.setItem(key, id);
-  } catch {
-    // not remembered
-  }
-}
+import { remembered } from './remembered.js';
 
 // railTabs takes tabs ({ id, label, count, body }), open (the tab to start on
 // when the page remembers none, default the first), name (the tool's, for the key
@@ -33,7 +16,7 @@ export function railTabs({ name, tabs, open, onOpen }) {
     const n = h('span', { class: 'kit-n' });
     const tab = h('button', { class: 'kit-ctl', type: 'button', role: 'tab', onclick: () => {
       show(t.id);
-      remember(key, t.id);
+      remembered.set(key, t.id);
       if (onOpen) onOpen(t.id);
     } }, t.label, n);
     const panel = h('div', { class: 'kit-rail-panel', role: 'tabpanel', 'aria-label': t.label }, t.body);
@@ -56,7 +39,7 @@ export function railTabs({ name, tabs, open, onOpen }) {
     p.n.textContent = p.n.hidden ? '' : String(n);
   };
   for (const t of tabs) setCount(t.id, t.count);
-  const start = [recall(key), open].find(id => parts.has(id));
+  const start = [remembered.get(key), open].find(id => parts.has(id));
   show(start ?? tabs[0]?.id);
   const each = [...parts.values()];
   const el = h('div', { class: 'kit-rail-tabs' },
