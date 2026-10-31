@@ -379,10 +379,12 @@ export interface CollapsibleOptions {
   name: string;
   /** Start folded whatever the page remembers, and leave what it remembers alone. */
   folded?: boolean;
+  /** Hears each press of the toggle. */
+  onPress?(): void;
 }
 
-/** Puts a toggle and body in col: the side folds to a thin strip and the page remembers it. */
-export function collapsible(o: CollapsibleOptions): void;
+/** Puts a toggle and body in col: the side folds to a thin strip and the page remembers it. Returns a function that folds or opens the side without remembering it. */
+export function collapsible(o: CollapsibleOptions): (folded: boolean) => void;
 
 export interface FrameSide {
   panel: string;
@@ -408,6 +410,8 @@ export interface Frame {
   right: HTMLElement | null;
   /** Where the caller draws the thread. */
   rightBody: HTMLElement | null;
+  /** Says whether the thread of card (its id) has no messages: an empty one folds to its strip and its first message opens it. A press on the toggle wins until the card changes, over a reload too. */
+  setRightEmpty(empty: boolean, card?: string): void;
 }
 
 /** The three columns of a .kit-app grid; the caller appends left, centre and right after its bar. */

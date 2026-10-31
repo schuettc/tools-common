@@ -75,6 +75,52 @@ test('frame: it opens with the state diazo users already have, and another tool 
   clean();
 });
 
+test('frame: a thread with no messages folds and its first message opens it, leaving what is remembered alone', () => {
+  clean();
+  const f = frame(parts());
+  f.setRightEmpty(true, 'F1');
+  assert(f.right.classList.contains('kit-collapsed'), 'folded with nothing to show');
+  eq(f.right.firstChild.title, 'Show the thread');
+  f.setRightEmpty(false, 'F1');
+  assert(!f.right.classList.contains('kit-collapsed'), 'the first message opens it');
+  eq(localStorage.getItem('tooltest.collapsed.thread'), ''); // collapsible writes '' as it starts
+});
+
+test('frame: a press wins over the empty rule until the card changes', () => {
+  clean();
+  const f = frame(parts());
+  f.setRightEmpty(true, 'F1');
+  f.right.firstChild.click();
+  f.setRightEmpty(true, 'F1');
+  assert(!f.right.classList.contains('kit-collapsed'), 'opened by hand, empty stays open');
+  f.right.firstChild.click();
+  f.setRightEmpty(false, 'F1');
+  assert(f.right.classList.contains('kit-collapsed'), 'folded by hand, a message leaves it folded');
+  eq(localStorage.getItem('tooltest.collapsed.thread'), '1');
+  f.setRightEmpty(false, 'F2');
+  assert(!f.right.classList.contains('kit-collapsed'), 'the next card takes the rule');
+  f.setRightEmpty(true, 'F1');
+  assert(f.right.classList.contains('kit-collapsed'), 'the press went with its card: back on F1 the rule holds');
+});
+
+test('frame: a press holds over a reload on its card, and not on another', () => {
+  clean();
+  const f = frame(parts());
+  f.setRightEmpty(false, 'F1');
+  f.right.firstChild.click();
+  const same = frame(parts());
+  same.setRightEmpty(false, 'F1');
+  assert(same.right.classList.contains('kit-collapsed'), 'still folded on its card');
+  const other = frame(parts());
+  other.setRightEmpty(false, 'F2');
+  assert(!other.right.classList.contains('kit-collapsed'), 'another card takes the rule');
+});
+
+test('frame: the empty rule does nothing to a page with no thread', () => {
+  clean();
+  frame(parts({ right: undefined })).setRightEmpty(true, 'F1');
+});
+
 test('collapsible: folded starts it folded and leaves what the page remembers alone', () => {
   clean();
   const col = document.createElement('aside');

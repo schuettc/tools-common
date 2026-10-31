@@ -160,6 +160,13 @@ function parts() {
   const box = h('span', { class: 'kit-tip-at' }, more, tip);
   wireTip(box, more, tip);
   f.centre.append(h('div', { class: 'kit-label' }, 'frame and tip'), box);
+  f.setRightEmpty(false, 'F2');
+  f.centre.append(
+    h('div', { class: 'kit-label' }, 'the thread folds when its card has no messages'),
+    buttons([
+      { label: 'a card with no messages', run: () => f.setRightEmpty(true, 'F3') },
+      { label: 'a card with messages', run: () => f.setRightEmpty(false, 'F2') },
+    ]));
   f.centre.append(
     h('div', { class: 'kit-label' }, 'stage track'),
     workingLine({ text: 'Reading the last ten builds', slot: true }),

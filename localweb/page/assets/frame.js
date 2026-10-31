@@ -7,7 +7,9 @@ import { h } from './dom.js';
 // collapsible puts a toggle and body in col. side says which way it folds and
 // name (the tool's) and panel make the key it is remembered under,
 // <name>.collapsed.<panel>; folded starts it folded whatever the page remembers.
-export function collapsible({ col, body, panel, side, name, folded }) {
+// onPress hears each press of the toggle. It returns a function that folds or
+// opens the side without remembering it.
+export function collapsible({ col, body, panel, side, name, folded, onPress }) {
   const key = `${name}.collapsed.${panel}`;
   const toggle = h('button', { class: 'kit-col-toggle', type: 'button', 'data-panel': panel });
   const set = (on, keep = true) => {
@@ -17,26 +19,43 @@ export function collapsible({ col, body, panel, side, name, folded }) {
     toggle.setAttribute('aria-expanded', String(!on));
     if (keep) localStorage.setItem(key, on ? '1' : '');
   };
-  toggle.addEventListener('click', () => set(!col.classList.contains('kit-collapsed')));
+  toggle.addEventListener('click', () => {
+    set(!col.classList.contains('kit-collapsed'));
+    if (onPress) onPress();
+  });
   col.append(toggle, body);
   if (folded) set(true, false);
   else set(localStorage.getItem(key) === '1');
+  return on => set(on, false);
 }
 
-function side(name, which, cls, o) {
-  if (!o) return [null, null];
+function side(name, which, cls, o, onPress) {
+  if (!o) return [null, null, null];
   const col = h('aside', { class: `${cls} kit-col kit-${which}-col`, 'aria-label': o.label });
   const body = h('div', { class: 'kit-col-body' });
-  collapsible({ col, body, panel: o.panel, side: which, name, folded: o.folded });
-  return [col, body];
+  const fold = collapsible({ col, body, panel: o.panel, side: which, name, folded: o.folded, onPress });
+  return [col, body, fold];
 }
 
 // frame builds the columns. left and right are { panel, label, folded }, each
 // optional; centre is { label }. The caller draws into leftBody, centre and
-// rightBody, and appends left, centre and right to its grid.
+// rightBody, and appends left, centre and right to its grid. setRightEmpty(empty,
+// card) tells it whether the thread of the card in front of the reader (its id)
+// has messages: an empty one folds, and its first message opens it. A press on
+// the toggle wins until the card changes, and is kept beside the fold, so a
+// reload on that card holds it too.
 export function frame({ name, left, centre, right }) {
   const [l, leftBody] = side(name, 'left', 'kit-list', left);
-  const [r, rightBody] = side(name, 'right', 'kit-rail', right);
+  const pressedOn = `${name}.collapsed.${right ? right.panel : ''}.card`;
+  let shown = '';
+  const [r, rightBody, foldRight] = side(name, 'right', 'kit-rail', right, () => localStorage.setItem(pressedOn, shown));
   const mid = h('main', { class: 'kit-read kit-col kit-mid', 'aria-label': centre.label });
-  return { left: l, leftBody, centre: mid, right: r, rightBody };
+  const setRightEmpty = (empty, card = '') => {
+    if (!r) return;
+    shown = card;
+    if (localStorage.getItem(pressedOn) === card) return;
+    localStorage.removeItem(pressedOn);
+    foldRight(empty);
+  };
+  return { left: l, leftBody, centre: mid, right: r, rightBody, setRightEmpty };
 }
