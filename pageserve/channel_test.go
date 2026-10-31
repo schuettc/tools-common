@@ -691,6 +691,31 @@ func TestALoopGoesStraightToANewServe(t *testing.T) {
 	}
 }
 
+// While no serve runs the loop looks fast only just after the tear, then once
+// per Retry: every session's channel does this whenever a tool's serve is down.
+func TestALoopLooksFastOnlyJustAfterATear(t *testing.T) {
+	torn, waits := tornServe(t)
+	cl := NewClient(Live{Tool: "cull"}, nil)
+	var looks atomic.Int32
+	cl.Find = func() (Entry, error) {
+		if waits.Load() == 0 {
+			return Entry{Base: torn.URL, Token: "tok", PID: 1}, nil
+		}
+		looks.Add(1)
+		return Entry{}, ErrNotRunning
+	}
+	ch := New(cullSpec(), Identity{Session: "s-1", Harness: "pi", Label: "pi · a", CWD: t.TempDir()}, cl)
+	ch.findFor = 200 * time.Millisecond
+	connectRetrying(t, ch, time.Minute)
+	time.Sleep(1500 * time.Millisecond)
+	if waits.Load() == 0 {
+		t.Fatal("the loop never reached the serve")
+	}
+	if n := looks.Load(); n > 5 {
+		t.Fatalf("%d looks in 1.5s with no serve", n)
+	}
+}
+
 // A serve that goes on refusing is still tried once per Retry.
 func TestALoopRestsOnTheSameServe(t *testing.T) {
 	torn, waits := tornServe(t)

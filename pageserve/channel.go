@@ -124,7 +124,8 @@ type Channel struct {
 	// and never waits. Two takers would split a session's sends.
 	ServeOnly bool
 
-	root    string // the session's project root; "" when it can't be resolved
+	findFor time.Duration // how long after a tear rest looks fast for a new serve
+	root    string        // the session's project root; "" when it can't be resolved
 	rootErr error
 	runCtx  context.Context
 	reports chan report // pi's reports, posted to serve in order by one goroutine
@@ -151,7 +152,7 @@ type report struct {
 // session's working directory.
 func New(spec Spec, id Identity, c *Client) *Channel {
 	ch := &Channel{Spec: spec, ID: id, Client: c, Log: io.Discard, Open: localweb.OpenBrowser,
-		Retry: 5 * time.Second, Presence: 30 * time.Second, Poll: 55 * time.Second, reports: make(chan report, 64)}
+		findFor: 2 * time.Second, Retry: 5 * time.Second, Presence: 30 * time.Second, Poll: 55 * time.Second, reports: make(chan report, 64)}
 	if spec.Root != nil {
 		ch.root, ch.rootErr = spec.Root(id.CWD)
 	}
@@ -319,6 +320,14 @@ func (ch *Channel) loop(ctx context.Context) {
 			lastErr = msg
 		}
 	}
+	var tornOf string       // the serve the loop last failed on
+	var fastUntil time.Time // when the fast looks after that tear end
+	rest := func(at string) bool {
+		if at != "" && at != tornOf {
+			tornOf, fastUntil = at, time.Now().Add(ch.findFor)
+		}
+		return ch.rest(ctx, c, at, fastUntil)
+	}
 	for ctx.Err() == nil {
 		at := serveKey(c)
 		if ch.Spec.OnServe != nil {
@@ -335,7 +344,7 @@ func (ch *Channel) loop(ctx context.Context) {
 					return
 				}
 				logOnce(err)
-				if ch.rest(ctx, c, at) {
+				if rest(at) {
 					lastPresence = time.Time{}
 				}
 				continue
@@ -355,7 +364,7 @@ func (ch *Channel) loop(ctx context.Context) {
 				lastPresence = time.Time{}
 			}
 			logOnce(err)
-			if ch.rest(ctx, c, at) {
+			if rest(at) {
 				lastPresence = time.Time{}
 			}
 		case code == http.StatusOK && len(got) > 0:
@@ -374,7 +383,7 @@ func (ch *Channel) loop(ctx context.Context) {
 	}
 }
 
-// findEvery is how often rest looks for a new serve.
+// findEvery is how often rest looks for a new serve just after a tear.
 const findEvery = 100 * time.Millisecond
 
 // serveKey names the serve Find returns, "" when none runs. A restart can keep
@@ -389,8 +398,10 @@ func serveKey(c *Client) string {
 
 // rest waits after a failed call to the serve at: for Retry, or until Find
 // returns one the loop hasn't reached yet, when it says true, so a restart
-// costs no wait. Each serve gets this one early try, so this never spins.
-func (ch *Channel) rest(ctx context.Context, c *Client, at string) bool {
+// costs no wait. It looks every findEvery until fastUntil, then only as Retry
+// ends, so a serve that stays down costs a look per Retry. Each serve gets this
+// one early try, so this never spins.
+func (ch *Channel) rest(ctx context.Context, c *Client, at string, fastUntil time.Time) bool {
 	end := time.Now().Add(ch.Retry)
 	for ctx.Err() == nil {
 		if k := serveKey(c); k != "" && k != at {
@@ -400,7 +411,10 @@ func (ch *Channel) rest(ctx context.Context, c *Client, at string) bool {
 		if left <= 0 {
 			return false
 		}
-		sleep(ctx, min(left, findEvery))
+		if time.Now().Before(fastUntil) {
+			left = min(left, findEvery)
+		}
+		sleep(ctx, left)
 	}
 	return false
 }
