@@ -95,7 +95,8 @@ var Proj = func(ctx context.Context, args ...string) ([]byte, int, error) {
 }
 
 // TerminalOf runs proj terminal for the session at w. It is nil, with no error,
-// outside tmux; an error says why proj gave no state.
+// outside tmux, which a w missing its socket or its pane is too; an error says
+// why proj gave no state.
 func TerminalOf(w Where) (*Terminal, error) { return terminal(w, false) }
 
 // TerminalGo is TerminalOf with --go: proj shows the session in a terminal, or
@@ -103,7 +104,7 @@ func TerminalOf(w Where) (*Terminal, error) { return terminal(w, false) }
 func TerminalGo(w Where) (*Terminal, error) { return terminal(w, true) }
 
 func terminal(w Where, goTo bool) (*Terminal, error) {
-	if w == (Where{}) {
+	if w.Socket == "" || w.Pane == "" {
 		return nil, nil
 	}
 	limit := terminalRead

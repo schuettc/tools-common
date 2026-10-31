@@ -108,9 +108,11 @@ func TestTerminalGoAsksProjToShowIt(t *testing.T) {
 
 func TestTerminalOfOutsideTmuxIsNothing(t *testing.T) {
 	calls := withTerminal(t, `{"state":"attached"}`)
-	got, err := TerminalOf(Where{})
-	if got != nil || err != nil || len(*calls) != 0 {
-		t.Fatalf("%+v %v, %d calls", got, err, len(*calls))
+	for _, w := range []Where{{}, {Socket: "/tmp/s"}, {Pane: "%3"}} {
+		got, err := TerminalOf(w)
+		if got != nil || err != nil || len(*calls) != 0 {
+			t.Fatalf("%+v: %+v %v, %d calls", w, got, err, len(*calls))
+		}
 	}
 }
 
