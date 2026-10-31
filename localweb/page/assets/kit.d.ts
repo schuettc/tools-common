@@ -342,10 +342,18 @@ export const SHARE_REPLY_MS: number;
 export function sharedLine(path: string): string;
 
 /** One menu row; act is the tool's own name for what it does. */
-export interface ShareItem<A extends string = string> {
+export interface ShareRow<A extends string = string> {
   label: string;
   act: A;
 }
+
+/** A label over the rows after it: not a menuitem, not pressable, not in the tab order. */
+export interface ShareHeading {
+  label: string;
+  heading: true;
+}
+
+export type ShareItem<A extends string = string> = ShareRow<A> | ShareHeading;
 
 export interface ShareMenu {
   el: HTMLElement;
@@ -358,7 +366,7 @@ export interface ShareMenu {
 }
 
 /** Builds button's menu from items, hidden, and makes the button toggle it, right-aligned under it. A pick closes it and calls onPick; an outside click, Escape and a resize close it. */
-export function shareMenu<A extends string>(button: HTMLElement, items: ShareItem<A>[], onPick: (act: A, item: ShareItem<A>) => void): ShareMenu;
+export function shareMenu<A extends string>(button: HTMLElement, items: ShareItem<A>[], onPick: (act: A, item: ShareRow<A>) => void): ShareMenu;
 
 // ---- tip.js
 
