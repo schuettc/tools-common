@@ -5,8 +5,9 @@
 // never pulls in. A page that keeps its messages elsewhere still shows them
 // through msgstate.Message.
 //
-// A tool appends Migrations to its own database's steps and names each
-// thread's scope: a round, a project, a group or whatever else it talks about.
+// A tool takes Migrations by position into its own database's steps (see
+// Migrations) and names each thread's scope: a round, a project, a group or
+// whatever else it talks about.
 // The store knows nothing of sessions beyond their ids: the tool keeps its
 // presence and tells the store who is present.
 //
@@ -175,9 +176,10 @@ type Message struct {
 	// BatchID and BatchPos place a message in the batch it went out in.
 	BatchID  int64
 	BatchPos int
-	// DeliveryID is the delivery that last carried it. It stays when the
-	// message is queued again, so a delivery that was interrupted or moved
-	// still knows what it held, until another delivery carries it.
+	// DeliveryID is the delivery that last carried it, as casebook's
+	// deliver.Message says on its wire. It stays when the message is queued
+	// again, so a delivery that was interrupted or moved still knows what it
+	// held, until another delivery carries it.
 	DeliveryID int64
 	State      msgstate.State
 	// Line is the agent's one line on what it is doing, while the message is

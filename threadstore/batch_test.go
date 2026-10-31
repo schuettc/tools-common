@@ -127,6 +127,19 @@ func TestReorderBatchNeedsEveryDraft(t *testing.T) {
 	}
 }
 
+func TestReorderBatchRefusesADuplicate(t *testing.T) {
+	s, _ := newStore(t)
+	th := thread(t, s, "group:x", "triage", "")
+	a, b := draft(t, s, th, "a"), draft(t, s, th, "b")
+	batch, _, _ := s.DraftBatch(ctx, "group:x")
+	if err := s.ReorderBatch(ctx, batch, []int64{a.ID, a.ID}); err == nil {
+		t.Fatal("reordered with a duplicate")
+	}
+	if _, got, _ := s.DraftBatch(ctx, "group:x"); !sameIDs(ids(got), []int64{a.ID, b.ID}) {
+		t.Fatalf("order %v", ids(got))
+	}
+}
+
 func TestSendBatchQueuesItAsOneUnit(t *testing.T) {
 	s, c := newStore(t)
 	a := thread(t, s, "round:1", "a.md", "")

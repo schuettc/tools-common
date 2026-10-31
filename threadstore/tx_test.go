@@ -224,3 +224,31 @@ func TestARefusedReplyTxWritesNothing(t *testing.T) {
 		t.Fatalf("open %s", got)
 	}
 }
+
+// sift moves a round's revision in the transaction that reports or replies.
+func TestScopesAreReadInTheToolsTransaction(t *testing.T) {
+	s, _ := newStore(t)
+	a := post(t, s, thread(t, s, "round:1", "a.md", "s1"), "one")
+	b := post(t, s, thread(t, s, "round:2", "b.md", "s1"), "two")
+	d := claim(t, s, "s1", "s1")
+	err := inToolTx(t, s, true, func(ctx context.Context, tx *sql.Tx) error {
+		got, err := s.MessageScopesTx(ctx, tx, []int64{a.ID, a.ID, b.ID})
+		if err != nil || len(got) != 2 || got[0] != "round:1" || got[1] != "round:2" {
+			t.Errorf("scopes %v %v", got, err)
+		}
+		if _, err := s.MessageScopesTx(ctx, tx, []int64{99}); !errors.Is(err, ErrNotFound) {
+			t.Errorf("no message: %v", err)
+		}
+		scope, err := s.TokenScopeTx(ctx, tx, "s1", d.Token)
+		if err != nil || scope != d.Scope {
+			t.Errorf("scope %q %v", scope, err)
+		}
+		if scope, err := s.TokenScopeTx(ctx, tx, "s2", d.Token); err != nil || scope != "" {
+			t.Errorf("another session's token: %q %v", scope, err)
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+}

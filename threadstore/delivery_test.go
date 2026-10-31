@@ -18,18 +18,9 @@ func claim(t *testing.T, s *Store, session string, present ...string) *Delivery 
 // allScopes is every scope a thread has: a claim that may take from any.
 func allScopes(t *testing.T, s *Store) []string {
 	t.Helper()
-	rows, err := s.DB.QueryContext(ctx, "SELECT DISTINCT scope FROM thread_threads")
+	out, err := s.Scopes(ctx)
 	if err != nil {
 		t.Fatal(err)
-	}
-	defer func() { _ = rows.Close() }()
-	var out []string
-	for rows.Next() {
-		var scope string
-		if err := rows.Scan(&scope); err != nil {
-			t.Fatal(err)
-		}
-		out = append(out, scope)
 	}
 	return out
 }

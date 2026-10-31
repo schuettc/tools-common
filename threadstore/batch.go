@@ -89,8 +89,16 @@ func (s *Store) draftExec(ctx context.Context, query string, args ...any) error 
 	return nil
 }
 
-// ReorderBatch sets a draft batch's order; ids must be exactly its drafts.
+// ReorderBatch sets a draft batch's order; ids must be exactly its drafts, each
+// once.
 func (s *Store) ReorderBatch(ctx context.Context, batch int64, ids []int64) error {
+	seen := make(map[int64]bool, len(ids))
+	for _, id := range ids {
+		if seen[id] {
+			return fmt.Errorf("reorder names message %d twice", id)
+		}
+		seen[id] = true
+	}
 	return s.tx(ctx, func(tx *sql.Tx) error {
 		var n int
 		if err := tx.QueryRowContext(ctx, "SELECT count(*) FROM thread_messages WHERE batch_id = ? AND state = 'draft'", batch).Scan(&n); err != nil {

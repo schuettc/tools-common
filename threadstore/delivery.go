@@ -404,6 +404,36 @@ func (s *Store) TurnEndedTx(ctx context.Context, tx *sql.Tx, session string) ([]
 	return s.endTurn(ctx, tx, ended)
 }
 
+// TurnEndedFor is a turn-end hook naming the deliveries the agent was shown this
+// turn: each of them still in flight for session lands, then ends. A delivery it
+// doesn't name stays, so a late hook can't end a newer one (casebook
+// serve/agent_api.go agentSettled, Queue.Settled). It returns the ended
+// deliveries.
+func (s *Store) TurnEndedFor(ctx context.Context, session string, ids []int64) ([]Delivery, error) {
+	var out []Delivery
+	err := s.tx(ctx, func(tx *sql.Tx) error {
+		now := ms(s.Now())
+		var ended []int64
+		for _, id := range ids {
+			var n int
+			if err := tx.QueryRowContext(ctx, "SELECT count(*) FROM thread_deliveries WHERE id = ? AND session = ? AND state = 'inflight'", id, session).Scan(&n); err != nil {
+				return err
+			}
+			if n == 0 {
+				continue
+			}
+			if _, err := landed(ctx, tx, now, id); err != nil {
+				return err
+			}
+			ended = append(ended, id)
+		}
+		var err error
+		out, err = s.endTurn(ctx, tx, ended)
+		return err
+	})
+	return out, err
+}
+
 // endTurn ends the deliveries ids: unsettled messages no_reply, delivery done.
 func (s *Store) endTurn(ctx context.Context, tx *sql.Tx, ids []int64) ([]Delivery, error) {
 	now := ms(s.Now())

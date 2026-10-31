@@ -66,11 +66,12 @@ CREATE INDEX thread_messages_batch ON thread_messages(batch_id, batch_pos);
 CREATE INDEX thread_messages_reply_to ON thread_messages(reply_to);
 `
 
-// Migrations is the store's schema, as steps a tool appends to its own
-// database's list. The list only grows, and sqlitedb numbers a database's steps
-// by their place in the tool's list, so a tool names what it took by position
-// (Migrations[:1]) and adds a later step of the store's after its own, rather
-// than appending the whole list and letting a new step shift its own steps.
+// Migrations is the store's schema, as steps a tool puts in its own database's
+// list. The list only grows, and sqlitedb numbers a database's steps by their
+// place in the tool's list, so a tool takes steps by position: Migrations[0],
+// and later Migrations[1] after the steps of its own it has added by then, never
+// the whole list. Appending the whole list would let a new store step shift the
+// tool's own later steps, and a database already past them would skip it.
 var Migrations = []sqlitedb.Step{
 	sqlitedb.SQL(schema),
 }

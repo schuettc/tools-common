@@ -69,6 +69,23 @@ func TestClaimTakesOnlyFromItsScopes(t *testing.T) {
 	}
 }
 
+// Taking a delivery back from a gone session stays within the scopes too.
+func TestClaimTakesBackOnlyFromItsScopes(t *testing.T) {
+	s, c := newStore(t)
+	post(t, s, thread(t, s, "project:other", "t", ""), "not yours")
+	first := claimIn(t, s, "gone", []string{"project:other"}, "gone")
+	if first == nil {
+		t.Fatal("no first claim")
+	}
+	c.add(DefaultPresenceTTL + time.Second)
+	if d := claimIn(t, s, "s1", []string{"project:mine"}, "s1"); d != nil {
+		t.Fatalf("took back another project's delivery: %+v", d)
+	}
+	if d := claimIn(t, s, "s1", []string{"project:other"}, "s1"); d == nil || d.ID != first.ID {
+		t.Fatalf("delivery %+v", d)
+	}
+}
+
 // A session's own scopes come first, even when another's send is older.
 func TestClaimTakesItsOwnScopeFirst(t *testing.T) {
 	s, c := newStore(t)
