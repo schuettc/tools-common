@@ -15,3 +15,4 @@ export * from './tip.js';
 export * from './frame.js';
 export * from './index.js';
 export * from './thread.js';
+export * from './track.js';

@@ -171,3 +171,4 @@ func TestJSEnter(t *testing.T)     { runBrowser(t, "enter") }
 func TestJSFrame(t *testing.T)     { runBrowser(t, "frame") }
 func TestJSIndex(t *testing.T)     { runBrowser(t, "index") }
 func TestJSThread(t *testing.T)    { runBrowser(t, "thread") }
+func TestJSTrack(t *testing.T)     { runBrowser(t, "track") }

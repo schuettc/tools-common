@@ -446,3 +446,78 @@ a.kit-brand:hover, a.kit-brand:focus-visible { text-decoration: underline; }
 .kit-thread-msg-text { margin: 4px 0 0; white-space: pre-wrap; }
 .kit-thread-ref { font-family: var(--kit-mono); font-size: 13px; }
 .kit-thread .kit-note-line { flex-direction: column; align-items: stretch; }
+
+/* the stage track (track.js): where it stands, and who it waits on */
+@keyframes kit-pulse { 50% { opacity: .25; } }
+.kit-stages {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  margin-top: 12px; font: 12px var(--kit-mono);
+}
+.kit-stage {
+  box-sizing: border-box; display: inline-block; height: 20px; white-space: nowrap;
+  font: 12px/18px var(--kit-mono); padding: 0 8px; border-radius: 999px; cursor: pointer;
+  border: 1px solid var(--kit-line); background: var(--kit-bg); color: var(--kit-muted);
+}
+.kit-stage.done { color: var(--kit-ok); border-color: var(--kit-ok); background: transparent; }
+.kit-stage.now { color: var(--kit-signal-ink); background: var(--kit-signal); border-color: var(--kit-signal); }
+.kit-stage.flagged {
+  color: var(--kit-agent); border-color: var(--kit-agent);
+  background: color-mix(in srgb, var(--kit-agent) 14%, transparent);
+}
+.kit-stage.live::before {
+  content: ""; display: inline-block; width: 7px; height: 7px; margin-right: 6px;
+  border-radius: 50%; background: var(--kit-ok); animation: kit-pulse 1.2s infinite;
+}
+.kit-stage.now.live::before { background: var(--kit-signal-ink); }
+.kit-stage.plain { cursor: default; }
+.kit-arrow { color: var(--kit-muted); }
+.kit-stages.parked :is(.kit-stage, .kit-arrow) { opacity: .55; filter: grayscale(1); }
+.kit-stages.parked .kit-stage.live::before { animation: none; }
+.kit-more {
+  display: inline-block; margin-left: 6px; width: 14px; height: 14px; line-height: 12px;
+  text-align: center; border-radius: 50%; border: 1px solid currentColor;
+  font: italic 600 10px var(--kit-sans); cursor: help;
+}
+.kit-more::before { content: "i"; }
+.kit-tip > b { display: block; font-weight: 600; }
+.kit-tip-rows { display: grid; grid-template-columns: auto 1fr auto; }
+.kit-tip-row { display: grid; grid-column: 1 / -1; grid-template-columns: subgrid; }
+.kit-tip-id { color: var(--kit-muted); font-variant-numeric: tabular-nums; }
+.kit-tip-id:not(:empty) { padding-right: 8px; }
+.kit-tip-meta { padding-left: 12px; text-align: right; white-space: nowrap; }
+.kit-tip-meta, .kit-tip-note { color: var(--kit-muted); }
+.kit-tip-note { display: block; margin-top: 4px; contain: inline-size; }
+.kit-pill.kit-badge {
+  box-sizing: border-box; display: inline-block; vertical-align: middle; height: 20px;
+  padding: 0 8px; border: 1px solid transparent; border-radius: 999px;
+  font-size: 12px; line-height: 18px; white-space: nowrap;
+  background: var(--kit-line); color: var(--kit-muted);
+}
+.kit-pill.kit-badge.t-you {
+  background: color-mix(in srgb, var(--kit-signal) 14%, transparent); color: var(--kit-signal); font-weight: 600;
+}
+.kit-pill.kit-badge.t-wait {
+  background: color-mix(in srgb, var(--kit-wait) 14%, transparent); color: var(--kit-wait); font-weight: 600;
+}
+.kit-stages .kit-badge { margin-left: 8px; }
+.kit-stages .kit-badge + .kit-badge { margin-left: 0; }
+.kit-waits-at { margin-left: 8px; }
+.kit-more-waits { color: var(--kit-muted); cursor: help; text-decoration: underline dotted; text-underline-offset: 3px; }
+
+/* the agent's one line; in a slot it holds its height with or without one */
+.kit-working {
+  box-sizing: border-box; display: inline-flex; align-items: center; gap: 8px; vertical-align: middle;
+  max-width: 100%; min-width: 0; height: 20px; margin: 8px 0 0; padding: 0 8px;
+  border: 1px solid transparent; border-radius: 999px; white-space: nowrap;
+  background: color-mix(in srgb, var(--kit-signal) 14%, transparent); color: var(--kit-wait);
+  font: 12px var(--kit-mono);
+}
+.kit-working i {
+  width: 8px; height: 8px; border-radius: 50%; background: var(--kit-wait);
+  animation: kit-pulse 1.2s infinite; flex: none;
+}
+.kit-working.kit-pending { background: var(--kit-panel); border: 1px solid var(--kit-line); color: var(--kit-muted); }
+.kit-working.kit-pending i { background: var(--kit-muted); }
+.kit-agent-slot { height: 28px; margin: 8px 0 0; display: flex; align-items: center; min-width: 0; }
+.kit-agent-slot .kit-working { margin: 0; max-width: 100%; min-width: 0; }
+.kit-agent-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }

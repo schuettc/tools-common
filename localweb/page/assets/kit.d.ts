@@ -496,3 +496,66 @@ export interface ThreadOptions<M extends ThreadMessageValue> {
 
 /** The thread column's content. */
 export function thread<M extends ThreadMessageValue>(o: ThreadOptions<M>): HTMLElement;
+
+// ---- track.js
+
+export interface StageDetail {
+  title: string;
+  rows?: { id?: string; text: string; meta?: string }[];
+  note?: string;
+}
+
+/** One stage, as plain values, so each tool or job gives its own. */
+export interface StageValue {
+  key: string;
+  label: string;
+  /** Drawn after the label: "Findings · 3 of 5". */
+  count?: string;
+  /** The class it draws in; done adds a tick, now is the aria-current step. */
+  state?: 'done' | 'now' | 'flagged' | '';
+  /** A pulsing dot: something runs in it. */
+  live?: boolean;
+  /** Adds an ⓘ with this in its tip. */
+  detail?: StageDetail;
+  /** What it opens: stageTrack passes this to open. Unset, the stage is plain. */
+  opens?: string | null;
+}
+
+/** One stage; open, when given, makes it a button. */
+export function stagePill(s: StageValue, open?: (() => void) | null): HTMLElement;
+
+export interface StageTrackOptions {
+  /** A stage, or an element (a tab of the caller's) that takes its place as it is. */
+  stages: (StageValue | HTMLElement)[];
+  open?: (opens: string) => void;
+  /** The track's aria-label. */
+  label?: string;
+  /** Greys it out and stops its pulse. */
+  parked?: boolean;
+  /** What follows on the line: wait badges, counts. */
+  after?: (Node | null)[];
+}
+
+/** The stages joined by arrows. */
+export function stageTrack(o: StageTrackOptions): HTMLElement;
+
+export interface WaitValue {
+  text: string;
+  /** Who it waits on; 'you' is the reader. */
+  who: string;
+}
+
+/** One badge, on you if any wait is, and the rest behind "and N more"; [] with no waits. */
+export function waitBadges(waits: WaitValue[]): HTMLElement[];
+
+export interface WorkingLineOptions {
+  text: string | null;
+  /** Draw it as a message not settled yet. */
+  pending?: boolean;
+  /** Hold one line's height with or without text; a long line gets a tip. */
+  slot?: boolean;
+}
+
+/** The agent's one line with a pulsing dot. */
+export function workingLine(o: WorkingLineOptions & { slot: true }): HTMLElement;
+export function workingLine(o: WorkingLineOptions): HTMLElement | null;
