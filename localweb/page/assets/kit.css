@@ -447,6 +447,12 @@ a.kit-brand:hover, a.kit-brand:focus-visible { text-decoration: underline; }
 .kit-thread-ref { font-family: var(--kit-mono); font-size: 13px; }
 .kit-thread .kit-note-line { flex-direction: column; align-items: stretch; }
 
+/* tabs in the right column (tabs.js): the row sits under the fold toggle's line */
+.kit-rail-tabs { padding-top: 41px; }
+.kit-rail-tabrow { display: flex; flex-wrap: wrap; gap: 8px; padding: 0 16px 14px; }
+.kit-rail-panel { padding: 0 16px 16px; }
+.kit-right-col > .kit-col-body .kit-rail-panel .kit-thread { padding: 0; }
+
 /* the stage track (track.js): where it stands, and who it waits on */
 @keyframes kit-pulse { 50% { opacity: .25; } }
 .kit-stages {

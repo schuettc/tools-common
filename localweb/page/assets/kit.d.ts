@@ -513,6 +513,38 @@ export interface ThreadOptions<M extends ThreadMessageValue> {
 /** The thread column's content. */
 export function thread<M extends ThreadMessageValue>(o: ThreadOptions<M>): HTMLElement;
 
+// ---- tabs.js
+
+export interface RailTab {
+  id: string;
+  label: string;
+  /** Shown after the label; 0 shows, and null or undefined leaves none. */
+  count?: number | string | null;
+  /** The tab's content. It stays in the page while hidden; to redraw, the tool changes what's inside its own element. */
+  body: Node;
+}
+
+export interface RailTabsOptions {
+  /** The tool's name: the open tab is remembered under <name>.railTab. */
+  name: string;
+  tabs: RailTab[];
+  /** The tab to start on when the page remembers none. Default the first. */
+  open?: string;
+  /** Hears each press with the tab's id; setOpen doesn't call it. */
+  onOpen?(id: string): void;
+}
+
+export interface RailTabs {
+  /** Goes in the frame's rightBody, so setRightEmpty folds the column around it. */
+  el: HTMLElement;
+  /** Opens a tab, and remembers it. An unknown id changes nothing. */
+  setOpen(id: string): void;
+  setCount(id: string, n: number | string | null | undefined): void;
+}
+
+/** Tabs in the right column, under its fold toggle's line, one body shown at a time. */
+export function railTabs(o: RailTabsOptions): RailTabs;
+
 // ---- track.js
 
 export interface StageDetail {

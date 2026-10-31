@@ -175,3 +175,4 @@ func TestJSTrack(t *testing.T)     { runBrowser(t, "track") }
 func TestJSDrafts(t *testing.T)    { runBrowser(t, "drafts") }
 func TestJSElsewhere(t *testing.T) { runBrowser(t, "elsewhere") }
 func TestJSFrontpage(t *testing.T) { runBrowser(t, "frontpage") }
+func TestJSTabs(t *testing.T)      { runBrowser(t, "tabs") }

@@ -14,6 +14,7 @@ export * from './msgstate.js';
 export * from './tip.js';
 export * from './frame.js';
 export * from './index.js';
+export * from './tabs.js';
 export * from './thread.js';
 export * from './track.js';
 export * from './drafts.js';
