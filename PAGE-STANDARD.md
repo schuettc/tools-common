@@ -39,11 +39,12 @@ Every page takes these from the kit, `localweb/page`. Page shape has no test: it
 - Its stages, and what its left rows and cards hold.
 - casebook's bulk group decisions, and cull's blind mode.
 - diazo's folder watch, its Record view and its cards.
-- galley's editor page, the one named exception. Its server takes the server rules through its approved PLAN1, and its switcher follows the top bar's rule.
+
+There are no exceptions: a page whose content doesn't fit this shape changes, or the standard changes for every page. galley's editor takes it with its documents as the left index, the editor as the centre card, its comment rail as the thread, Revise as the drafts sent together, and review rounds as the stage track.
 
 ## Where each server stands
 
-Read from each repo's `origin/main`, the version and tools-common pin in the first column. "uses" means its source calls the part; how the page looks is not checked here. A cell conforms or says what it waits on; "excepted" names an approved exception. This session updates the table as each server adopts, and removes it once every cell conforms.
+Read from each repo's `origin/main`, the version and tools-common pin in the first column. "uses" means its source calls the part; how the page looks is not checked here. A cell conforms or says what it waits on; This session updates the table as each server adopts, and removes it once every cell conforms.
 
 Server rules:
 
@@ -66,7 +67,7 @@ Page rules:
 | sift | needs adopting from 0.41.0 | uses `bar` | uses `card` | needs adopting from 0.41.0 | needs adopting from 0.41.0 | uses `msgstate` |
 | cull | needs adopting from 0.41.0 | uses `bar` | uses `card` | needs adopting from 0.41.0 | needs adopting from 0.41.0 | uses `msgstate` |
 | casebook | needs adopting from 0.41.0 | uses `bar` | uses `card` | needs adopting from 0.41.0 | needs adopting from 0.41.0 | uses `msgstate` |
-| galley | excepted: editor page | its switcher, through its PLAN2 | excepted: editor page | excepted: editor page | excepted: editor page | uses `msgstate` |
+| galley | through its PLAN2 | through its PLAN2 | through its PLAN2 | through its PLAN2 | through its PLAN2 | uses `msgstate` |
 | muda | no page yet: its PLAN1 builds on the kit parts | no page yet | no page yet | no page yet | no page yet | no page yet |
 | proj | not decided | not decided | not decided | not decided | not decided | not decided |
 | imprint | no page | no page | no page | no page | no page | no page |
