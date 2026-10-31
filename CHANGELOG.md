@@ -4,6 +4,11 @@ Root module releases are tagged `vX.Y.Z`; the separate `sqlitedb` and
 `mermaidkit` modules are tagged `sqlitedb/vX.Y.Z` and `mermaidkit/vX.Y.Z`. Releases before this file are described by their
 tags and PRs.
 
+## 0.45.1
+
+### Fixed
+- The thread column's fold toggle sits on the THREAD label's line at the column's right edge, as the index column's does, instead of on a row of its own above the label. The thread's title starts below it.
+
 ## 0.45.0
 
 ### Added
