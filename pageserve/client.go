@@ -66,10 +66,10 @@ func (c *Client) ensure() (Entry, error) {
 }
 
 // Fresh replaces a serve that marked itself stale (a newer binary was
-// installed since it started) with one running the installed binary. Call it
-// only when the agent is about to open a page anyway, never in the middle of
-// a wait: serve keeps its token, so open tabs reconnect, but each reloads for
-// the new page (or asks to).
+// installed since it started) with one running the installed binary. The
+// channel calls it before each tool call, never in the middle of a wait: serve
+// keeps its token, so open tabs reconnect, but each reloads for the new page
+// (or asks to).
 func (c *Client) Fresh(ctx context.Context) error {
 	if c.Start == nil {
 		return nil
@@ -85,7 +85,8 @@ func (c *Client) Fresh(ctx context.Context) error {
 	case !e.Stale:
 		return nil
 	}
-	if err := c.Stop(ctx); err != nil {
+	// Another channel may have stopped it first: nothing is left to stop.
+	if err := c.Stop(ctx); err != nil && !errors.Is(err, ErrNotRunning) {
 		return fmt.Errorf("restarting %s serve for the newer install: %w", c.Tool, err)
 	}
 	_, err = c.ensure()

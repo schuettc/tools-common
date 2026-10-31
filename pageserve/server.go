@@ -47,8 +47,9 @@ type Options struct {
 
 // Run serves until ctx ends or POST /api/stop; it never exits for being idle.
 // It writes the tool's one entry (Live.Advertise) while running and removes it
-// on the way out, and keeps its token in StateDir/token across restarts, so
-// open tabs keep working. Besides the tool's API it answers GET /api/events (Options.Stream, else
+// on the way out, keeps its token in StateDir/token across restarts, so open
+// tabs keep working, and marks itself stale once its binary is replaced (see
+// binaryWatch), which the next tool call acts on. Besides the tool's API it answers GET /api/events (Options.Stream, else
 // Events.Stream), GET /api/poll and POST /api/stop.
 func Run(ctx context.Context, o Options) error {
 	if o.Log == nil {
@@ -84,6 +85,9 @@ func Run(ctx context.Context, o Options) error {
 	if err != nil {
 		return err
 	}
+	// The binary as it is now, before anything can be found, so an install
+	// from here on counts.
+	binary, watchErr := watchBinary(executable(), o.Live, o.Events)
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	o.Events.bind(ctx)
@@ -124,11 +128,20 @@ func Run(ctx context.Context, o Options) error {
 	defer o.Live.Withdraw(e.PID)
 	_, _ = fmt.Fprintf(o.Log, "%s serve: started %s (pid %d)\n", tool, e.Base, e.PID)
 	defer func() { _, _ = fmt.Fprintf(o.Log, "%s serve: stopped (pid %d)\n", tool, e.PID) }()
+	watched := make(chan struct{})
+	if watchErr != nil {
+		_, _ = fmt.Fprintf(o.Log, "%s serve: not watching its binary for a new install: %v\n", tool, watchErr)
+		close(watched)
+	} else {
+		every := staleEvery
+		go func() { defer close(watched); binary.run(ctx, every) }()
+	}
 	if o.Ready != nil {
 		o.Ready(srv.URL)
 	}
 	err = srv.Wait()
 	cancel()
 	o.Events.wait() // streams end with ctx
+	<-watched       // a last tick must not write the entry after it is withdrawn
 	return err
 }

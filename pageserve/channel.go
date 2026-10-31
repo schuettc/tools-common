@@ -158,6 +158,11 @@ func New(spec Spec, id Identity, c *Client) *Channel {
 			if ctx == nil {
 				ctx = context.Background()
 			}
+			// A tool call is where a stale serve gets replaced (the wait loop
+			// never does it), so no tool has to ask.
+			if err := c.Fresh(ctx); err != nil {
+				return "", err
+			}
 			return spec.Call(ctx, ch, name, args)
 		},
 		// Run's read loop hands each report over and goes on: posting it
