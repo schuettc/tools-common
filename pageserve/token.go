@@ -13,7 +13,7 @@ import (
 )
 
 // keptToken returns the token in state/token (0600), making one the first time
-// (or when the file holds anything but 64 hex characters), so a tab opened
+// (or when the file holds anything but 64 hex characters, or others can read it), so a tab opened
 // before a restart keeps working after it. The entry goes on stop; this file
 // stays. Run takes it holding serve.lock, and of takers racing without it the
 // first to write the file sets the token every one of them uses.
@@ -46,8 +46,13 @@ func keptToken(state string) (string, error) {
 	return t, nil
 }
 
-// readToken is the token in path, when it holds one.
+// readToken is the token in path, when it holds one that only this account can
+// read: a token others could read is no secret, so it counts as no token.
 func readToken(path string) (string, bool) {
+	st, err := os.Stat(path)
+	if err != nil || st.Mode().Perm()&0o077 != 0 {
+		return "", false
+	}
 	b, err := os.ReadFile(path)
 	if err != nil {
 		return "", false

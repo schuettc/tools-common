@@ -4,6 +4,22 @@ Root module releases are tagged `vX.Y.Z`; the separate `sqlitedb` and
 `mermaidkit` modules are tagged `sqlitedb/vX.Y.Z` and `mermaidkit/vX.Y.Z`. Releases before this file are described by their
 tags and PRs.
 
+## 0.42.0
+
+Every server gets the standard's server rules with no code of its own. See `PAGE-STANDARD.md`.
+
+### Changed
+- `pageserve.Run` keeps its token in `StateDir/token` (0600; a file others can read is replaced), watches its own binary and marks its entry stale when an install replaces it, keeps its tab list in `StateDir/tabs.json`, and puts `X-Tool-Build` (the version and a hash of the assets) on API responses.
+- The channel calls `Client.Fresh` before each tool call; a tool stops calling it itself. Channels that find one stale serve at once replace it once.
+
+### Removed
+- `pageserve.Options.Idle`, `Busy` and `Token`: a server never exits for being idle. On bumping, a tool removes them, and its own kept token, binary watch, tab setup and version header. A tool with its own `Options.Stream` (casebook) relays the `stale` event to its stream.
+
+### Added
+- `PAGE-STANDARD.md`: what a server and page must do, each rule naming the part that delivers it, and where each server stands.
+- `pageserve/conformance`: `Check(t, Server)`, which a tool's tests run against its own serve.
+- `Options.Tabs`, a callback handing a tool the tab list; the kit's `createApi` and `live` take `onNewBuild`, called once on a new build or a `stale` event.
+
 ## 0.41.0
 
 ### Added

@@ -133,3 +133,31 @@ func TestKeptTokenReplacesAFileThatIsNotAToken(t *testing.T) {
 		t.Fatalf("%q, then %q: %v", a, b, err)
 	}
 }
+
+// A token another account could read is no secret: it is replaced, and the new
+// file is private.
+func TestKeptTokenReplacesAFileOthersCanRead(t *testing.T) {
+	state := t.TempDir()
+	path := filepath.Join(state, "token")
+	loose := strings.Repeat("ab", 32)
+	if err := os.WriteFile(path, []byte(loose+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(path, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	got, err := keptToken(state)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got == loose {
+		t.Fatal("kept a token others could read")
+	}
+	st, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if st.Mode().Perm() != 0o600 {
+		t.Fatalf("mode %o, want 600", st.Mode().Perm())
+	}
+}

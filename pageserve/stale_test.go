@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -216,5 +217,48 @@ func TestFreshAcceptsAServeAnotherChannelStopped(t *testing.T) {
 	}
 	if started != 1 {
 		t.Fatalf("started %d", started)
+	}
+}
+
+// Channels finding one stale serve at once replace it once: the second must
+// not stop the serve the first just started.
+func TestFreshRacingChannelsStopOnce(t *testing.T) {
+	t.Setenv("CULL_HOME", t.TempDir())
+	var mu sync.Mutex
+	stale, stops, starts := true, 0, 0
+	find := func() (Entry, error) {
+		mu.Lock()
+		defer mu.Unlock()
+		return Entry{Stale: stale}, nil
+	}
+	newClient := func() *Client {
+		c := NewClient(LiveFor("cull"), func() (Entry, error) {
+			mu.Lock()
+			defer mu.Unlock()
+			starts++
+			return Entry{}, nil
+		})
+		c.Find = find
+		c.Stop = func(context.Context) error {
+			mu.Lock()
+			defer mu.Unlock()
+			stops++
+			stale = false
+			return nil
+		}
+		return c
+	}
+	var wg sync.WaitGroup
+	for range 8 {
+		c := newClient()
+		wg.Go(func() {
+			if err := c.Fresh(context.Background()); err != nil {
+				t.Error(err)
+			}
+		})
+	}
+	wg.Wait()
+	if stops != 1 {
+		t.Fatalf("stopped %d times, want 1", stops)
 	}
 }
