@@ -45,6 +45,9 @@ type Commands struct {
 	// opener, so a tool's own switch (casebook's CASEBOOK_NO_BROWSER) covers
 	// it. nil: the system opener.
 	Open func(url string) error
+	// Around, when set, runs the channel: it calls run, which is ch.Run, and
+	// its answer is the command's, so a tool can announce presence around it.
+	Around func(ctx context.Context, ch *Channel, run func() error) error
 }
 
 // Help is a command's help: the argument shape after its name, its one-line
@@ -159,11 +162,14 @@ func (c Commands) ServeCommand(h Help) tools.Command {
 	return tools.Command{Name: "serve", Group: c.Group, Synopsis: h.Synopsis, Summary: h.Summary, NewFlags: nf, Run: run}
 }
 
-// ChannelCommand is `<tool> channel`: the session's MCP server on
-// stdin/stdout (Claude Code or pi starts it).
+// ChannelCommand is `<tool> channel [--scope <dir>]`: the session's MCP server
+// on stdin/stdout (Claude Code or pi starts it). --scope is the session's
+// folder, instead of the one the harness says.
 func (c Commands) ChannelCommand(stdin io.Reader, h Help) tools.Command {
 	tool := c.tool()
-	nf := newFlags("channel", strings.TrimSpace(tool+" channel "+h.Synopsis), h.Long, nil)
+	nf := newFlags("channel", strings.TrimSpace(tool+" channel "+h.Synopsis), h.Long, func(fs *flag.FlagSet) {
+		fs.String("scope", "", "the session's folder (default: the harness's)")
+	})
 	run := func(args []string, out, errw io.Writer) error {
 		fs := nf()
 		pos, err := parse(fs, args, errw) // stdout is the MCP stream
@@ -176,9 +182,16 @@ func (c Commands) ChannelCommand(stdin io.Reader, h Help) tools.Command {
 		c.refreshSkill(errw)
 		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 		defer stop()
-		ch := ForSession(c.Spec, c.client())
+		ch, err := sessionIn(c.Spec, c.client(), fs.Lookup("scope").Value.String())
+		if err != nil {
+			return err
+		}
 		ch.Log = errw
-		return ch.Run(ctx, stdin, out)
+		run := func() error { return ch.Run(ctx, stdin, out) }
+		if c.Around != nil {
+			return c.Around(ctx, ch, run)
+		}
+		return run()
 	}
 	return tools.Command{Name: "channel", Group: c.Group, Synopsis: h.Synopsis, Summary: h.Summary, NewFlags: nf, Run: run}
 }

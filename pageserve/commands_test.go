@@ -173,3 +173,68 @@ func TestChannelAndWatchTakeNoArguments(t *testing.T) {
 		}
 	}
 }
+
+type readSpy struct{ read bool }
+
+func (r *readSpy) Read([]byte) (int, error) { r.read = true; return 0, io.EOF }
+
+// Commands.Around wraps the channel's run, so a tool can announce presence
+// around it, and its answer is the command's.
+func TestChannelRunsInsideAround(t *testing.T) {
+	c := cullCommands(t)
+	stdin := &readSpy{}
+	var before, after bool
+	c.Around = func(_ context.Context, ch *Channel, run func() error) error {
+		before = !stdin.read && ch.Spec.Tool == "cull"
+		err := run()
+		after = stdin.read
+		if err != nil {
+			return err
+		}
+		return errors.New("from around")
+	}
+	err := c.ChannelCommand(stdin, Help{}).Run(nil, io.Discard, io.Discard)
+	if !before || !after {
+		t.Fatalf("before %v after %v", before, after)
+	}
+	if err == nil || err.Error() != "from around" {
+		t.Fatalf("err %v", err)
+	}
+}
+
+// channels.json runs `galley channel --scope .`: --scope is the session's
+// folder, resolved from where the channel starts.
+func TestChannelScopeIsTheSessionsFolder(t *testing.T) {
+	dir, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	other := filepath.Join(dir, "other")
+	if err := os.Mkdir(other, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	t.Chdir(dir)
+	t.Setenv("AGENT_SESSION_ID", "s-1")
+	t.Setenv("CLAUDE_CODE_SESSION_ID", "")
+	for _, tc := range []struct {
+		args []string
+		cwd  string
+	}{
+		{[]string{"--scope", "."}, dir},
+		{[]string{"--scope", other}, other},
+		{[]string{"--scope=other"}, other},
+	} {
+		c := cullCommands(t)
+		var got *Channel
+		c.Around = func(_ context.Context, ch *Channel, _ func() error) error { got = ch; return nil }
+		if err := c.ChannelCommand(strings.NewReader(""), Help{}).Run(tc.args, io.Discard, io.Discard); err != nil {
+			t.Fatalf("%v: %v", tc.args, err)
+		}
+		if got.ID.CWD != tc.cwd || got.scope() != tc.cwd || got.ID.Label != "pi · "+filepath.Base(tc.cwd) {
+			t.Errorf("%v: id %+v scope %q", tc.args, got.ID, got.scope())
+		}
+		if root, _ := got.Root(); root != tc.cwd {
+			t.Errorf("%v: Spec.Root got %q", tc.args, root)
+		}
+	}
+}

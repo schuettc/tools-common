@@ -183,9 +183,14 @@ type mcpClient struct {
 
 func connect(t *testing.T, ch *Channel) *mcpClient {
 	t.Helper()
+	return connectRetrying(t, ch, 50*time.Millisecond)
+}
+
+func connectRetrying(t *testing.T, ch *Channel, retry time.Duration) *mcpClient {
+	t.Helper()
 	logs := &syncBuf{}
 	ch.Log = logs
-	ch.Retry, ch.Presence, ch.Poll = 50*time.Millisecond, 200*time.Millisecond, time.Second
+	ch.Retry, ch.Presence, ch.Poll = retry, 200*time.Millisecond, time.Second
 	c := &mcpClient{t: t, wait: map[int]chan rpc{}, events: make(chan pushed, 16), logs: logs}
 	inR, inW := io.Pipe()
 	outR, outW := io.Pipe()
@@ -631,5 +636,89 @@ func TestFreshRestartsOnlyAStaleServe(t *testing.T) {
 func TestQueryLeavesOutEmptyValues(t *testing.T) {
 	if got := Query("session", "s 1", "root", "", "timeout", "55"); got != "session=s+1&timeout=55" {
 		t.Fatalf("%q", got)
+	}
+}
+
+// tornServe takes presence and tears every wait, as a serve going down does.
+func tornServe(t *testing.T) (*httptest.Server, *atomic.Int32) {
+	t.Helper()
+	var waits atomic.Int32
+	mux := http.NewServeMux()
+	mux.HandleFunc("POST /api/agent/presence", func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNoContent) })
+	mux.HandleFunc("GET /api/agent/wait", func(w http.ResponseWriter, _ *http.Request) {
+		waits.Add(1)
+		conn, _, err := w.(http.Hijacker).Hijack()
+		if err == nil {
+			_ = conn.Close()
+		}
+	})
+	srv := httptest.NewServer(mux)
+	t.Cleanup(srv.Close)
+	return srv, &waits
+}
+
+// After a torn poll the loop goes straight to a serve Find returns that it
+// hasn't reached yet, and registers there: a restart must not leave a Send
+// unheard for Retry (galley refused a Revise for up to 5s). The gap while no
+// serve runs is the restart galley saw.
+func TestALoopGoesStraightToANewServe(t *testing.T) {
+	for _, gap := range []bool{false, true} {
+		torn, waits := tornServe(t)
+		next := newFakeServe(t)
+		root := t.TempDir()
+		cl := next.client()
+		var moved atomic.Bool
+		var seen atomic.Int32
+		cl.Find = func() (Entry, error) {
+			if waits.Load() == 0 {
+				return Entry{Base: torn.URL, Token: "tok", PID: 1}, nil
+			}
+			if gap && seen.Add(1) < 3 {
+				return Entry{}, ErrNotRunning
+			}
+			moved.Store(true)
+			return Entry{Base: next.srv.URL, Token: "tok", PID: 2}, nil
+		}
+		ch := New(cullSpec(), Identity{Session: "s-1", Harness: "pi", Label: "pi · a", CWD: root}, cl)
+		c := connectRetrying(t, ch, time.Minute)
+		next.send(root, "Court sent his answers")
+		if _, ok := c.expectEvent(3 * time.Second); !ok {
+			t.Fatalf("gap %v: the send never arrived (moved %v)", gap, moved.Load())
+		}
+		if len(next.presences()) == 0 {
+			t.Errorf("gap %v: no presence with the new serve", gap)
+		}
+	}
+}
+
+// A serve that goes on refusing is still tried once per Retry.
+func TestALoopRestsOnTheSameServe(t *testing.T) {
+	torn, waits := tornServe(t)
+	cl := NewClient(Live{Tool: "cull"}, nil)
+	cl.Find = func() (Entry, error) { return Entry{Base: torn.URL, Token: "tok", PID: 1}, nil }
+	ch := New(cullSpec(), Identity{Session: "s-1", Harness: "pi", Label: "pi · a", CWD: t.TempDir()}, cl)
+	connectRetrying(t, ch, time.Minute)
+	time.Sleep(300 * time.Millisecond)
+	// Two: net/http itself retries a GET torn on a reused connection, once.
+	if n := waits.Load(); n > 2 {
+		t.Fatalf("%d waits in 300ms", n)
+	}
+}
+
+// Spec.Scope sends the root on presence and the wait; unlike Spec.Root it
+// never stops the loop.
+func TestScopeSendsTheRootWithoutGatingTheLoop(t *testing.T) {
+	f := newFakeServe(t)
+	root := t.TempDir()
+	spec := cullSpec()
+	spec.Root = func(string) (string, error) { return "", errNoProject }
+	spec.Scope = func(cwd string) string { return cwd }
+	c := connect(t, New(spec, Identity{Session: "s-1", Harness: "pi", Label: "pi · a", CWD: root}, f.client()))
+	f.send(root, "Court sent his answers")
+	if _, ok := c.expectEvent(5 * time.Second); !ok {
+		t.Fatalf("the send never arrived: %s", c.logs.String())
+	}
+	if p := f.presences(); len(p) == 0 || p[0]["root"] != root {
+		t.Fatalf("presence %v", p)
 	}
 }

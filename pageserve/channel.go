@@ -46,6 +46,10 @@ type Spec struct {
 	// root its Sends come from. nil: the tool has no project, and they name
 	// no root.
 	Root func(cwd string) (string, error)
+	// Scope is the root presence and wait name, from the session's folder,
+	// for a tool whose loop runs in any folder; it takes Root's place there
+	// and gates nothing.
+	Scope func(cwd string) string
 	// Wake reads one answer of GET /api/agent/wait into the event pushed to
 	// the agent; ok is false when there is nothing to push (the wait timed
 	// out).
@@ -176,9 +180,24 @@ func New(spec Spec, id Identity, c *Client) *Channel {
 // ForSession is the channel `<tool> channel` runs: this session, and
 // serve-only when the session is Claude Code's (see ServeOnly).
 func ForSession(spec Spec, c *Client) *Channel {
-	ch := New(spec, FromEnv(), c)
-	ch.ServeOnly = harness.FromEnv().IsClaude()
+	ch, _ := sessionIn(spec, c, "") // no folder to resolve, no error
 	return ch
+}
+
+// sessionIn is ForSession with dir as the session's folder ("": the harness's).
+func sessionIn(spec Spec, c *Client, dir string) (*Channel, error) {
+	id := FromEnv()
+	if dir != "" {
+		abs, err := filepath.Abs(dir)
+		if err != nil {
+			return nil, err
+		}
+		id.CWD = abs
+		id.Label = id.Harness + " · " + filepath.Base(abs)
+	}
+	ch := New(spec, id, c)
+	ch.ServeOnly = harness.FromEnv().IsClaude()
+	return ch, nil
 }
 
 // Root is the session's project root, or why it has none (spec.Root's
@@ -193,6 +212,9 @@ func (ch *Channel) logf(format string, args ...any) {
 // contains it and every repository inside it (a workspace root), so a Send
 // for any of them reaches this session. "" when the tool has no project.
 func (ch *Channel) scope() string {
+	if ch.Spec.Scope != nil {
+		return ch.Spec.Scope(ch.ID.CWD)
+	}
 	if ch.Spec.Root == nil {
 		return ""
 	}
@@ -245,10 +267,14 @@ func (ch *Channel) Watch(ctx context.Context) error {
 	return nil
 }
 
-// ready says why the loop cannot run: no session, or no project.
+// ready says why the loop cannot run: no session, or no project when Spec.Root
+// is what names it.
 func (ch *Channel) ready() error {
 	if ch.ID.Session == "" {
 		return fmt.Errorf("no session id (not under Claude Code or pi); %s will not reach this session", ch.Spec.Answers)
+	}
+	if ch.Spec.Scope != nil {
+		return nil
 	}
 	return ch.rootErr
 }
@@ -294,6 +320,7 @@ func (ch *Channel) loop(ctx context.Context) {
 		}
 	}
 	for ctx.Err() == nil {
+		at := serveKey(c)
 		if ch.Spec.OnServe != nil {
 			if e, err := c.Find(); err == nil && !e.StartedAt.Equal(seen) {
 				if !seen.IsZero() {
@@ -308,7 +335,9 @@ func (ch *Channel) loop(ctx context.Context) {
 					return
 				}
 				logOnce(err)
-				sleep(ctx, ch.Retry)
+				if ch.rest(ctx, c, at) {
+					lastPresence = time.Time{}
+				}
 				continue
 			}
 			lastPresence, lastErr = time.Now(), ""
@@ -326,7 +355,9 @@ func (ch *Channel) loop(ctx context.Context) {
 				lastPresence = time.Time{}
 			}
 			logOnce(err)
-			sleep(ctx, ch.Retry)
+			if ch.rest(ctx, c, at) {
+				lastPresence = time.Time{}
+			}
 		case code == http.StatusOK && len(got) > 0:
 			lastErr = ""
 			text, meta, ok := ch.Spec.Wake(got)
@@ -341,6 +372,37 @@ func (ch *Channel) loop(ctx context.Context) {
 			lastErr = ""
 		}
 	}
+}
+
+// findEvery is how often rest looks for a new serve.
+const findEvery = 100 * time.Millisecond
+
+// serveKey names the serve Find returns, "" when none runs. A restart can keep
+// its port and its token, so its process and start time are in it.
+func serveKey(c *Client) string {
+	e, err := c.Find()
+	if err != nil {
+		return ""
+	}
+	return fmt.Sprintf("%s %s %d %d", e.Base, e.Token, e.PID, e.StartedAt.UnixNano())
+}
+
+// rest waits after a failed call to the serve at: for Retry, or until Find
+// returns one the loop hasn't reached yet, when it says true, so a restart
+// costs no wait. Each serve gets this one early try, so this never spins.
+func (ch *Channel) rest(ctx context.Context, c *Client, at string) bool {
+	end := time.Now().Add(ch.Retry)
+	for ctx.Err() == nil {
+		if k := serveKey(c); k != "" && k != at {
+			return true
+		}
+		left := time.Until(end)
+		if left <= 0 {
+			return false
+		}
+		sleep(ctx, min(left, findEvery))
+	}
+	return false
 }
 
 // refused describes a delivery the tool's Wake refused by its size and its
