@@ -446,3 +446,53 @@ export interface IndexSectionOptions {
 
 /** A named group of rows. */
 export function indexSection(o: IndexSectionOptions): HTMLElement;
+
+// ---- thread.js
+
+/** One message, as plain values; the caller may carry more on it for attachments. */
+export interface ThreadMessageValue {
+  id: number | string;
+  from: 'court' | 'agent';
+  /** RFC 3339; anything else shows as it came. */
+  at: string;
+  /** What the caller says about it, in the head: "your note". */
+  words?: string;
+  /** A link after the words, opening through the caller. */
+  link?: { text: string; href: string; open(): void } | null;
+  /** Where one of Court's stands: a msgstate state, drawn with messagePill. */
+  state?: string;
+  /** The line under the state's pill. */
+  stateLine?: string;
+  text?: string;
+}
+
+/** Draws what a message carries, under its text. */
+export type ThreadAttachments<M> = (m: M) => Node | null;
+
+export function threadMessage<M extends ThreadMessageValue>(m: M, attachments?: ThreadAttachments<M>): HTMLElement;
+
+/** The note box: el goes in the column; Enter in box, or Send note, calls send. */
+export interface ThreadNote {
+  el: HTMLElement;
+  box: HTMLTextAreaElement;
+  send(): void;
+}
+
+export interface ThreadOptions<M extends ThreadMessageValue> {
+  /** What the thread is on; with none it draws only empty. */
+  id?: string | null;
+  /** The words with no id. */
+  empty?: string;
+  name?: string;
+  /** The card's key: a button that copies a link to it, plain when readOnly; none, no line. */
+  key?: string | null;
+  /** The address's #fragment the key copies; default the id. */
+  link?: string;
+  messages?: M[];
+  note?: ThreadNote | null;
+  readOnly?: boolean;
+  attachments?: ThreadAttachments<M>;
+}
+
+/** The thread column's content. */
+export function thread<M extends ThreadMessageValue>(o: ThreadOptions<M>): HTMLElement;

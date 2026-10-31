@@ -415,3 +415,34 @@ a.kit-brand:hover, a.kit-brand:focus-visible { text-decoration: underline; }
   box-sizing: content-box; width: 7px; height: 7px; margin: 0 4px;
   border: 4px solid transparent; border-radius: 50%; background: var(--kit-signal) padding-box;
 }
+
+/* a key: a card's address, in mono and never shouted */
+.kit-key {
+  overflow-wrap: anywhere; font: 11.5px var(--kit-mono); color: var(--kit-muted);
+  text-transform: none; letter-spacing: 0; font-weight: 400;
+}
+
+/* a note box and its button */
+.kit-note-line { display: flex; gap: 8px; align-items: flex-start; margin-top: 12px; }
+.kit-note-line .kit-btns { flex: none; }
+
+/* the thread column (thread.js): each message edged by who wrote it */
+.kit-thread { padding: 16px; }
+.kit-right-col > .kit-col-body .kit-thread { padding-top: 0; }
+.kit-thread > .kit-label { margin-bottom: 4px; }
+.kit-thread-name {
+  font-weight: 600; margin: 0 0 12px;
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden;
+}
+.kit-thread-key { margin: -8px 0 12px; }
+.kit-thread-key .kit-label-link { font: inherit; color: inherit; text-align: left; }
+.kit-thread-key .kit-label-link:hover { color: var(--kit-signal); }
+.kit-thread-msgs { list-style: none; margin: 0 0 12px; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.kit-thread-msg { border: 1px solid var(--kit-line); border-radius: 8px; padding: 8px 12px; font-size: 14px; }
+.kit-thread-msg.agent { border-left: 3px solid var(--kit-agent); }
+.kit-thread-msg.court { border-left: 3px solid var(--kit-signal); }
+.kit-thread-msg-head { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+.kit-thread-msg-head .kit-meta { font: 11px var(--kit-mono); color: var(--kit-muted); }
+.kit-thread-msg-text { margin: 4px 0 0; white-space: pre-wrap; }
+.kit-thread-ref { font-family: var(--kit-mono); font-size: 13px; }
+.kit-thread .kit-note-line { flex-direction: column; align-items: stretch; }
