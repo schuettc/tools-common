@@ -4,6 +4,32 @@
 // bar.
 import { h } from './dom.js';
 
+// remembered reaches localStorage, where a throw means nothing is remembered: a
+// frame sandboxed without allow-same-origin can't reach it at all.
+const remembered = {
+  get(key) {
+    try {
+      return localStorage.getItem(key);
+    } catch {
+      return null;
+    }
+  },
+  set(key, value) {
+    try {
+      localStorage.setItem(key, value);
+    } catch {
+      // not remembered, still applied
+    }
+  },
+  remove(key) {
+    try {
+      localStorage.removeItem(key);
+    } catch {
+      // nothing to forget
+    }
+  },
+};
+
 // collapsible puts a toggle and body in col. side says which way it folds and
 // name (the tool's) and panel make the key it is remembered under,
 // <name>.collapsed.<panel>; folded starts it folded whatever the page remembers.
@@ -17,7 +43,7 @@ export function collapsible({ col, body, panel, side, name, folded, onPress }) {
     toggle.textContent = on === (side === 'left') ? '›' : '‹';
     toggle.title = on ? `Show the ${panel}` : `Hide the ${panel}`;
     toggle.setAttribute('aria-expanded', String(!on));
-    if (keep) localStorage.setItem(key, on ? '1' : '');
+    if (keep) remembered.set(key, on ? '1' : '');
   };
   toggle.addEventListener('click', () => {
     set(!col.classList.contains('kit-collapsed'));
@@ -25,7 +51,7 @@ export function collapsible({ col, body, panel, side, name, folded, onPress }) {
   });
   col.append(toggle, body);
   if (folded) set(true, false);
-  else set(localStorage.getItem(key) === '1');
+  else set(remembered.get(key) === '1');
   return on => set(on, false);
 }
 
@@ -53,15 +79,15 @@ export function frame({ name, left, centre, right }) {
   let pressed; // the card this tab's press holds on, null for none; undefined before the first call
   const [r, rightBody, foldRight] = side(name, 'right', 'kit-rail', right, () => {
     pressed = shown;
-    localStorage.setItem(pressedOn, shown);
+    remembered.set(pressedOn, shown);
   });
   const mid = h('main', { class: 'kit-read kit-col kit-mid', 'aria-label': centre.label });
   const setRightEmpty = (empty, card = '') => {
     if (!r) return;
     shown = card;
-    if (pressed === undefined) pressed = localStorage.getItem(pressedOn) === card ? card : null;
+    if (pressed === undefined) pressed = remembered.get(pressedOn) === card ? card : null;
     if (pressed === card) return;
-    if (pressed !== null && localStorage.getItem(pressedOn) === pressed) localStorage.removeItem(pressedOn);
+    if (pressed !== null && remembered.get(pressedOn) === pressed) remembered.remove(pressedOn);
     pressed = null;
     foldRight(empty);
   };

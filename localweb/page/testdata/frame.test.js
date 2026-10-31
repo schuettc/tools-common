@@ -204,3 +204,38 @@ test('tip: a press with nothing to show goes to what is under it', () => {
   assert(!box.classList.contains('show'), 'stays shut');
   assert(reached, 'the press carried on');
 });
+
+// A sandboxed frame without allow-same-origin (diazo's mockup view) throws on
+// reaching localStorage at all.
+function withoutStorage(run) {
+  const was = Object.getOwnPropertyDescriptor(window, 'localStorage');
+  Object.defineProperty(window, 'localStorage', {
+    configurable: true,
+    get() { throw new DOMException('denied', 'SecurityError'); },
+  });
+  try {
+    run();
+  } finally {
+    Object.defineProperty(window, 'localStorage', was);
+  }
+}
+
+test('frame: draws where storage is blocked, and folds without remembering', () => {
+  clean();
+  withoutStorage(() => {
+    const f = frame(parts());
+    mount(f);
+    assert(!f.left.classList.contains('kit-collapsed'), 'nothing remembered: open');
+    f.left.firstChild.click();
+    assert(f.left.classList.contains('kit-collapsed'), 'the press still folds');
+    f.setRightEmpty(true, 'c1');
+    assert(f.right.classList.contains('kit-collapsed'), 'an empty thread folds');
+    f.right.firstChild.click();
+    assert(!f.right.classList.contains('kit-collapsed'), 'a press opens it');
+    f.setRightEmpty(true, 'c1');
+    assert(!f.right.classList.contains('kit-collapsed'), 'the press holds on its card in this tab');
+    f.setRightEmpty(true, 'c2');
+    assert(f.right.classList.contains('kit-collapsed'), 'a new card lets go of it');
+  });
+  eq(localStorage.getItem('tooltest.collapsed.index'), null);
+});
