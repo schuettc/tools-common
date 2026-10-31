@@ -8,7 +8,7 @@ const DRAFTS = [
 
 function make(extra = {}) {
   const heard = [];
-  const el = draftList({
+  const list = draftList({
     drafts: DRAFTS,
     empty: 'Nothing drafted.',
     onEdit: (id, text) => heard.push(['edit', id, text]),
@@ -16,10 +16,11 @@ function make(extra = {}) {
     onSelect: id => heard.push(['select', id]),
     ...extra,
   });
+  const el = list.el;
   fixture().append(el);
   const rows = [...el.querySelectorAll('.kit-draft-row')];
   const box = i => rows[i].querySelector('textarea');
-  return { el, heard, rows, box };
+  return { list, el, heard, rows, box };
 }
 
 const enter = (extra = {}) => new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true, ...extra });
@@ -103,6 +104,81 @@ test('draftRow: focus in the box selects the row, and clicks in its words after 
   assert(rows[1].classList.contains('on'), 'marked');
   box(1).click();
   eq(heard, [['select', 'd2']]);
+});
+
+const NEW = { id: 'd3', quote: 'new one', text: 'Arrived while typing.' };
+const shownIds = el => [...el.querySelectorAll('.kit-draft-row')].map(r => r.dataset.draftId);
+
+test('redraw: typing in a box survives a new draft arriving: the words, the focus and the caret', () => {
+  const { list, el, heard, rows, box } = make();
+  const typing = box(1);
+  typing.focus();
+  typing.value = 'half a sentence';
+  typing.setSelectionRange(4, 6);
+  heard.length = 0;
+  list.redraw({ drafts: [...DRAFTS, NEW] });
+  eq(shownIds(el), ['d1', 'd2', 'd3']);
+  assert(el.querySelectorAll('.kit-draft-row')[1] === rows[1], 'the same row');
+  assert(document.activeElement === typing, 'the focus stays in the box');
+  eq([typing.value, typing.selectionStart, typing.selectionEnd], ['half a sentence', 4, 6]);
+  eq(heard, []);
+  blurEl(typing);
+  eq(heard, [['edit', 'd2', 'half a sentence']]);
+});
+
+test('redraw: a row keeps its focus when the others move around it', () => {
+  const { list, el, box } = make();
+  const typing = box(1);
+  typing.focus();
+  typing.value = 'half';
+  list.redraw({ drafts: [DRAFTS[1], NEW, DRAFTS[0]] });
+  eq(shownIds(el), ['d2', 'd3', 'd1']);
+  assert(document.activeElement === typing, 'the focus stays in the box');
+  eq(typing.value, 'half');
+});
+
+test('redraw: changes the quote, meta and mark of a kept row', () => {
+  const { list, rows } = make({ selected: 'd1' });
+  list.redraw({ selected: 'd2', drafts: [{ ...DRAFTS[0], quote: 'purged daily', meta: undefined }, { ...DRAFTS[1], meta: 'now with meta' }] });
+  eq(rows[0].querySelector('.kit-draft-quote').textContent, 'purged daily');
+  assert(!rows[0].querySelector('.kit-meta'), 'its meta went');
+  eq(rows[1].querySelector('.kit-meta').textContent, 'now with meta');
+  assert(rows[1].lastChild.contains(rows[1].querySelector('.kit-btn')), 'the meta sits above the buttons');
+  eq(rows.map(r => r.classList.contains('on')), [false, true]);
+});
+
+test('redraw: new words from the tool replace a box with nothing unsaved, and never unsaved words', () => {
+  const { list, heard, box } = make();
+  box(1).value = 'mine';
+  list.redraw({ drafts: [{ ...DRAFTS[0], text: 'from elsewhere' }, { ...DRAFTS[1], text: 'also from elsewhere' }] });
+  eq([box(0).value, box(1).value], ['from elsewhere', 'mine']);
+  blurEl(box(0));
+  eq(heard, [], 'the tool gave those words, so there is nothing to save');
+  blurEl(box(1));
+  eq(heard, [['edit', 'd2', 'mine']]);
+});
+
+test('redraw: a draft removed goes, with its focused box and unsaved words, and nothing is saved', () => {
+  const { list, el, heard, rows, box } = make();
+  const typing = box(0);
+  typing.focus();
+  typing.value = 'half';
+  heard.length = 0;
+  list.redraw({ drafts: [DRAFTS[1]] });
+  eq(shownIds(el), ['d2']);
+  assert(!rows[0].isConnected, 'gone');
+  blurEl(typing);
+  eq(heard, []);
+});
+
+test('redraw: to no drafts shows the empty line, and back shows rows', () => {
+  const { list, el } = make();
+  list.redraw({ drafts: [] });
+  eq(shownIds(el), []);
+  eq(el.querySelector('.kit-empty').textContent, 'Nothing drafted.');
+  list.redraw({ drafts: [NEW] });
+  eq(shownIds(el), ['d3']);
+  assert(!el.querySelector('.kit-empty'), 'the empty line went');
 });
 
 test('draftRow: a row stands alone, with no callbacks given', () => {

@@ -525,7 +525,7 @@ export interface RailTab {
 }
 
 export interface RailTabsOptions {
-  /** The tool's name: the open tab is remembered under <name>.railTab. */
+  /** The tool's name: the tab last pressed is remembered under <name>.railTab. */
   name: string;
   tabs: RailTab[];
   /** The tab to start on when the page remembers none. Default the first. */
@@ -537,7 +537,7 @@ export interface RailTabsOptions {
 export interface RailTabs {
   /** Goes in the frame's rightBody, so setRightEmpty folds the column around it. */
   el: HTMLElement;
-  /** Opens a tab, and remembers it. An unknown id changes nothing. */
+  /** Shows a tab for the tool, without remembering it: only a press is the reader's choice. An unknown id changes nothing. */
   setOpen(id: string): void;
   setCount(id: string, n: number | string | null | undefined): void;
 }
@@ -672,7 +672,7 @@ export interface DraftListItem {
 }
 
 export interface DraftCallbacks {
-  /** Hears the new words on blur or Enter, when they changed. The row already shows them, so it needn't redraw: a redraw here can lose the press that took the focus away. */
+  /** Hears the new words on blur or Enter, when they changed. The row already shows them, so it needn't redraw. */
   onEdit?(id: string, text: string): void;
   /** Hears delete. Unsaved words go with the draft. The tool removes the row. */
   onDelete?(id: string): void;
@@ -683,8 +683,14 @@ export interface DraftCallbacks {
 /** One draft's row, an <li>. */
 export function draftRow(o: DraftCallbacks & { draft: DraftListItem; on?: boolean }): HTMLElement;
 
-/** The drafts list, for a tab of the right column. The tool stores the drafts; don't redraw while a box has the focus, since unsaved words go with the old box. */
-export function draftList(o: DraftCallbacks & { drafts: DraftListItem[]; empty: string; selected?: string }): HTMLElement;
+export interface DraftList {
+  el: HTMLElement;
+  /** Draws again, at any moment. A row whose draft id is still there stays the same element, with its focus, caret and unsaved words; only what changed is updated. New words from the tool replace a box's only when it has nothing unsaved. A draft no longer given goes, unsaved words with it. */
+  redraw(o: { drafts: DraftListItem[]; selected?: string }): void;
+}
+
+/** The drafts list, for a tab of the right column. The tool stores the drafts. Put el in the page once and call redraw on updates: taking el out of the page takes the focus from its box. */
+export function draftList(o: DraftCallbacks & { drafts: DraftListItem[]; empty: string; selected?: string }): DraftList;
 
 // ---- elsewhere.js
 

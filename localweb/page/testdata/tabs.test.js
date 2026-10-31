@@ -108,12 +108,21 @@ test('railTabs: the open tab is remembered per tool, over open', () => {
   eq(localStorage.getItem(KEY), 'chat');
   const { t, b } = make({ open: 'drafts' });
   assert(shown(t)[0].firstChild === b, 'the pressed tab comes back');
-  make().t.setOpen('drafts');
-  eq(localStorage.getItem(KEY), 'drafts');
   const other = document.createElement('p');
   const t2 = railTabs({ name: 'tabother', tabs: [{ id: 'x', label: 'X', body: other }] });
   eq(shown(t2).length, 1);
   eq(localStorage.getItem('tabother.railTab'), null);
+});
+
+test('railTabs: setOpen shows a tab without remembering it, so the reader\'s tab comes back', () => {
+  clean();
+  tabs(make().t)[0].click();
+  const { t, b } = make();
+  t.setOpen('chat');
+  assert(shown(t)[0].firstChild === b, 'chat is open');
+  eq(localStorage.getItem(KEY), 'drafts');
+  const { t: reloaded, a } = make();
+  assert(shown(reloaded)[0].firstChild === a, 'the pressed tab opens');
 });
 
 test('railTabs: a remembered tab that is gone falls back to open', () => {

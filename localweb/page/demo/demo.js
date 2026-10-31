@@ -228,30 +228,26 @@ function tabsDemo(f, chat) {
     { id: 'd2', quote: '“open it to everyone in March”', text: 'Drop the month; we have no date yet.', meta: 'draft · goes with the next Send' },
   ];
   const shows = h('p', { class: 'kit-empty' }, 'Press a draft to show its item here.');
-  const slot = h('div');
+  const list = draftList({
+    drafts,
+    selected: 'd1',
+    empty: 'Nothing drafted yet.',
+    onEdit(id, text) { drafts = drafts.map(d => (d.id === id ? { ...d, text } : d)); },
+    onDelete(id) {
+      drafts = drafts.filter(d => d.id !== id);
+      t.setCount('drafts', drafts.length);
+      list.redraw({ drafts, selected: 'd1' });
+    },
+    onSelect(id) { shows.textContent = `Showing ${drafts.find(d => d.id === id).quote}`; },
+  });
   const t = railTabs({
     name: 'kitdemo',
     open: 'drafts',
     tabs: [
-      { id: 'drafts', label: 'Drafts', count: drafts.length, body: slot },
+      { id: 'drafts', label: 'Drafts', count: drafts.length, body: list.el },
       { id: 'chat', label: 'Chat', count: 2, body: chat },
     ],
   });
-  const draw = selected => {
-    slot.replaceChildren(draftList({
-      drafts,
-      selected,
-      empty: 'Nothing drafted yet.',
-      onEdit(id, text) { drafts = drafts.map(d => (d.id === id ? { ...d, text } : d)); },
-      onDelete(id) {
-        drafts = drafts.filter(d => d.id !== id);
-        t.setCount('drafts', drafts.length);
-        draw(selected);
-      },
-      onSelect(id) { shows.textContent = `Showing ${drafts.find(d => d.id === id).quote}`; },
-    }));
-  };
-  draw('d1');
   f.centre.prepend(h('div', { class: 'kit-label' }, 'the item a draft is on'), shows);
   return t;
 }

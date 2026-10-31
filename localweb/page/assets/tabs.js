@@ -24,15 +24,16 @@ function remember(key, id) {
 
 // railTabs takes tabs ({ id, label, count, body }), open (the tab to start on
 // when the page remembers none, default the first), name (the tool's, for the key
-// it remembers under, <name>.railTab) and onOpen, which hears each press.
-// setOpen(id) opens a tab from the tool, and is remembered too; setCount(id, n)
-// changes a count, and null or undefined leaves none.
+// it remembers under, <name>.railTab) and onOpen, which hears each press. Only a
+// press is remembered: setOpen(id) shows a tab for the tool, which isn't the
+// reader's choice. setCount(id, n) changes a count, and null or undefined leaves none.
 export function railTabs({ name, tabs, open, onOpen }) {
   const key = `${name}.railTab`;
   const parts = new Map(tabs.map(t => {
     const n = h('span', { class: 'kit-n' });
     const tab = h('button', { class: 'kit-ctl', type: 'button', role: 'tab', onclick: () => {
-      setOpen(t.id);
+      show(t.id);
+      remember(key, t.id);
       if (onOpen) onOpen(t.id);
     } }, t.label, n);
     const panel = h('div', { class: 'kit-rail-panel', role: 'tabpanel', 'aria-label': t.label }, t.body);
@@ -46,9 +47,7 @@ export function railTabs({ name, tabs, open, onOpen }) {
     }
   };
   const setOpen = id => {
-    if (!parts.has(id)) return;
-    show(id);
-    remember(key, id);
+    if (parts.has(id)) show(id);
   };
   const setCount = (id, n) => {
     const p = parts.get(id);
