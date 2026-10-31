@@ -623,3 +623,32 @@ export function sendBar(o: SendBarOptions): HTMLElement;
 
 /** The call to make whenever the bar's "also open" list may have changed. Each runs read() for the items and sets the bar only when they changed (their onClick aside), so an open list stays open. A call during a read reads once more after it, never twice at once; a failed read leaves the list as it was. */
 export function keepElsewhere(bar: Pick<BarHandle, 'setElsewhere'>, read: () => Promise<ElsewhereItem[]> | ElsewhereItem[]): () => Promise<void>;
+
+// ---- frontpage.js
+
+/** A value to filter by, with how many it holds. */
+export interface FilterItem {
+  value: string;
+  label: string;
+  count: number;
+}
+
+/** A section of the left column: All with the total, then one row per item with its count. Several can be chosen; All is on when none is. onToggle hears the value pressed, '' for All. */
+export function filterRow(o: { label: string; items: FilterItem[]; chosen: string[]; onToggle(value: string): void }): HTMLElement;
+
+/** The status pills, drawn as a stage track with no arrows, since statuses aren't a sequence. A pill with no count is hidden unless chosen. The value '' is the tool's All, on when none is chosen. onToggle hears the value pressed. */
+export function statusPills(o: { pills: FilterItem[]; chosen: string[]; onToggle(value: string): void; label?: string }): HTMLElement;
+
+export interface ListGroup {
+  key: string;
+  title: string;
+  /** The group's rows, each an <li>. */
+  rows: HTMLElement[];
+  /** The line shown when it has no rows. */
+  empty: string;
+  /** The edge of a group that needs you. */
+  edge?: 'signal' | 'agent' | 'wait';
+}
+
+/** Named groups of rows, each a card that folds in place. folded holds the keys that start folded; onFold hears each press with the key and whether it is now folded. The tool decides which groups to pass, and keeps what it hears for its next draw. */
+export function groupList(o: { groups: ListGroup[]; folded: string[]; onFold(key: string, folded: boolean): void }): HTMLElement;

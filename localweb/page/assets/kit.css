@@ -537,3 +537,33 @@ textarea.kit-draft { min-height: 72px; field-sizing: content; max-height: 360px;
 .kit-sendbar-count { font: 12px var(--kit-mono); white-space: nowrap; margin-right: auto; }
 .kit-sendbar-hint { color: var(--kit-muted); font-size: 13px; flex: 1 1 100%; order: 3; }
 .kit-sendbar .kit-btns { flex: 0 1 auto; gap: 8px; }
+
+/* the front page's list (frontpage.js): filter rows of one line with the count
+   at the right, chips on a phone; status pills with their count; groups that
+   fold. */
+.kit-filter {
+  grid-template-columns: minmax(0, 1fr) auto; align-items: baseline;
+  column-gap: 8px; padding: 5px 8px;
+}
+.kit-filter > .kit-meta { grid-column: 2; }
+.kit-pill-n { margin-left: 6px; }
+.kit-group.kit-card { max-width: 1100px; margin: 0 0 24px; }
+.kit-group-head {
+  display: block; margin: 0 0 12px; padding: 0; border: 0; background: none;
+  cursor: pointer; text-align: left;
+}
+.kit-group-head::before { content: '▾ '; }
+.kit-group-head:hover { color: var(--kit-signal); }
+.kit-group.kit-folded > .kit-group-head::before { content: '▸ '; }
+.kit-group.kit-folded > :not(.kit-group-head) { display: none; }
+.kit-group.kit-folded > .kit-group-head { margin-bottom: 0; }
+.kit-group-rows { list-style: none; margin: 0; padding: 0; }
+@media (width <= 640px) {
+  .kit-filter-row { padding: 0 12px; }
+  .kit-filter-row > .kit-label { margin: 0 0 4px; }
+  .kit-filter-row .kit-index-rows { flex-direction: row; flex-wrap: wrap; gap: 4px; }
+  .kit-filter-row .kit-index-row { border: 1px solid var(--kit-line); background: var(--kit-card); }
+  .kit-filter-row .kit-index-row.on { background: color-mix(in srgb, var(--kit-signal) 14%, var(--kit-card)); }
+  .kit-filter { grid-template-columns: auto auto; padding: 2px 8px; }
+  .kit-filter > .kit-index-title { font-size: 13px; }
+}
