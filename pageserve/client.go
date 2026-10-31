@@ -44,8 +44,8 @@ func NewClient(l Live, start func() (Entry, error)) *Client {
 }
 
 // Passive is a copy of c that never starts serve: the client the channel's
-// wait loop, its reports, `<tool> watch` and `<tool> report` use, so that
-// serve's idle exit can happen. Only a tool call starts serve.
+// wait loop, its reports, `<tool> watch` and `<tool> report` use. Only a tool
+// call starts serve.
 func (c *Client) Passive() *Client {
 	return &Client{Tool: c.Tool, HTTP: c.HTTP, Find: c.Find, Stop: c.Stop}
 }

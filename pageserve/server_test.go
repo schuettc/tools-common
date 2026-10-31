@@ -38,6 +38,13 @@ func testAPI() http.Handler {
 func startRun(t *testing.T, o Options) *running {
 	t.Helper()
 	t.Setenv("CULL_HOME", t.TempDir())
+	return runHere(t, o)
+}
+
+// runHere is startRun in the state directory already set, so a test can
+// restart a serve over the same state.
+func runHere(t *testing.T, o Options) *running {
+	t.Helper()
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
 	r := &running{done: make(chan error, 1), url: make(chan string, 1), log: &strings.Builder{}, started: make(chan string, 1)}
@@ -129,14 +136,6 @@ func TestAdvertPrivateAndRemovedOnExit(t *testing.T) {
 	}
 }
 
-func TestIdleExit(t *testing.T) {
-	r := startRun(t, Options{Idle: 200 * time.Millisecond})
-	wait(t, r)
-	if _, err := LiveFor("cull").Running(); !errors.Is(err, ErrNotRunning) {
-		t.Fatalf("%v", err)
-	}
-}
-
 func TestStopRequiresToken(t *testing.T) {
 	r := startRun(t, Options{})
 	live := LiveFor("cull")
@@ -160,14 +159,6 @@ func TestStopRequiresToken(t *testing.T) {
 	}
 	_ = Stop(context.Background(), live)
 	wait(t, r)
-}
-
-func TestIdleExitWithIdleStreamOpen(t *testing.T) {
-	r := startRun(t, Options{Idle: 300 * time.Millisecond})
-	e, _ := LiveFor("cull").Running()
-	resp := get(t, e, "/api/events")
-	defer func() { _ = resp.Body.Close() }()
-	wait(t, r) // an open but idle tab doesn't keep the server alive
 }
 
 func TestAPIRequiresToken(t *testing.T) {

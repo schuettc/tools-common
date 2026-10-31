@@ -8,8 +8,8 @@
 //     whether the session that owns it is still here. A tool with one page
 //     uses one entry, live/serve.json (Running, Advertise, Withdraw).
 //   - Events: the event log the page reads, by poll or server-sent events.
-//   - Run: the serve process itself (the advert while it runs, /api/stop,
-//     the idle shutdown); Process starts, finds and stops it from outside.
+//   - Run: the serve process itself (the advert while it runs, /api/stop, the
+//     kept token); Process starts, finds and stops it from outside.
 //   - Client and Channel: what an agent session runs, `<tool> channel` and
 //     `<tool> watch`: find or start serve, call it, register the session,
 //     long-poll for the human's Sends and push each one to the agent.

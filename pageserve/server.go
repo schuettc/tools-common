@@ -3,7 +3,7 @@ package pageserve
 // The serve process: one local server per machine that serves the tool's
 // page and API, streams its events, and writes the entry other processes find
 // (and stop) it by. Moved from cull's internal/cull/serve/server.go, with
-// diazo's serve.lock and kept token.
+// diazo's serve.lock and kept token (token.go).
 
 import (
 	"context"
@@ -13,7 +13,6 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"sync/atomic"
 	"time"
 
 	tools "github.com/subaud-tools/tools-common"
@@ -26,12 +25,8 @@ type Options struct {
 	Assets fs.FS        // the page, served at / without a token
 	API    http.Handler // the tool's own /api/ routes (token required); nil: none
 	// Events is the log behind /api/events and /api/poll (nil: a new one).
-	Events *Events
-	Port   int // 0: remembered, else free
-	// Token, when set, is used instead of a new one, so a serve that keeps it
-	// across restarts keeps its open tabs working (localweb.Config.Token).
-	Token   string
-	Idle    time.Duration // shut down after this long with no API traffic (0: never)
+	Events  *Events
+	Port    int // 0: remembered, else free
 	Version string
 	Log     io.Writer // one line per start/stop
 	// OnStart runs the tool's own start-up steps once the server listens and
@@ -44,22 +39,16 @@ type Options struct {
 	// a tool whose page streams from its own event bus (casebook's).
 	// GET /api/poll stays Events'.
 	Stream http.HandlerFunc
-	// Busy, when set, keeps serve up past Idle while it answers true: a tool
-	// whose open page should keep its serve alive (casebook counts its tabs)
-	// says so here, and the idle clock starts again from the last busy check.
-	// It runs on the idle goroutine, so it must be a fast, concurrency-safe
-	// read that never blocks or panics (an atomic count). nil: only API
-	// requests count as activity.
-	Busy func() bool
 	// Entry, when set, edits the entry just before it is written: the
 	// server's own start time as StartedAt, Reopened. The edited entry must
 	// still validate, or Run fails.
 	Entry func(*Entry)
 }
 
-// Run serves until ctx ends, POST /api/stop, or the idle limit. It writes the
-// tool's one entry (Live.Advertise) while running and removes it on the way
-// out. Besides the tool's API it answers GET /api/events (Options.Stream, else
+// Run serves until ctx ends or POST /api/stop; it never exits for being idle.
+// It writes the tool's one entry (Live.Advertise) while running and removes it
+// on the way out, and keeps its token in StateDir/token across restarts, so
+// open tabs keep working. Besides the tool's API it answers GET /api/events (Options.Stream, else
 // Events.Stream), GET /api/poll and POST /api/stop.
 func Run(ctx context.Context, o Options) error {
 	if o.Log == nil {
@@ -91,11 +80,13 @@ func Run(ctx context.Context, o Options) error {
 	if e, err := o.Live.Running(); err == nil {
 		return fmt.Errorf("%s serve is already running (pid %d, %s)", tool, e.PID, e.Base)
 	}
+	token, err := keptToken(state)
+	if err != nil {
+		return err
+	}
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	o.Events.bind(ctx)
-	var activity atomic.Int64 // unix ms of the last API request
-	activity.Store(time.Now().UnixMilli())
 	mux := http.NewServeMux()
 	stream := o.Events.Stream
 	if o.Stream != nil {
@@ -110,11 +101,7 @@ func Run(ctx context.Context, o Options) error {
 	if o.API != nil {
 		mux.Handle("/", o.API)
 	}
-	api := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		activity.Store(time.Now().UnixMilli())
-		mux.ServeHTTP(w, r)
-	})
-	srv, err := localweb.Start(ctx, localweb.Config{Tool: tool, Assets: o.Assets, API: api, Port: o.Port, Token: o.Token})
+	srv, err := localweb.Start(ctx, localweb.Config{Tool: tool, Assets: o.Assets, API: mux, Port: o.Port, Token: token})
 	if err != nil {
 		return err
 	}
@@ -137,9 +124,6 @@ func Run(ctx context.Context, o Options) error {
 	defer o.Live.Withdraw(e.PID)
 	_, _ = fmt.Fprintf(o.Log, "%s serve: started %s (pid %d)\n", tool, e.Base, e.PID)
 	defer func() { _, _ = fmt.Fprintf(o.Log, "%s serve: stopped (pid %d)\n", tool, e.PID) }()
-	if o.Idle > 0 {
-		go idle(ctx, o.Idle, &activity, o.Busy, cancel)
-	}
 	if o.Ready != nil {
 		o.Ready(srv.URL)
 	}
@@ -147,25 +131,4 @@ func Run(ctx context.Context, o Options) error {
 	cancel()
 	o.Events.wait() // streams end with ctx
 	return err
-}
-
-func idle(ctx context.Context, limit time.Duration, activity *atomic.Int64, busy func() bool, stop context.CancelFunc) {
-	every := min(max(limit/4, 5*time.Millisecond), time.Minute)
-	t := time.NewTicker(every)
-	defer t.Stop()
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-t.C:
-			if busy != nil && busy() {
-				activity.Store(time.Now().UnixMilli())
-				continue
-			}
-			if time.Since(time.UnixMilli(activity.Load())) > limit {
-				stop()
-				return
-			}
-		}
-	}
 }

@@ -258,8 +258,6 @@ func (l *Events) Stream(w http.ResponseWriter, r *http.Request) {
 			return
 		case <-wait:
 		case <-beat.C:
-			// The heartbeat is not activity: an open but idle tab must not
-			// keep the server alive.
 			if !write(": hb\n\n") {
 				return
 			}

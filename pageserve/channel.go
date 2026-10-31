@@ -272,8 +272,8 @@ func (ch *Channel) Announce(ctx context.Context, c *Client) error {
 // claims a send for exactly one caller, so an event is never duplicated. A
 // delivery the tool's Wake refuses is logged with its first 200 bytes, so a
 // lost one leaves a trace. It
-// never starts serve (only a tool call does), so serve's idle exit can
-// happen, and while no serve runs it logs nothing.
+// never starts serve (only a tool call does), and while no serve runs it logs
+// nothing.
 func (ch *Channel) loop(ctx context.Context) {
 	c := ch.Client.Passive()
 	var lastPresence time.Time
