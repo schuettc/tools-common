@@ -1,5 +1,5 @@
 import { test, eq, assert, fixture } from './harness.js';
-import { frame, collapsible } from '/_kit/frame.js';
+import { frame, collapsible, narrowMode } from '/_kit/frame.js';
 import { lineTip, wireTip } from '/_kit/tip.js';
 
 const parts = (extra = {}) => ({
@@ -143,6 +143,236 @@ test('collapsible: folded starts it folded and leaves what the page remembers al
   collapsible({ col, body, panel: 'index', side: 'left', name: 'tooltest', folded: true });
   assert(col.classList.contains('kit-collapsed'), 'folded');
   eq(localStorage.getItem('tooltest.collapsed.index'), null);
+});
+
+// A window whose width the test sets: fire(true) drags it to 1080 or less.
+function withWidth(run) {
+  const real = window.matchMedia;
+  const heard = new Set();
+  const mq = {
+    matches: true,
+    addEventListener: (_, f) => heard.add(f),
+    removeEventListener: (_, f) => heard.delete(f),
+  };
+  const queries = [];
+  window.matchMedia = q => { queries.push(q); return mq; };
+  const fire = on => {
+    mq.matches = on;
+    for (const f of [...heard]) f({ matches: on });
+  };
+  try {
+    return run(fire, { queries, heard });
+  } finally {
+    window.matchMedia = real;
+  }
+}
+
+function narrowed(extra = {}) {
+  clean();
+  const f = frame(parts());
+  const app = mount(f);
+  const seen = [];
+  const n = narrowMode({ root: app, left: f.left, right: f.right, onShow: s => seen.push(s), ...extra });
+  return { f, app, n, seen };
+}
+
+const stateOf = ({ app }) => (app.classList.contains('kit-narrow-left') ? 'left' : app.classList.contains('kit-narrow-right') ? 'right' : null);
+const stored = () => Object.keys(localStorage).filter(k => k.includes('.collapsed.')).sort().map(k => [k, localStorage.getItem(k)]);
+
+test('narrowMode: at 1080 or less the page is narrow on the card, and it follows the window', () => {
+  withWidth((fire, { queries }) => {
+    const p = narrowed();
+    eq(queries, ['(width <= 1080px)']);
+    assert(p.app.classList.contains('kit-narrow'), 'narrow');
+    eq(stateOf(p), null);
+    fire(false);
+    assert(!p.app.classList.contains('kit-narrow'), 'wide again');
+    fire(true);
+    assert(p.app.classList.contains('kit-narrow'), 'narrow again');
+  });
+});
+
+test('narrowMode: closed sides are 40px strips whatever kit-collapsed says, and the centre has the rest', () => {
+  withWidth(() => {
+    const { f, app } = narrowed();
+    app.style.width = '800px';
+    assert(!f.left.classList.contains('kit-collapsed'), 'the fold says open');
+    eq([f.left.offsetWidth, f.right.offsetWidth, f.centre.offsetWidth], [40, 40, 720]);
+    eq(getComputedStyle(f.leftBody).display, 'none');
+    eq(app.scrollWidth, 800);
+  });
+});
+
+test('narrowMode: a press moves the state, and the open side takes the centre track', () => {
+  withWidth(() => {
+    const p = narrowed();
+    p.app.style.width = '800px';
+    p.f.left.firstChild.click();
+    eq(stateOf(p), 'left');
+    eq(p.seen, ['left']);
+    eq([p.f.left.offsetWidth, p.f.right.offsetWidth], [760, 40]);
+    eq(getComputedStyle(p.f.centre).visibility, 'hidden');
+    assert(getComputedStyle(p.f.leftBody).display !== 'none', 'the body shows');
+    eq(p.app.scrollWidth, 800);
+  });
+});
+
+test('narrowMode: a press on the open side returns to the card', () => {
+  withWidth(() => {
+    const p = narrowed();
+    p.f.right.firstChild.click();
+    eq(stateOf(p), 'right');
+    p.f.right.firstChild.click();
+    eq(stateOf(p), null);
+    eq(p.seen, ['right', null]);
+    eq(getComputedStyle(p.f.centre).visibility, 'visible');
+  });
+});
+
+test('narrowMode: a press on the other strip moves straight there', () => {
+  withWidth(() => {
+    const p = narrowed();
+    p.f.left.firstChild.click();
+    p.f.right.firstChild.click();
+    eq(stateOf(p), 'right');
+    eq(p.seen, ['left', 'right']);
+  });
+});
+
+test('narrowMode: show moves the state and tells onShow only of a change', () => {
+  withWidth(() => {
+    const p = narrowed();
+    p.n.show('right');
+    p.n.show('right');
+    p.n.show(null);
+    eq(p.seen, ['right', null]);
+  });
+});
+
+test('narrowMode: presses leave what is remembered untouched', () => {
+  withWidth(() => {
+    const p = narrowed();
+    const before = stored();
+    p.f.left.firstChild.click();
+    p.f.right.firstChild.click();
+    p.f.right.firstChild.click();
+    eq(stored(), before);
+    assert(!p.f.left.classList.contains('kit-collapsed') && !p.f.right.classList.contains('kit-collapsed'), 'the folds stay');
+  });
+});
+
+test('narrowMode: setRightEmpty changes nothing visible while narrow, and its fold is there on widening', () => {
+  withWidth(fire => {
+    const p = narrowed();
+    const t = p.f.right.firstChild;
+    const look = () => [stateOf(p), t.textContent, t.title, t.getAttribute('aria-expanded'), p.f.right.offsetWidth];
+    const shut = look();
+    p.f.setRightEmpty(true, 'F1');
+    p.f.setRightEmpty(false, 'F1');
+    eq(look(), shut);
+    t.click();
+    const open = look();
+    p.f.setRightEmpty(true, 'F2');
+    eq(look(), open);
+    fire(false);
+    assert(p.f.right.classList.contains('kit-collapsed'), 'the empty rule holds once wide');
+    eq(t.title, 'Show the thread');
+  });
+});
+
+test('narrowMode: the toggle follows the state while narrow and the fold again when wide', () => {
+  withWidth(fire => {
+    const { f, n } = narrowed();
+    const face = t => [t.textContent, t.title, t.getAttribute('aria-expanded')];
+    const l = f.left.firstChild;
+    const r = f.right.firstChild;
+    eq(face(l), ['›', 'Show the index', 'false']);
+    eq(face(r), ['‹', 'Show the thread', 'false']);
+    l.click();
+    eq(face(l), ['‹', 'Hide the index', 'true']);
+    n.show('right');
+    eq(face(l), ['›', 'Show the index', 'false']);
+    eq(face(r), ['›', 'Hide the thread', 'true']);
+    fire(false);
+    eq(face(l), ['‹', 'Hide the index', 'true']);
+    eq(face(r), ['›', 'Hide the thread', 'true']);
+  });
+});
+
+test('narrowMode: leaving narrow clears the state, and a wide press folds and is remembered', () => {
+  withWidth(fire => {
+    const p = narrowed();
+    p.f.left.firstChild.click();
+    fire(false);
+    eq(stateOf(p), null);
+    eq(p.seen, ['left', null]);
+    p.f.left.firstChild.click();
+    assert(p.f.left.classList.contains('kit-collapsed'), 'folded');
+    eq(localStorage.getItem('tooltest.collapsed.index'), '1');
+    fire(true);
+    eq(stateOf(p), null);
+    fire(false);
+    assert(p.f.left.classList.contains('kit-collapsed'), 'the wide choice survives narrow');
+  });
+});
+
+test('narrowMode: show does nothing while the page is wide', () => {
+  withWidth(fire => {
+    const p = narrowed();
+    fire(false);
+    p.n.show('left');
+    eq(stateOf(p), null);
+    eq(p.seen, []);
+  });
+});
+
+test('narrowMode: a count is a badge under the toggle, absent at zero, and shown only on a closed strip', () => {
+  withWidth(fire => {
+    const { f, n } = narrowed();
+    const badge = () => f.right.querySelector(':scope > .kit-col-count');
+    assert(!badge(), 'none to start');
+    n.setCount('right', 3);
+    eq(badge().textContent, '3');
+    assert(f.right.firstChild.nextElementSibling === badge(), 'under the toggle');
+    assert(badge().getBoundingClientRect().top >= f.right.firstChild.getBoundingClientRect().bottom, 'below it on the strip');
+    n.setCount('right', 4);
+    eq(f.right.querySelectorAll('.kit-col-count').length, 1);
+    eq(badge().textContent, '4');
+    n.show('right');
+    eq(getComputedStyle(badge()).display, 'none');
+    n.show(null);
+    fire(false);
+    eq(getComputedStyle(badge()).display, 'none');
+    fire(true);
+    n.setCount('right', 0);
+    assert(!badge(), 'gone at zero');
+  });
+});
+
+test('narrowMode: a page with one side has only that strip', () => {
+  withWidth(() => {
+    clean();
+    const f = frame(parts({ right: undefined }));
+    const app = document.createElement('div');
+    app.className = 'kit-app';
+    app.append(document.createElement('div'), f.left, f.centre);
+    fixture().append(app);
+    const n = narrowMode({ root: app, left: f.left });
+    n.setCount('right', 2);
+    n.show('right');
+    assert(!app.classList.contains('kit-narrow-right'), 'no such side');
+    f.left.firstChild.click();
+    assert(app.classList.contains('kit-narrow-left'), 'the side it has');
+  });
+});
+
+test('narrowMode: stop lets go of the window', () => {
+  withWidth((fire, { heard }) => {
+    const { n } = narrowed();
+    eq(heard.size, 1);
+    n.stop();
+    eq(heard.size, 0);
+  });
 });
 
 function tipped(when) {
