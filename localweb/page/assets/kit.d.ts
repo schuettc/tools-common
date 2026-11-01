@@ -732,3 +732,30 @@ export interface ListGroup {
 
 /** Named groups of rows, each a card that folds in place. folded holds the keys that start folded; onFold hears each press with the key and whether it is now folded. The tool decides which groups to pass, and keeps what it hears for its next draw. */
 export function groupList(o: { groups: ListGroup[]; folded: string[]; onFold(key: string, folded: boolean): void }): HTMLElement;
+
+// ---- needs.js
+
+/** One thing that needs the reader. */
+export interface NeedsItem {
+  id: string;
+  label: string;
+  /** A second line in the menu. */
+  detail?: string;
+}
+
+export interface NeedsPill {
+  el: HTMLButtonElement;
+  /** The list now. Items that haven't changed leave an open menu and its rows alone. */
+  set(items: NeedsItem[]): void;
+  /** Closes the menu. A page that takes el out for good calls this. */
+  close(): void;
+}
+
+/** The count of what needs the reader, as a button: one item opens on a press, several open a menu naming each in the order given, none hides it. open hears the item's id. */
+export function needsPill(o: { items: NeedsItem[]; open(id: string): void }): NeedsPill;
+
+/** The line after an answer: how many are left and a button naming next, which calls open. With none left it says so, with no button. It never moves the page. */
+export function nextLine(o: { left: number; next?: NeedsItem | null; open(id: string): void }): HTMLElement;
+
+/** Shows el with its answer control on screen: the element marked data-answer, else a text box in it. On an el too tall for the screen the control wins. A text box is focused. */
+export function arrive(el: Element): void;

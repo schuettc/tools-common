@@ -595,3 +595,18 @@ textarea.kit-draft { min-height: 72px; field-sizing: content; max-height: 360px;
   .kit-filter { grid-template-columns: auto auto; padding: 2px 8px; }
   .kit-filter > .kit-index-title { font-size: 13px; }
 }
+
+/* getting to what needs the reader (needs.js): the count as a button, the same
+   button on the line after an answer. */
+.kit-needs {
+  box-sizing: border-box; height: 22px; padding: 0 10px; border: 0; border-radius: 999px;
+  font: 600 12px var(--kit-mono); white-space: nowrap; cursor: pointer;
+  background: var(--kit-signal); color: var(--kit-signal-ink);
+}
+.kit-needs[hidden] { display: none; }
+.kit-needs:hover { filter: brightness(1.08); }
+.kit-stages .kit-needs { margin-left: 8px; }
+.kit-needs-row { grid-template-columns: 1fr; }
+.kit-needs-row > * { grid-column: 1; }
+.kit-next { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; }
+.kit-next-words { font: 12px var(--kit-mono); color: var(--kit-muted); }
