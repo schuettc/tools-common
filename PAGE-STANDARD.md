@@ -33,6 +33,7 @@ Every page takes these from the kit, `localweb/page`. Page shape has no test: it
 | Rule | Delivered by | Since |
 |---|---|---|
 | The three-column frame, with the thread on the right. The thread column is always present and folds to a strip when its card has no messages. | `frame`, `collapsible`, `thread` | needs adopting from 0.41.0 |
+| One thing at a time at 1080 wide or less, on a page that turns it on, with a count on each strip. | `narrowMode` | adopted by diazo |
 | One primary action on the top bar, on the far right. | `bar`, through its `primary` | already released |
 | The fixed card header. | `card`, through its `head` | already released |
 | The stage track, whose stages are the tool's own. | `stageTrack` | needs adopting from 0.41.0 |

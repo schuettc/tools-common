@@ -4,6 +4,11 @@ Root module releases are tagged `vX.Y.Z`; the separate `sqlitedb` and
 `mermaidkit` modules are tagged `sqlitedb/vX.Y.Z` and `mermaidkit/vX.Y.Z`. Releases before this file are described by their
 tags and PRs.
 
+## 0.50.0
+
+### Added
+- `narrowMode({ root, left, right })` in the page kit's frame: at 1080 wide or less a page that turns it on shows one thing at a time (the centre, or a side in its place, the other a strip), with a count slot on each strip. The fold and what is remembered of it are ignored and never written while narrow. Pages that don't turn it on are unchanged.
+
 ## 0.49.0
 
 ### Added
