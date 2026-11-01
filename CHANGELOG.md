@@ -4,6 +4,13 @@ Root module releases are tagged `vX.Y.Z`; the separate `sqlitedb` and
 `mermaidkit` modules are tagged `sqlitedb/vX.Y.Z` and `mermaidkit/vX.Y.Z`. Releases before this file are described by their
 tags and PRs.
 
+## 0.48.0
+
+### Added
+- `needsPill({items, open})` returns `{el, set, close}`: the count of what needs the reader as a button. One item opens on a press, several open a menu naming each in the order given, none hides it. `set` with the same items leaves an open menu and its rows alone, so a live update takes nothing from under the pointer.
+- `nextLine({left, next, open})`: the line after an answer, how many are left with a Next button naming the next, and no button at zero. It never moves the page.
+- `arrive(el)`: shows `el` with its answer control on screen (the element marked `data-answer`, else a text box in it) and focuses a text box.
+
 ## 0.47.0
 
 ### Added
