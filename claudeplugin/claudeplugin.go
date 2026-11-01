@@ -1,9 +1,9 @@
 // Package claudeplugin renders a family tool's Claude Code plugin: the
 // manifest, the .mcp.json that runs `<bin> channel` for the tool's MCP tools,
-// and a mod (hooks/hooks.json, hooks/register.js) that runs `<bin> watch` and
-// starts a turn with each event it prints. Every tool's mod comes from the
-// one template in this package; AssertCurrent keeps a tool's committed copy
-// equal to it.
+// and a mod (hooks/hooks.json, hooks/register.js) that runs `<bin> watch` (or
+// `<bin> <group> watch`) and starts a turn with each event it prints. Every
+// tool's mod comes from the one template in this package; AssertCurrent keeps
+// a tool's committed copy equal to it.
 //
 // plugin.json carries no "version": for a plugin in a git-hosted marketplace
 // Claude Code then versions it by commit, so the committed plugin does not
@@ -34,6 +34,10 @@ type Spec struct {
 	// Bin is the executable: `<Bin> channel` serves the MCP tools and
 	// `<Bin> watch` prints events.
 	Bin string
+	// Group, when set, is the command the mod's commands sit under: the mod
+	// runs `<Bin> <Group> watch` and `<Bin> <Group> report`. `<Bin> channel`
+	// stays where it is.
+	Group string
 	// ServerName is the MCP server's key in .mcp.json.
 	ServerName  string
 	Description string
@@ -98,16 +102,26 @@ func Render(s Spec) (Files, error) {
 	return files, nil
 }
 
-// renderJS fills a register.js template with s's name and binary.
+// renderJS fills a register.js template with s's name, binary and group.
 func renderJS(src string, s Spec) ([]byte, error) {
 	nameJS, _ := json.Marshal(s.Name)
 	binJS, _ := json.Marshal(s.Bin)
+	// groupJS goes before 'watch' and 'report' in the argvs, and logGroupJS
+	// after BIN in the log lines that name the command; both are empty with
+	// no group, so an ungrouped mod renders as it always has.
+	groupJS, logGroupJS := "", ""
+	if s.Group != "" {
+		g, _ := json.Marshal(s.Group)
+		groupJS = string(g) + ", "
+		lg, _ := json.Marshal(" " + s.Group)
+		logGroupJS = string(lg) + " + "
+	}
 	t, err := template.New("register.js").Parse(src)
 	if err != nil {
 		return nil, err
 	}
 	var b bytes.Buffer
-	if err := t.Execute(&b, map[string]string{"NameJS": string(nameJS), "BinJS": string(binJS)}); err != nil {
+	if err := t.Execute(&b, map[string]string{"NameJS": string(nameJS), "BinJS": string(binJS), "GroupJS": groupJS, "LogGroupJS": logGroupJS}); err != nil {
 		return nil, err
 	}
 	return b.Bytes(), nil

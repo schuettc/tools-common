@@ -4,6 +4,11 @@ Root module releases are tagged `vX.Y.Z`; the separate `sqlitedb` and
 `mermaidkit` modules are tagged `sqlitedb/vX.Y.Z` and `mermaidkit/vX.Y.Z`. Releases before this file are described by their
 tags and PRs.
 
+## 0.49.0
+
+### Added
+- `claudeplugin.Spec.Group`: an optional command group, so a tool's mod runs `<bin> <group> watch` and `<bin> <group> report`. A tool that sets none renders exactly as before.
+
 ## 0.48.0
 
 ### Added
