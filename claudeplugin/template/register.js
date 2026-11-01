@@ -54,7 +54,7 @@ async function report($, args) {
   const what = BIN + ' report ' + args.join(' ')
   try {
     const id = await $.session.id()
-    const child = $.process.spawn({ argv: [BIN, 'report', ...args], env: { CLAUDE_CODE_SESSION_ID: id } })
+    const child = $.process.spawn({ argv: [BIN, {{.GroupJS}}'report', ...args], env: { CLAUDE_CODE_SESSION_ID: id } })
     for await (const _ of child) {
     }
     const r = await child.result
@@ -95,7 +95,7 @@ async function watch($, gen) {
   try {
     const id = await $.session.id()
     if (gen !== generation) return
-    const child = $.process.spawn({ argv: [BIN, 'watch'], env: { CLAUDE_CODE_SESSION_ID: id } })
+    const child = $.process.spawn({ argv: [BIN, {{.GroupJS}}'watch'], env: { CLAUDE_CODE_SESSION_ID: id } })
     current = child
     let buf = ''
     for await (const { stream, text } of child) {

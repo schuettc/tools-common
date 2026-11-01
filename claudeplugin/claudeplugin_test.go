@@ -107,7 +107,9 @@ func TestRenderHooksModule(t *testing.T) {
 type modRun struct {
 	Submitted []string `json:"submitted"`
 	Spawns    int      `json:"spawns"`
-	Restarts  int      `json:"restarts"`
+	// Watches is each watch's argv.
+	Watches  [][]string `json:"watches"`
+	Restarts int        `json:"restarts"`
 	// Reports is each `BIN report ...` the mod ran, with its env.
 	Reports []struct {
 		Argv []string          `json:"argv"`
@@ -166,7 +168,7 @@ import { register } from './register.mjs'
 const hooks = {}
 register((name, fn) => { hooks[name] = fn })
 const out = ` + strconvQuote(out) + `
-const run = { submitted: [], spawns: 0, restarts: 0, reports: [], logs: [], order: [] }
+const run = { submitted: [], watches: [], spawns: 0, restarts: 0, reports: [], logs: [], order: [] }
 const waits = []
 const sleep = ms => new Promise(r => setTimeout(r, ms))
 async function settle() {
@@ -178,13 +180,16 @@ const $ = {
   session: { id: async () => 'sid' },
   env: { get: async () => '' },
   process: { spawn: ({ argv, env }) => {
-    if (argv[1] === 'report') {
+    const at = argv.indexOf('report')
+    if (at > 0) {
       run.reports.push({ argv, env })
-      run.order.push('start ' + argv[2])
-      const result = new Promise(r => setTimeout(() => { run.order.push('end ' + argv[2]); r({ code: ` + strconv.Itoa(o.ReportCode) + ` }) }, ` + strconv.Itoa(o.ReportMs) + `))
+      const what = argv[at + 1]
+      run.order.push('start ' + what)
+      const result = new Promise(r => setTimeout(() => { run.order.push('end ' + what); r({ code: ` + strconv.Itoa(o.ReportCode) + ` }) }, ` + strconv.Itoa(o.ReportMs) + `))
       return { result, return() {}, async *[Symbol.asyncIterator]() { await result } }
     }
     run.spawns++
+    run.watches.push(argv)
     return { result: Promise.resolve({ code: 0 }), return() {}, async *[Symbol.asyncIterator]() { yield { stream: 'stdout', text: out } } }
   } },
   prompt: { submit: ({ text }) => {
@@ -285,6 +290,79 @@ func TestOldModReadsNewLines(t *testing.T) {
 		now := runMod(t, files["hooks/register.js"], buf.String())
 		if len(was.Submitted) != 1 || len(now.Submitted) != 1 || was.Submitted[0] != now.Submitted[0] {
 			t.Fatalf("meta %v: 0.17.0 mod submitted %q, new mod %q", meta, was.Submitted, now.Submitted)
+		}
+	}
+}
+
+// TestNoGroupLeavesTheOldTemplateUnchanged: the 0.17.0 template, which knows
+// nothing of groups, renders with only its name and binary filled in.
+func TestNoGroupLeavesTheOldTemplateUnchanged(t *testing.T) {
+	old, err := os.ReadFile(filepath.Join("testdata", "register-v0.17.0.js"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := renderJS(string(old), galley)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := strings.NewReplacer("{{.NameJS}}", `"galley"`, "{{.BinJS}}", `"galley"`).Replace(string(old))
+	if string(got) != want {
+		t.Fatalf("0.17.0 template rendered differently:\n%s", got)
+	}
+}
+
+// TestGroupGoesBeforeWatchAndReport: a tool with a group runs `BIN GROUP watch`
+// and `BIN GROUP report ...`; one with none runs `BIN watch` and `BIN report ...`.
+func TestGroupGoesBeforeWatchAndReport(t *testing.T) {
+	for _, tc := range []struct {
+		group string
+		words []string
+	}{
+		{"", []string{galley.Bin}},
+		{"pages", []string{galley.Bin, "pages"}},
+	} {
+		s := galley
+		s.Group = tc.group
+		files, err := Render(s)
+		if err != nil {
+			t.Fatal(err)
+		}
+		r := runModWith(t, files["hooks/register.js"], `{"text":"hi","report":"t7"}`+"\n", modOpts{TurnComplete: true})
+		watch := append(slices.Clone(tc.words), "watch")
+		if len(r.Watches) != 1 || !slices.Equal(r.Watches[0], watch) {
+			t.Fatalf("group %q: watches %q, want %q", tc.group, r.Watches, watch)
+		}
+		landed := append(slices.Clone(tc.words), "report", "landed", "t7")
+		ended := append(slices.Clone(tc.words), "report", "turn-ended")
+		if len(r.Reports) != 2 || !slices.Equal(r.Reports[0].Argv, landed) || !slices.Equal(r.Reports[1].Argv, ended) {
+			t.Fatalf("group %q: reports %+v, want %q then %q", tc.group, r.Reports, landed, ended)
+		}
+	}
+}
+
+// TestGroupChangesOnlyTheTwoArgvs: taking the group's word out of a grouped
+// mod gives the ungrouped mod, byte for byte, and the word appears twice.
+func TestGroupChangesOnlyTheTwoArgvs(t *testing.T) {
+	plain, err := Render(galley)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := galley
+	s.Group = "pages"
+	grouped, err := Render(s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	js := string(grouped["hooks/register.js"])
+	if n := strings.Count(js, `"pages", `); n != 2 {
+		t.Fatalf("the group appears %d times, want 2", n)
+	}
+	if strings.ReplaceAll(js, `"pages", `, "") != string(plain["hooks/register.js"]) {
+		t.Fatal("the group changed more of register.js than its two argvs")
+	}
+	for p, b := range plain {
+		if p != "hooks/register.js" && !bytes.Equal(b, grouped[p]) {
+			t.Fatalf("the group changed %s", p)
 		}
 	}
 }
