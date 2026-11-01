@@ -106,17 +106,22 @@ func Render(s Spec) (Files, error) {
 func renderJS(src string, s Spec) ([]byte, error) {
 	nameJS, _ := json.Marshal(s.Name)
 	binJS, _ := json.Marshal(s.Bin)
-	groupJS := ""
+	// groupJS goes before 'watch' and 'report' in the argvs, and logGroupJS
+	// after BIN in the log lines that name the command; both are empty with
+	// no group, so an ungrouped mod renders as it always has.
+	groupJS, logGroupJS := "", ""
 	if s.Group != "" {
 		g, _ := json.Marshal(s.Group)
 		groupJS = string(g) + ", "
+		lg, _ := json.Marshal(" " + s.Group)
+		logGroupJS = string(lg) + " + "
 	}
 	t, err := template.New("register.js").Parse(src)
 	if err != nil {
 		return nil, err
 	}
 	var b bytes.Buffer
-	if err := t.Execute(&b, map[string]string{"NameJS": string(nameJS), "BinJS": string(binJS), "GroupJS": groupJS}); err != nil {
+	if err := t.Execute(&b, map[string]string{"NameJS": string(nameJS), "BinJS": string(binJS), "GroupJS": groupJS, "LogGroupJS": logGroupJS}); err != nil {
 		return nil, err
 	}
 	return b.Bytes(), nil

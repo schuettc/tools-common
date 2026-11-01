@@ -340,9 +340,10 @@ func TestGroupGoesBeforeWatchAndReport(t *testing.T) {
 	}
 }
 
-// TestGroupChangesOnlyTheTwoArgvs: taking the group's word out of a grouped
-// mod gives the ungrouped mod, byte for byte, and the word appears twice.
-func TestGroupChangesOnlyTheTwoArgvs(t *testing.T) {
+// TestGroupChangesOnlyTheTwoArgvsAndTheLogs: taking the group's word out of a
+// grouped mod gives the ungrouped mod, byte for byte: it appears in the two
+// argvs and in the five log lines that name the command.
+func TestGroupChangesOnlyTheTwoArgvsAndTheLogs(t *testing.T) {
 	plain, err := Render(galley)
 	if err != nil {
 		t.Fatal(err)
@@ -357,8 +358,12 @@ func TestGroupChangesOnlyTheTwoArgvs(t *testing.T) {
 	if n := strings.Count(js, `"pages", `); n != 2 {
 		t.Fatalf("the group appears %d times, want 2", n)
 	}
-	if strings.ReplaceAll(js, `"pages", `, "") != string(plain["hooks/register.js"]) {
-		t.Fatal("the group changed more of register.js than its two argvs")
+	if n := strings.Count(js, `" pages" + `); n != 5 {
+		t.Fatalf("the group appears in %d log lines, want 5", n)
+	}
+	stripped := strings.ReplaceAll(strings.ReplaceAll(js, `"pages", `, ""), `" pages" + `, "")
+	if stripped != string(plain["hooks/register.js"]) {
+		t.Fatal("the group changed more of register.js than its two argvs and its logs")
 	}
 	for p, b := range plain {
 		if p != "hooks/register.js" && !bytes.Equal(b, grouped[p]) {

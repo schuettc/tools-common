@@ -51,7 +51,7 @@ function queueReport($, args) {
 // debug log (a binary older than its plugin has no report command, and would
 // otherwise log every turn) and is never retried.
 async function report($, args) {
-  const what = BIN + ' report ' + args.join(' ')
+  const what = BIN + {{.LogGroupJS}}' report ' + args.join(' ')
   try {
     const id = await $.session.id()
     const child = $.process.spawn({ argv: [BIN, {{.GroupJS}}'report', ...args], env: { CLAUDE_CODE_SESSION_ID: id } })
@@ -111,15 +111,15 @@ async function watch($, gen) {
         try {
           ev = JSON.parse(line)
         } catch {
-          $.ui.log(BIN + ' watch printed a line that is not JSON: ' + line.slice(0, 200), { to: 'debug' })
+          $.ui.log(BIN + {{.LogGroupJS}}' watch printed a line that is not JSON: ' + line.slice(0, 200), { to: 'debug' })
           continue
         }
         if (typeof ev?.stop === 'string') {
-          $.ui.log(BIN + ' watch stopped: ' + ev.stop, { to: 'debug' })
+          $.ui.log(BIN + {{.LogGroupJS}}' watch stopped: ' + ev.stop, { to: 'debug' })
           return
         }
         if (typeof ev?.text !== 'string') {
-          $.ui.log(BIN + ' watch printed a line with no text: ' + line.slice(0, 200), { to: 'debug' })
+          $.ui.log(BIN + {{.LogGroupJS}}' watch printed a line with no text: ' + line.slice(0, 200), { to: 'debug' })
           continue
         }
         delay = FIRST_DELAY
@@ -133,7 +133,7 @@ async function watch($, gen) {
     ended = 'failed: ' + String(error?.message ?? error)
   }
   if (gen !== generation) return
-  $.ui.log(BIN + ' watch ' + ended + '; restarting in ' + Math.round(delay / 1000) + 's')
+  $.ui.log(BIN + {{.LogGroupJS}}' watch ' + ended + '; restarting in ' + Math.round(delay / 1000) + 's')
   $.clock.after(delay, () => {
     if (gen === generation) void watch($, gen)
   })
