@@ -425,6 +425,31 @@ export interface Frame {
 /** The three columns of a .kit-app grid; the caller appends left, centre and right after its bar. */
 export function frame(o: FrameOptions): Frame;
 
+/** A side of the frame, or null for the centre. */
+export type NarrowSide = 'left' | 'right' | null;
+
+export interface NarrowOptions {
+  /** The .kit-app grid. */
+  root: HTMLElement;
+  /** Columns collapsible (or frame) drew. */
+  left?: HTMLElement | null;
+  right?: HTMLElement | null;
+  /** Hears each change of what has the frame. */
+  onShow?(side: NarrowSide): void;
+}
+
+export interface NarrowMode {
+  /** Gives the frame to a side, or to the centre with null. Does nothing while the page is wide. */
+  show(side: NarrowSide): void;
+  /** Puts n under a strip's toggle, none at zero. It shows only on a closed strip while narrow. */
+  setCount(side: 'left' | 'right', n: number): void;
+  /** Lets go of the window, when the page goes. */
+  stop(): void;
+}
+
+/** One thing at a time at 1080 wide or less: the centre, or a side in its place with the other a strip. A page opens on the centre. The fold and what is remembered of it are ignored and never written while narrow, so they come back when the window widens. */
+export function narrowMode(o: NarrowOptions): NarrowMode;
+
 // ---- index.js
 
 /** A row's needs-you dot, which says so in a tip. */
